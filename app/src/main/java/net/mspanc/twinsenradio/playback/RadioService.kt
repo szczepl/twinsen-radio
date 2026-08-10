@@ -465,6 +465,11 @@ class RadioService : MediaLibraryService() {
     private fun favouriteButton(): CommandButton {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
+        // Podajemy i stala semantyczna, i wlasny drawable. Stale ICON_STAR_* sa
+        // w Media3 1.8.1, ale nie kazda wersja Android Auto potrafi je narysowac -
+        // sama stala dawala w projekcji pusty kwadrat. setIconResId jest wprawdzie
+        // deprecjonowane, ale to wlasnie ono daje glowicy grafike zapasowa.
+        @Suppress("DEPRECATION")
         return CommandButton.Builder(
             if (isFav) CommandButton.ICON_STAR_FILLED else CommandButton.ICON_STAR_UNFILLED
         )
@@ -474,6 +479,10 @@ class RadioService : MediaLibraryService() {
                     if (isFav) net.mspanc.twinsenradio.R.string.fav_remove
                     else net.mspanc.twinsenradio.R.string.fav_add
                 )
+            )
+            .setIconResId(
+                if (isFav) net.mspanc.twinsenradio.R.drawable.ic_star_filled
+                else net.mspanc.twinsenradio.R.drawable.ic_star_outline
             )
             .build()
     }
