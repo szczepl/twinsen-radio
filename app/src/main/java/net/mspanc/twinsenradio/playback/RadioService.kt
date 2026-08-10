@@ -359,6 +359,16 @@ class RadioService : MediaLibraryService() {
 
     private fun apply(now: NowPlaying?) {
         now?.slogan?.let { lastSlogan = it }
+
+        // Dane katalogowe dotycza POPRZEDNIEGO utworu, wiec zerujemy je, zanim
+        // cokolwiek narysujemy. Inaczej przez chwile widac nowego wykonawce
+        // sklejonego ze stara plyta - "Taylor Swift - Black Gold: The Best of
+        // Soul Asylum [1992]". Okladki celowo nie ruszamy: obrazek moze zostac
+        // do czasu znalezienia nowego, bo mylacy tekst jest gorszy niz mylaca
+        // grafika, ktora i tak zaraz sie podmieni.
+        trackInfo = null
+        PlaybackStatusBus.setTrackInfo(null)
+
         PlaybackStatusBus.setNowPlaying(now)
         refreshCurrentMetadata(force = true, now = now)
         updateCoverArt(now)
@@ -777,6 +787,38 @@ class RadioService : MediaLibraryService() {
             Log.i(TAG, "onGetChildren($parentId) od ${browser.packageName} -> ${children.size} pozycji")
             return Futures.immediateFuture(
                 LibraryResult.ofItemList(ImmutableList.copyOf(children), contentStyleParams())
+            )
+        }
+
+        /**
+         * Wznawianie odtwarzania po podlaczeniu do auta albo z panelu systemowego.
+         *
+         * Bez tego Media3 nie wie, co wlaczyc, i wybor bywal przypadkowy. Bierzemy
+         * ostatnio sluchana stacje, a gdy historia jest pusta - pierwsza ulubiona,
+         * i dopiero na koncu pierwsza z listy.
+         */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val station = repo.recent().firstOrNull()
+                ?: repo.favourites().firstOrNull()
+                ?: repo.all().firstOrNull()
+
+            if (station == null) {
+                return Futures.immediateFailedFuture(
+                    UnsupportedOperationException("brak stacji do wznowienia")
+                )
+            }
+
+            Log.i(TAG, "wznawiam po podlaczeniu: ${station.name} (zlecil ${controller.packageName})")
+            return Futures.immediateFuture(
+                MediaSession.MediaItemsWithStartPosition(
+                    listOf(playableItem(station)),
+                    0,
+                    // Radio na zywo - pozycja startowa nie ma znaczenia
+                    C.TIME_UNSET
+                )
             )
         }
 
