@@ -387,6 +387,44 @@ ale okno „Media Playback Status" w DHU czyta UTF-8 jak Latin-1 i pokazuje
 typografii — a o możliwościach fontów w desce Passata nic pewnego nie wiemy —
 wszystkie etykiety są w czystym ASCII.
 
+### AID w Passacie — obserwacje z jazdy (inne aplikacje)
+
+Zanim jeszcze pojechaliśmy z własną aplikacją, wiadomo z obserwacji ReplaIO
+i oficjalnej apki Radia Nowy Świat, że **Active Info Display pokazuje trzy linie
+tekstu i małą grafikę** — czyli o jedną linię więcej niż ekran centralny AA:
+
+```
+        [ kwadrat: logo stacji albo okladka ]
+        wykonawca
+        nazwa stacji
+        tytul
+```
+
+Istotny szczegół: oficjalna apka RNŚ **nie** wyświetla nazwy stacji w środkowej
+linii, ReplaIO wyświetla ją zawsze. To znaczy, że środkowa linia nie jest
+generowana przez głowicę z nazwy źródła — bierze się z pola, które aplikacja
+albo wypełnia, albo nie.
+
+Stąd hipoteza do potwierdzenia jednym spojrzeniem w trybie diagnostycznym:
+
+| linia na AID | prawdopodobne pole |
+|---|---|
+| górna | `artist` |
+| środkowa | `albumTitle` |
+| dolna | `title` |
+
+Byłby to klasyczny układ artysta / album / tytuł, w którym radiowe aplikacje
+wpisują nazwę stacji w `albumTitle`. Build diagnostyczny pokazuje w każdym polu
+jego nazwę razem z zegarem, więc wystarczy odczytać, co się wyświetli.
+
+### Czego robić nie należy: podwójna nazwa stacji
+
+ReplaIO ma wadę wartą uniknięcia. Gdy nie leci utwór, wpisuje nazwę stacji
+także w `displayTitle`, przez co na ekranie widać dwa razy to samo —
+„Radio Nowy Świat" nad „Radio Nowy Świat". Docelowe metadane muszą traktować
+brak utworu jako osobny przypadek, a nie powielać tę samą wartość w kilku
+polach.
+
 ### Co zostało do sprawdzenia w aucie
 
 Sam AID. Kanał Instrument Cluster w protokole AA przenosi wyłącznie nawigację
