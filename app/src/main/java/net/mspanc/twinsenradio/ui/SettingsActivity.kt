@@ -11,6 +11,7 @@ import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ClockColors
+import net.mspanc.twinsenradio.data.ClockFace
 import net.mspanc.twinsenradio.data.ContentStyle
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Presentation
@@ -49,6 +50,20 @@ class SettingsActivity : AppCompatActivity() {
 
         b.swDiagApi.setOnCheckedChangeListener { _, _ -> renderLegend() }
         b.btnSave.setOnClickListener { save() }
+
+        // Ustawienia zegara-okladki maja sens tylko przy ukladach, ktore go uzywaja
+        b.spPresentation.onItemSelectedListener =
+            object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: android.widget.AdapterView<*>?,
+                    view: android.view.View?,
+                    position: Int,
+                    id: Long
+                ) = updateClockOptionsEnabled(position)
+
+                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+            }
+        updateClockOptionsEnabled(prefs.presentationMode)
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -63,6 +78,14 @@ class SettingsActivity : AppCompatActivity() {
             labels
         )
         spinner.setSelection(selected.coerceIn(labels.indices))
+    }
+
+    private fun updateClockOptionsEnabled(presentationIndex: Int) {
+        val usesClockCover = Presentation.at(presentationIndex).clockFace != ClockFace.NONE
+        listOf(b.swClockAlways, b.spClockBg, b.spClockFg).forEach {
+            it.isEnabled = usesClockCover
+            it.alpha = if (usesClockCover) 1f else 0.4f
+        }
     }
 
     private fun renderLegend() {

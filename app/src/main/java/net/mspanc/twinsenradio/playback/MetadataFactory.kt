@@ -59,7 +59,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         station: Station,
         now: NowPlaying?,
         coverArtUrl: String? = null,
-        albumLabel: String? = null
+        trackInfo: CoverArtLookup.TrackInfo? = null
     ): MediaMetadata {
         val b = MediaMetadata.Builder()
             .setIsBrowsable(false)
@@ -100,9 +100,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 .setReleaseYear(DiagnosticFields.RELEASE_YEAR)
         } else {
             val p = Presentation.at(prefs.presentationMode)
-            val top = textFor(p.top, station, now, albumLabel)
-            val middle = textFor(p.middle, station, now, albumLabel)
-            val bottom = textFor(p.bottom, station, now, albumLabel)
+            val top = textFor(p.top, station, now, trackInfo)
+            val middle = textFor(p.middle, station, now, trackInfo)
+            val bottom = textFor(p.bottom, station, now, trackInfo)
 
             // Srodkowa linia idzie w albumTitle - to najbardziej prawdopodobne
             // zrodlo srodkowej linii na desce. `station` zostawiamy zawsze na
@@ -133,14 +133,14 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         slot: Slot,
         station: Station,
         now: NowPlaying?,
-        albumLabel: String? = null
+        trackInfo: CoverArtLookup.TrackInfo? = null
     ): String = when (slot) {
         Slot.CLOCK -> clockText()
         Slot.STATION -> station.name
         Slot.EMPTY -> ""
         // Etykieta reklamy trafia wylacznie w linie tytulu - powtorzona w dwoch
         // liniach wygladalaby dokladnie tak, jak zdublowana nazwa stacji.
-        Slot.ARTIST -> if (now?.isRealSong == true) artistLine(now, albumLabel) else ""
+        Slot.ARTIST -> if (now?.isRealSong == true) artistLine(now, trackInfo) else ""
         Slot.TITLE -> when {
             now?.isRealSong == true -> now.songTitle.orEmpty()
             now?.slogan != null -> now.slogan!!
@@ -156,12 +156,25 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
      * ruszamy. Stacje, ktore daja sam nazwisko, uzupelniamy o to, co wie katalog
      * iTunes: "Kaeyra / singiel [2024]".
      */
-    private fun artistLine(now: NowPlaying, albumLabel: String?): String {
+    private fun artistLine(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
         val artist = now.artist.orEmpty()
         if (artist.isBlank()) return ""
-        if (!prefs.enrichWithAlbum) return artist
-        if (artist.contains(" / ")) return artist
-        return if (albumLabel.isNullOrBlank()) artist else "$artist / $albumLabel"
+        if (!prefs.enrichWithAlbum || info == null) return artist
+
+        // Odetnij koncowke tylko wtedy, gdy katalog potwierdza, ze to nazwa plyty.
+        // Inaczej "Shimza / AR/CO / Kasango" stracilby trzeciego wykonawce.
+        val separator = Regex("\\s+[/,]\\s+")
+        val parts = artist.split(separator)
+        val artistsOnly = if (parts.size > 1 && info.tailIsAlbum(parts.last())) {
+            parts.dropLast(1).joinToString(" / ")
+        } else {
+            artist
+        }
+
+        val album = info.albumLabel() ?: return artistsOnly
+        // Wydawnictwo oddzielamy kropka srodkowa, a nie ukosnikiem - przy kilku
+        // wykonawcach oddzielonych ukosnikami nie dalo by sie ich odroznic od plyty.
+        return "$artistsOnly · $album"
     }
 
     private fun adText(now: NowPlaying): String {

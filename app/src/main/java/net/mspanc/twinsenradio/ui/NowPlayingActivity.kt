@@ -51,6 +51,11 @@ class NowPlayingActivity : AppCompatActivity() {
         }
         b.prev.setOnClickListener { step(-1) }
         b.next.setOnClickListener { step(+1) }
+        b.favourite.setOnClickListener {
+            val id = PlaybackStatusBus.stationId.value ?: return@setOnClickListener
+            prefs.toggleFavourite(id)
+            render()
+        }
 
         listOf(
             PlaybackStatusBus.stationId,
@@ -134,6 +139,13 @@ class NowPlayingActivity : AppCompatActivity() {
                 b.songArtist.text = ""
             }
         }
+
+        val isFav = station != null && station.id in prefs.favourites
+        b.favourite.setImageResource(
+            if (isFav) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
+        )
+        b.favourite.contentDescription =
+            getString(if (isFav) R.string.fav_remove else R.string.fav_add)
 
         b.diagnosticBanner.visibility =
             if (prefs.diagnosticMode) android.view.View.VISIBLE else android.view.View.GONE

@@ -12,7 +12,18 @@
         android:background="?attr/colorPrimary"
         app:navigationIcon="@drawable/ic_arrow_back"
         app:title="@string/now_playing_title"
-        app:titleTextColor="@color/on_brand" />
+        app:titleTextColor="@color/on_brand">
+
+        <ImageButton
+            android:id="@+id/favourite"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="end"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/fav_add"
+            android:src="@android:drawable/btn_star_big_off" />
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <ImageView
         android:id="@+id/art"

@@ -73,9 +73,9 @@ class RadioService : MediaLibraryService() {
     @Volatile
     private var coverArtUrl: String? = null
 
-    /** Nazwa wydawnictwa z roku z katalogu, np. "Księga [2024]" albo "singiel [2024]". */
+    /** Co katalog wie o biezacym utworze - wydawnictwo, rok, okladka. */
     @Volatile
-    private var albumLabel: String? = null
+    private var trackInfo: CoverArtLookup.TrackInfo? = null
 
     /** Rosnie przy kazdej zmianie utworu - odsiewa spoznione wyniki wyszukiwania. */
     private var coverGeneration = 0
@@ -124,7 +124,7 @@ class RadioService : MediaLibraryService() {
 
         session = MediaLibrarySession.Builder(this, player, LibraryCallback())
             .setSessionActivity(sessionActivity)
-            .setCustomLayout(ImmutableList.of(diagnosticButton()))
+            .setCustomLayout(customLayout())
             .build()
 
         reconnect = ReconnectController(this, player) { status ->
@@ -354,9 +354,9 @@ class RadioService : MediaLibraryService() {
         fun applyIfCurrent(info: CoverArtLookup.TrackInfo?) {
             if (generation != coverGeneration) return
             val url = info?.artworkUrl
-            if (coverArtUrl == url && albumLabel == info?.albumLabel()) return
+            if (coverArtUrl == url && trackInfo == info) return
             coverArtUrl = url
-            albumLabel = info?.albumLabel()
+            trackInfo = info
             PlaybackStatusBus.setCoverArt(url)
             refreshCurrentMetadata(force = true, now = PlaybackStatusBus.nowPlaying.value)
         }
@@ -408,7 +408,7 @@ class RadioService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return
         val station = repo.byMediaId(item.mediaId) ?: return
         if (!force && prefs.diagnosticMode) return
-        val fresh = metadata.forPlayback(station, now, coverArtUrl, albumLabel)
+        val fresh = metadata.forPlayback(station, now, coverArtUrl, trackInfo)
         player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(fresh).build())
         dumpMetadata(station, fresh)
     }
@@ -453,6 +453,31 @@ class RadioService : MediaLibraryService() {
      * Po co akurat ten: pozwala przelaczyc tryb diagnostyczny wprost z ekranu
      * auta, bez siegania po telefon w trakcie jazdy.
      */
+    /** Przyciski w szablonie odtwarzacza Android Auto. */
+    private fun customLayout(): ImmutableList<CommandButton> =
+        ImmutableList.of(favouriteButton(), diagnosticButton())
+
+    /**
+     * Gwiazdka ulubionych. Bez niej stacji granej w aucie nie dalo sie dodac do
+     * ulubionych w ogole - a to wlasnie w aucie czlowiek stwierdza, ze chce ja
+     * miec pod reka.
+     */
+    private fun favouriteButton(): CommandButton {
+        val id = PlaybackStatusBus.stationId.value
+        val isFav = id != null && id in prefs.favourites
+        return CommandButton.Builder(
+            if (isFav) CommandButton.ICON_STAR_FILLED else CommandButton.ICON_STAR_UNFILLED
+        )
+            .setSessionCommand(CMD_TOGGLE_FAV)
+            .setDisplayName(
+                getString(
+                    if (isFav) net.mspanc.twinsenradio.R.string.fav_remove
+                    else net.mspanc.twinsenradio.R.string.fav_add
+                )
+            )
+            .build()
+    }
+
     private fun diagnosticButton(): CommandButton =
         // Ikona musi byc semantyczna stala z zestawu Media3, nie nasz drawable.
         // Stare setIconResId jest deprecjonowane i Android Auto go nie honoruje -
@@ -473,6 +498,7 @@ class RadioService : MediaLibraryService() {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
                 .add(CMD_TOGGLE_DIAG)
+                .add(CMD_TOGGLE_FAV)
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -485,12 +511,27 @@ class RadioService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction == CMD_TOGGLE_DIAG.customAction) {
-                prefs.diagnosticMode = !prefs.diagnosticMode
-                Log.i(TAG, "przelaczono tryb diagnostyczny na ${prefs.diagnosticMode}")
-                // prefsListener zajmie sie odswiezeniem metadanych
-                session.setCustomLayout(ImmutableList.of(diagnosticButton()))
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            when (customCommand.customAction) {
+                CMD_TOGGLE_DIAG.customAction -> {
+                    prefs.diagnosticMode = !prefs.diagnosticMode
+                    Log.i(TAG, "przelaczono tryb diagnostyczny na ${prefs.diagnosticMode}")
+                    // prefsListener zajmie sie odswiezeniem metadanych
+                    session.setCustomLayout(customLayout())
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                CMD_TOGGLE_FAV.customAction -> {
+                    val id = PlaybackStatusBus.stationId.value
+                    if (id != null) {
+                        val added = prefs.toggleFavourite(id)
+                        Log.i(TAG, "stacja $id ${if (added) "dodana do" else "usunieta z"} ulubionych")
+                        session.setCustomLayout(customLayout())
+                        // notifyChildrenChanged jest tylko na MediaLibrarySession,
+                        // a tutaj `session` ma szerszy typ MediaSession
+                        this@RadioService.session
+                            .notifyChildrenChanged(NODE_FAVOURITES, Int.MAX_VALUE, null)
+                    }
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
             }
             return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
         }
@@ -689,6 +730,8 @@ class RadioService : MediaLibraryService() {
 
         private val CMD_TOGGLE_DIAG =
             SessionCommand("net.mspanc.twinsenradio.TOGGLE_DIAG", Bundle.EMPTY)
+        private val CMD_TOGGLE_FAV =
+            SessionCommand("net.mspanc.twinsenradio.TOGGLE_FAV", Bundle.EMPTY)
 
         /**
          * Ile czekamy na okladke, zanim wrocimy do logo stacji. Wyszukiwanie

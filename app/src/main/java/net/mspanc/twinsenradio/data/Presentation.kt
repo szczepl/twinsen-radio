@@ -76,15 +76,15 @@ data class Presentation(
                 Slot.ARTIST, Slot.STATION, Slot.TITLE
             ),
             Presentation(
-                "Zegar u góry — zegar, wykonawca, tytuł",
+                "Góra — zegar, wykonawca, tytuł",
                 Slot.CLOCK, Slot.ARTIST, Slot.TITLE
             ),
             Presentation(
-                "Zegar w środku — wykonawca, zegar, tytuł",
+                "Środek — wykonawca, zegar, tytuł",
                 Slot.ARTIST, Slot.CLOCK, Slot.TITLE
             ),
             Presentation(
-                "Zegar na dole — tytuł, wykonawca, zegar",
+                "Dół — tytuł, wykonawca, zegar",
                 Slot.TITLE, Slot.ARTIST, Slot.CLOCK
             ),
             Presentation(

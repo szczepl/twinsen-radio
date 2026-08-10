@@ -50,6 +50,23 @@ object CoverArtLookup {
             }
             return if (year != null) "$name [$year]" else name
         }
+
+        /**
+         * Czy koncowka podana przez rozglosnie to nazwa wydawnictwa, a nie kolejny
+         * wykonawca.
+         *
+         * Po samym separatorze tego nie odroznisz: RMF pisze "Wiktoria Kida / Księga"
+         * (wykonawca i plyta), ale rownie dobrze przysyla "Shimza / AR/CO / Kasango"
+         * (trzech wykonawcow) albo "Nico / Vinz" (nazwa zespolu ze slashem).
+         * Rozstrzyga dopiero porownanie z tym, co o utworze wie katalog.
+         */
+        fun tailIsAlbum(tail: String): Boolean {
+            val a = album ?: return false
+            return normalize(tail) == normalize(a)
+        }
+
+        private fun normalize(s: String) = s.lowercase()
+            .replace(Regex("[^\\p{L}\\p{N}]"), "")
     }
 
     /** Male, ograniczone cache - w aucie i tak krecimy sie po kilku stacjach. */

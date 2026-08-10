@@ -3,10 +3,13 @@
     <string name="app_name">Twinsen Radio</string>
     <string name="settings_title">Opcje</string>
 
+    <!-- Krotkie, bo Android Auto renderuje je jako zakladki i dluzsze przycina -->
     <string name="node_favourites">Ulubione</string>
-    <string name="node_all">Wszystkie stacje</string>
-    <string name="node_recent">Ostatnio słuchane</string>
+    <string name="node_all">Wszystkie</string>
+    <string name="node_recent">Ostatnie</string>
     <string name="node_genres">Gatunki</string>
+    <string name="fav_add">Dodaj do ulubionych</string>
+    <string name="fav_remove">Usuń z ulubionych</string>
     <string name="root_title">Twinsen Radio</string>
 
     <string name="search_hint">Szukaj stacji…</string>
