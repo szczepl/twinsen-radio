@@ -27,6 +27,14 @@ object PlaybackStatusBus {
         _coverArtUrl.value = url
     }
 
+    /** Co katalog wie o utworze - wydawnictwo i rok, potrzebne takze na telefonie. */
+    private val _trackInfo = MutableStateFlow<CoverArtLookup.TrackInfo?>(null)
+    val trackInfo: StateFlow<CoverArtLookup.TrackInfo?> = _trackInfo
+
+    fun setTrackInfo(info: CoverArtLookup.TrackInfo?) {
+        _trackInfo.value = info
+    }
+
     private val _status = MutableStateFlow(Status.IDLE)
     val status: StateFlow<Status> = _status
 

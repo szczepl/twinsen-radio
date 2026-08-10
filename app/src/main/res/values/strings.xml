@@ -25,6 +25,8 @@
     <string name="diagnostic_banner_line2">Dotyczy tylko Android Auto — tam pola metadanych są zastąpione etykietami. Tutaj widzisz prawdziwe dane.</string>
     <string name="opt_clock_bg">Tło zegara</string>
     <string name="opt_clock_fg">Kolor zegara</string>
+    <string name="opt_swap">Zamień miejscami tytuł i wykonawcę</string>
+    <string name="opt_swap_sub">Działa niezależnie od wybranego układu — zamienia samą treść, nie pola metadanych.</string>
     <string name="opt_enrich">Uzupełniaj wykonawcę o album i rok</string>
     <string name="opt_enrich_sub">Gdy stacja podaje samego wykonawcę, dopisujemy wydawnictwo z katalogu iTunes — np. „Kaeyra / singiel [2024]”. Stacje, które już podają album (RMF: „Wiktoria Kida / Księga”), zostawiamy bez zmian.</string>
     <string name="ad">Reklama</string>

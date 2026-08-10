@@ -61,7 +61,8 @@ class NowPlayingActivity : AppCompatActivity() {
             PlaybackStatusBus.stationId,
             PlaybackStatusBus.nowPlaying,
             PlaybackStatusBus.status,
-            PlaybackStatusBus.coverArtUrl
+            PlaybackStatusBus.coverArtUrl,
+            PlaybackStatusBus.trackInfo
         ).forEach { flow ->
             lifecycleScope.launch { flow.collect { render() } }
         }
@@ -118,8 +119,20 @@ class NowPlayingActivity : AppCompatActivity() {
         // albo reklama - nigdy powielona nazwa stacji.
         when {
             now?.isRealSong == true -> {
-                b.songTitle.text = now.songTitle.orEmpty()
-                b.songArtist.text = now.artist.orEmpty()
+                // Ta sama linia co w aucie, razem z wydawnictwem i rokiem
+                val artistLine = MetadataFactory.composeArtistLine(
+                    now,
+                    PlaybackStatusBus.trackInfo.value,
+                    prefs.enrichWithAlbum
+                )
+                val title = now.songTitle.orEmpty()
+                if (prefs.swapTitleArtist) {
+                    b.songTitle.text = artistLine
+                    b.songArtist.text = title
+                } else {
+                    b.songTitle.text = title
+                    b.songArtist.text = artistLine
+                }
             }
             now?.slogan != null -> {
                 b.songTitle.text = now.slogan

@@ -100,7 +100,8 @@ class RadioService : MediaLibraryService() {
             }
             Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK,
             Prefs.KEY_PRESENTATION, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
-            Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM -> refreshCurrentMetadata(force = true)
+            Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM,
+            Prefs.KEY_SWAP -> refreshCurrentMetadata(force = true)
             Prefs.KEY_BUFFER -> Log.i(TAG, "Zmieniono bufor - zadziala po restarcie odtwarzania")
         }
     }
@@ -358,6 +359,7 @@ class RadioService : MediaLibraryService() {
             coverArtUrl = url
             trackInfo = info
             PlaybackStatusBus.setCoverArt(url)
+            PlaybackStatusBus.setTrackInfo(info)
             refreshCurrentMetadata(force = true, now = PlaybackStatusBus.nowPlaying.value)
         }
 

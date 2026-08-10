@@ -38,6 +38,7 @@ class SettingsActivity : AppCompatActivity() {
         b.swClockAlways.isChecked = prefs.clockCoverAlways
         fill(b.spClockBg, ClockColors.BACKGROUND_LABELS, prefs.clockBackground)
         fill(b.spClockFg, ClockColors.FOREGROUND_LABELS, prefs.clockForeground)
+        b.swSwap.isChecked = prefs.swapTitleArtist
         b.swEnrich.isChecked = prefs.enrichWithAlbum
 
         fill(b.spBrowsable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.browsableStyle))
@@ -99,6 +100,7 @@ class SettingsActivity : AppCompatActivity() {
         prefs.clockCoverAlways = b.swClockAlways.isChecked
         prefs.clockBackground = b.spClockBg.selectedItemPosition
         prefs.clockForeground = b.spClockFg.selectedItemPosition
+        prefs.swapTitleArtist = b.swSwap.isChecked
         prefs.enrichWithAlbum = b.swEnrich.isChecked
         prefs.browsableStyle = ContentStyle.indexToValue(b.spBrowsable.selectedItemPosition)
         prefs.playableStyle = ContentStyle.indexToValue(b.spPlayable.selectedItemPosition)

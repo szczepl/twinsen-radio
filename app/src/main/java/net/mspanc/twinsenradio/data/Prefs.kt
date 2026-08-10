@@ -69,6 +69,14 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_CLOCK_FG, 0)
         set(v) = sp.edit { putInt(KEY_CLOCK_FG, v) }
 
+    /**
+     * Zamiana miejscami tytulu i wykonawcy - niezaleznie od tego, w ktore pola
+     * metadanych akurat trafiaja przy wybranym ukladzie.
+     */
+    var swapTitleArtist: Boolean
+        get() = sp.getBoolean(KEY_SWAP, false)
+        set(v) = sp.edit { putBoolean(KEY_SWAP, v) }
+
     /** Czy uzupelniac linie wykonawcy o wydawnictwo i rok z katalogu iTunes. */
     var enrichWithAlbum: Boolean
         get() = sp.getBoolean(KEY_ENRICH_ALBUM, true)
@@ -131,6 +139,7 @@ class Prefs(context: Context) {
         const val KEY_CLOCK_BG = "clock_background"
         const val KEY_CLOCK_FG = "clock_foreground"
         const val KEY_ENRICH_ALBUM = "enrich_with_album"
+        const val KEY_SWAP = "swap_title_artist"
         const val KEY_STYLE_BROWSABLE = "aa_style_browsable"
         const val KEY_STYLE_PLAYABLE = "aa_style_playable"
         const val KEY_BUFFER = "buffer_profile"

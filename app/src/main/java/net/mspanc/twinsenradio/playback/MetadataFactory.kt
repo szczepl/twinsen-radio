@@ -134,7 +134,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         station: Station,
         now: NowPlaying?,
         trackInfo: CoverArtLookup.TrackInfo? = null
-    ): String = when (slot) {
+    ): String = when (effectiveSlot(slot)) {
         Slot.CLOCK -> clockText()
         Slot.STATION -> station.name
         Slot.EMPTY -> ""
@@ -149,6 +149,16 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         }
     }
 
+    /** Zamiana tytulu z wykonawca dziala na poziomie tresci, nie ukladu pol. */
+    private fun effectiveSlot(slot: Slot): Slot {
+        if (!prefs.swapTitleArtist) return slot
+        return when (slot) {
+            Slot.ARTIST -> Slot.TITLE
+            Slot.TITLE -> Slot.ARTIST
+            else -> slot
+        }
+    }
+
     /**
      * Linia wykonawcy, w razie potrzeby uzupelniona o wydawnictwo.
      *
@@ -156,26 +166,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
      * ruszamy. Stacje, ktore daja sam nazwisko, uzupelniamy o to, co wie katalog
      * iTunes: "Kaeyra / singiel [2024]".
      */
-    private fun artistLine(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
-        val artist = now.artist.orEmpty()
-        if (artist.isBlank()) return ""
-        if (!prefs.enrichWithAlbum || info == null) return artist
-
-        // Odetnij koncowke tylko wtedy, gdy katalog potwierdza, ze to nazwa plyty.
-        // Inaczej "Shimza / AR/CO / Kasango" stracilby trzeciego wykonawce.
-        val separator = Regex("\\s+[/,]\\s+")
-        val parts = artist.split(separator)
-        val artistsOnly = if (parts.size > 1 && info.tailIsAlbum(parts.last())) {
-            parts.dropLast(1).joinToString(" / ")
-        } else {
-            artist
-        }
-
-        val album = info.albumLabel() ?: return artistsOnly
-        // Wydawnictwo oddzielamy kropka srodkowa, a nie ukosnikiem - przy kilku
-        // wykonawcach oddzielonych ukosnikami nie dalo by sie ich odroznic od plyty.
-        return "$artistsOnly · $album"
-    }
+    private fun artistLine(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String =
+        composeArtistLine(now, info, prefs.enrichWithAlbum)
 
     private fun adText(now: NowPlaying): String {
         val seconds = now.adDurationMs / 1000
@@ -270,6 +262,40 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         private val CLOCK_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
         const val AD_LABEL = "Reklama"
+
+        /**
+         * Linia wykonawcy, w razie potrzeby uzupelniona o wydawnictwo.
+         *
+         * Wspoldzielona przez metadane dla auta i ekran odtwarzania w telefonie -
+         * inaczej na telefonie brakowaloby nazwy plyty, ktora widac w aucie.
+         *
+         * RMF sam podaje gotowe "Wiktoria Kida / Księga" - takiego zapisu nie
+         * ruszamy. Stacjom, ktore daja samego wykonawce, dokladamy to, co wie
+         * katalog: "Kaeyra · singiel [2024]".
+         */
+        fun composeArtistLine(
+            now: NowPlaying,
+            info: CoverArtLookup.TrackInfo?,
+            enrich: Boolean
+        ): String {
+            val artist = now.artist.orEmpty()
+            if (artist.isBlank()) return ""
+            if (!enrich || info == null) return artist
+
+            // Odetnij koncowke tylko wtedy, gdy katalog potwierdza, ze to nazwa
+            // plyty. Inaczej "Shimza / AR/CO / Kasango" stracilby trzeciego wykonawce.
+            val parts = artist.split(Regex("\\s+[/,]\\s+"))
+            val artistsOnly = if (parts.size > 1 && info.tailIsAlbum(parts.last())) {
+                parts.dropLast(1).joinToString(" / ")
+            } else {
+                artist
+            }
+
+            val album = info.albumLabel() ?: return artistsOnly
+            // Wydawnictwo oddzielamy kropka srodkowa, a nie ukosnikiem - przy kilku
+            // wykonawcach po ukosnikach nie dalo by sie ich odroznic od plyty.
+            return "$artistsOnly · $album"
+        }
 
         /** Zawsze dwucyfrowa godzina i minuta, np. "09:07". */
         fun clockText(): String = LocalTime.now().format(CLOCK_FORMAT)

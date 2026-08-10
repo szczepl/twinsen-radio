@@ -87,6 +87,19 @@
             android:layout_marginBottom="16dp" />
 
         <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/swSwap"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/opt_swap" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="16dp"
+            android:text="@string/opt_swap_sub"
+            android:textAppearance="?attr/textAppearanceBodySmall" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/swEnrich"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
