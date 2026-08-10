@@ -467,11 +467,10 @@ class RadioService : MediaLibraryService() {
     private fun favouriteButton(): CommandButton {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
-        // Podajemy i stala semantyczna, i wlasny drawable. Stale ICON_STAR_* sa
-        // w Media3 1.8.1, ale nie kazda wersja Android Auto potrafi je narysowac -
-        // sama stala dawala w projekcji pusty kwadrat. setIconResId jest wprawdzie
-        // deprecjonowane, ale to wlasnie ono daje glowicy grafike zapasowa.
-        @Suppress("DEPRECATION")
+        // Stale ICON_STAR_* sa w Media3 1.8.1, ale nie kazda wersja Android Auto
+        // potrafi je narysowac - sama stala dawala w projekcji pusty kwadrat.
+        // setCustomIconResId dodaje wlasna grafike jako zapas; to nowsza metoda
+        // niz deprecjonowane setIconResId, ktore probowalem wczesniej.
         return CommandButton.Builder(
             if (isFav) CommandButton.ICON_STAR_FILLED else CommandButton.ICON_STAR_UNFILLED
         )
@@ -482,7 +481,7 @@ class RadioService : MediaLibraryService() {
                     else net.mspanc.twinsenradio.R.string.fav_add
                 )
             )
-            .setIconResId(
+            .setCustomIconResId(
                 if (isFav) net.mspanc.twinsenradio.R.drawable.ic_star_filled
                 else net.mspanc.twinsenradio.R.drawable.ic_star_outline
             )
@@ -529,6 +528,31 @@ class RadioService : MediaLibraryService() {
                     // prefsListener zajmie sie odswiezeniem metadanych
                     session.setCustomLayout(customLayout())
                     return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                // Akcja z menu przy pozycji listy - glowica dokleja id pozycji
+                ACTION_FAVOURITE, ACTION_UNFAVOURITE -> {
+                    val mediaId = args.getString(KEY_ACTION_MEDIA_ITEM_ID)
+                    val station = mediaId?.let { repo.byMediaId(it) }
+                    val result = Bundle()
+                    if (station != null) {
+                        val added = prefs.toggleFavourite(station.id)
+                        Log.i(TAG, "z listy: ${station.name} ${if (added) "dodana do" else "usunieta z"} ulubionych")
+                        // Kaz glowicy odswiezyc te pozycje, zeby ikona sie przelaczyla
+                        result.putString(KEY_ACTION_RESULT_REFRESH_ITEM, mediaId)
+                        result.putString(
+                            KEY_ACTION_RESULT_MESSAGE,
+                            getString(
+                                if (added) net.mspanc.twinsenradio.R.string.fav_added_toast
+                                else net.mspanc.twinsenradio.R.string.fav_removed_toast,
+                                station.name
+                            )
+                        )
+                        this@RadioService.session
+                            .notifyChildrenChanged(NODE_FAVOURITES, Int.MAX_VALUE, null)
+                    }
+                    return Futures.immediateFuture(
+                        SessionResult(SessionResult.RESULT_SUCCESS, result)
+                    )
                 }
                 CMD_TOGGLE_FAV.customAction -> {
                     val id = PlaybackStatusBus.stationId.value
@@ -708,11 +732,50 @@ class RadioService : MediaLibraryService() {
             )
             .build()
 
-    private fun browseItem(station: Station): MediaItem =
-        MediaItem.Builder()
+    /**
+     * Pozycja listy z akcja "ulubione" dostepna wprost z menu kontekstowego
+     * w Android Auto. Bez tego stacje dalo sie dodac do ulubionych tylko wtedy,
+     * gdy juz gra - a naturalne jest zaznaczenie jej podczas przegladania listy.
+     */
+    private fun browseItem(station: Station): MediaItem {
+        val isFav = station.id in prefs.favourites
+        val extras = Bundle().apply {
+            putStringArrayList(
+                KEY_ACTION_ID_LIST,
+                arrayListOf(if (isFav) ACTION_UNFAVOURITE else ACTION_FAVOURITE)
+            )
+        }
+        return MediaItem.Builder()
             .setMediaId(station.mediaId)
-            .setMediaMetadata(metadata.forBrowseItem(station))
+            .setMediaMetadata(
+                metadata.forBrowseItem(station).buildUpon().setExtras(extras).build()
+            )
             .build()
+    }
+
+    /** Definicje akcji, ktore glowica pokaze przy pozycjach listy. */
+    private fun browseActionsRootList(): ArrayList<Bundle> {
+        fun action(id: String, labelRes: Int, iconRes: Int) = Bundle().apply {
+            putString(KEY_ACTION_ID, id)
+            putString(KEY_ACTION_LABEL, getString(labelRes))
+            putString(
+                KEY_ACTION_ICON_URI,
+                "android.resource://$packageName/$iconRes"
+            )
+        }
+        return arrayListOf(
+            action(
+                ACTION_FAVOURITE,
+                net.mspanc.twinsenradio.R.string.fav_add,
+                net.mspanc.twinsenradio.R.drawable.ic_star_outline
+            ),
+            action(
+                ACTION_UNFAVOURITE,
+                net.mspanc.twinsenradio.R.string.fav_remove,
+                net.mspanc.twinsenradio.R.drawable.ic_star_filled
+            )
+        )
+    }
 
     private fun playableItem(station: Station): MediaItem =
         MediaItem.Builder()
@@ -730,6 +793,7 @@ class RadioService : MediaLibraryService() {
             putBoolean(ContentStyle.EXTRA_SUPPORTED, true)
             putInt(ContentStyle.EXTRA_BROWSABLE_HINT, prefs.browsableStyle)
             putInt(ContentStyle.EXTRA_PLAYABLE_HINT, prefs.playableStyle)
+            putParcelableArrayList(KEY_ACTION_ROOT_LIST, browseActionsRootList())
         }
         return MediaLibraryService.LibraryParams.Builder().setExtras(extras).build()
     }
@@ -743,6 +807,29 @@ class RadioService : MediaLibraryService() {
             SessionCommand("net.mspanc.twinsenradio.TOGGLE_DIAG", Bundle.EMPTY)
         private val CMD_TOGGLE_FAV =
             SessionCommand("net.mspanc.twinsenradio.TOGGLE_FAV", Bundle.EMPTY)
+
+        // Akcje przy pozycjach listy w Android Auto. Klucze pochodza z
+        // androidx.media.utils.MediaConstants - wpisane wprost, bo Media3 nie
+        // wystawia ich we wlasnym MediaConstants.
+        private const val ACTION_FAVOURITE = "net.mspanc.twinsenradio.FAVOURITE"
+        private const val ACTION_UNFAVOURITE = "net.mspanc.twinsenradio.UNFAVOURITE"
+
+        private const val KEY_ACTION_ROOT_LIST =
+            "androidx.media.utils.extras.CUSTOM_BROWSER_ACTION_ROOT_LIST"
+        private const val KEY_ACTION_ID_LIST =
+            "androidx.media.utils.extras.CUSTOM_BROWSER_ACTION_ID_LIST"
+        private const val KEY_ACTION_ID =
+            "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_ID"
+        private const val KEY_ACTION_LABEL =
+            "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_LABEL"
+        private const val KEY_ACTION_ICON_URI =
+            "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_ICON_URI"
+        private const val KEY_ACTION_MEDIA_ITEM_ID =
+            "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_MEDIA_ITEM_ID"
+        private const val KEY_ACTION_RESULT_REFRESH_ITEM =
+            "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_RESULT_REFRESH_ITEM"
+        private const val KEY_ACTION_RESULT_MESSAGE =
+            "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_RESULT_MESSAGE"
 
         /**
          * Ile czekamy na okladke, zanim wrocimy do logo stacji. Wyszukiwanie

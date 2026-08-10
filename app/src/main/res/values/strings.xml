@@ -10,6 +10,8 @@
     <string name="node_genres">Gatunki</string>
     <string name="fav_add">Dodaj do ulubionych</string>
     <string name="fav_remove">Usuń z ulubionych</string>
+    <string name="fav_added_toast">%1$s — dodano do ulubionych</string>
+    <string name="fav_removed_toast">%1$s — usunięto z ulubionych</string>
     <string name="root_title">Twinsen Radio</string>
 
     <string name="search_hint">Szukaj stacji…</string>
