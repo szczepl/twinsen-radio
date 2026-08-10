@@ -92,16 +92,67 @@ Po tym Twinsen Radio pojawi się na liście źródeł dźwięku w aucie.
 
 ## 5. Desktop Head Unit — próba na biurku
 
-DHU emuluje ekran centralny Android Auto na laptopie, przez kabel USB.
+Zainstalowana jest **DHU 2.1** (build 2022-12-15). Uwaga: w domyślnym listingu
+`sdkmanager` widać tylko 2.0 — 2.1 siedzi w kanale preview i trzeba go pobrać
+jawnie:
 
 ```powershell
-.\tools\run-dhu.ps1            # profil 1280x640 (Discover Pro 9.2")
-.\tools\run-dhu.ps1 -Small     # profil 800x480  (Composition/Discover Media 8")
+sdkmanager --sdk_root=C:\Android\Sdk --channel=3 "extras;google;auto"
 ```
 
-Skrypt robi `adb forward tcp:5277 tcp:5277` i uruchamia
-`desktop-head-unit.exe -c <profil>`. Warunek: na telefonie musi być włączony
-**head unit server** (punkt 4.5) i telefon musi być odblokowany.
+Uruchamianie:
+
+```powershell
+.\tools\dhu.bat                  # 1280x640 - natywna geometria Discover Pro 9,2"
+.\tools\dhu.bat small            # 800x480  - Composition / Discover Media 8"
+.\tools\dhu.bat cluster          # jw. + wirtualny zegar/AID
+.\tools\dhu.bat small cluster
+```
+
+### Trzy rzeczy, bez których to nie ruszy
+
+Wszystkie trzy kosztowały nas po kilka podejść, więc są tu zapisane wprost.
+
+1. **DHU musi dostać własną konsolę.** Ma interaktywny prompt; uruchomione ze
+   skryptu bez konsoli dostaje EOF na stdin i kończy pracę w ułamku sekundy,
+   zabierając ze sobą okna projekcji. Stąd `cmd /c start` w `dhu.bat`, a nie
+   zwykłe wywołanie.
+
+2. **USB nie może być w trybie „tylko debugowanie".** Przy gołym adb
+   (`kernel_function_list=adb`) połączenie dochodzi do końca handshake'u TLS,
+   po czym car service loguje `Detected charge only` oraz
+   `Critical error 18 ... Failed to read message` i zrywa sesję. Trzeba
+   przełączyć USB na **Transfer plików / Android Auto** — wtedy lista funkcji
+   to `mtp,acm,conn_gadget,adb,ss_mon` i projekcja wstaje.
+
+3. **Serwer head unit trzeba przeklikać wyłącz → włącz przed każdym startem DHU.**
+   Sam napis „Wyłącz serwer radioodtwarzacza" w menu nie oznacza, że nasłuch
+   żyje — zdarzało się, że przełącznik pokazywał „włączony", a telefon nie
+   odnotował ani jednej próby połączenia. Każde uruchomienie DHU zużywa jedną
+   sesję serwera.
+
+Menu jest w: Android Auto → ⋮ → „Włącz serwer radioodtwarzacza". W tym samym
+menu jest „Ustawienia programisty" → **Tryb aplikacji: Deweloperska** — to
+nowszy odpowiednik dawnych „Nieznanych źródeł", bez którego AA nie pokaże
+aplikacji spoza sklepu.
+
+### Rozdzielczości: sztuczka z marginesem
+
+DHU przyjmuje wyłącznie 800x480, 1280x720 i 1920x1080 — natywnych 1280x640
+Discover Pro nie da się wpisać wprost. Rozwiązanie podpatrzone w
+`config/default_wide.ini` Google'a: wziąć 1280x720 i obciąć marginesem.
+
+```ini
+resolution = 1280x720
+marginheight = 80      ; efektywnie 1280x640
+```
+
+### Układ ekranu to decyzja głowicy
+
+Przy 1280x640 Android Auto włącza pulpit Coolwalk: odtwarzacz po lewej, mapa po
+prawej, pasek aplikacji przy lewej krawędzi. Przy 800x480 kontrolki wędrują na
+dół. Aplikacja nie ma na to wpływu — to wynik geometrii ekranu, nie ustawień
+`CONTENT_STYLE_*`.
 
 ### Instrument Cluster — czego DHU *nie* pokaże
 
@@ -280,7 +331,51 @@ w cieniu powiadomień po restarcie telefonu.
 
 ---
 
-## 11. Struktura projektu
+## 11. Pierwsze wyniki eksperymentu z metadanymi
+
+Zebrane **na realnym Galaxy S20+ w projekcji Android Auto** (DHU 2.1, 2026-08-10).
+To jeszcze nie AID w Passacie, ale już konkret o tym, które pola dokąd trafiają.
+
+### Ekran odtwarzania Android Auto
+
+| co widać | z którego pola |
+|---|---|
+| duża linia | `displayTitle` |
+| mała linia pod nią | `subtitle` |
+| okładka | `artworkUri` (`android.resource://` działa) |
+
+Ani `title`, ani `artist` **nie pojawiają się** na tym ekranie — mimo że są
+ustawione. Android Auto bierze warianty „display".
+
+### Okno „Media Playback Status" w DHU
+
+| etykieta DHU | z którego pola |
+|---|---|
+| Song | `displayTitle` |
+| Artist | `subtitle` |
+| Album | `description` |
+
+`description` lądujący w polu „Album" to najmniej oczywisty wynik z całej
+serii — warto o nim pamiętać przy układaniu docelowych metadanych.
+
+### Dlaczego etykiety są bez polskich znaków
+
+Projekcja AA renderuje diakrytyki poprawnie („TYT.WYŚW" wyświetlało się dobrze),
+ale okno „Media Playback Status" w DHU czyta UTF-8 jak Latin-1 i pokazuje
+`TYT.WYÅ?W`. Ponieważ etykieta ma służyć do rozpoznania pola, a nie do
+typografii — a o możliwościach fontów w desce Passata nic pewnego nie wiemy —
+wszystkie etykiety są w czystym ASCII.
+
+### Co zostało do sprawdzenia w aucie
+
+Sam AID. Kanał Instrument Cluster w protokole AA przenosi wyłącznie nawigację
+(patrz punkt 5), więc kafelka muzyki na zegarach nie da się podejrzeć na
+biurku — rysuje go głowica z pól `MediaMetadata`. To jedyna rzecz, po którą
+trzeba pojechać.
+
+---
+
+## 12. Struktura projektu
 
 ```
 app/src/main/java/net/mspanc/twinsenradio/

@@ -83,6 +83,7 @@ class RadioService : MediaLibraryService() {
 
         player = buildPlayer()
         player.addListener(PlayerEvents())
+        player.addAnalyticsListener(LoadDiagnostics())
 
         val sessionActivity = PendingIntent.getActivity(
             this,

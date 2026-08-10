@@ -7,25 +7,31 @@ package net.mspanc.twinsenradio.playback
  *
  * Etykiety sa celowo krotkie - na wyswietlaczu miedzy zegarami w Passacie jest
  * malo miejsca i dluzsze napisy zostana przyciete wielokropkiem.
+ *
+ * Sa tez celowo bez polskich znakow. Sama projekcja Android Auto renderuje
+ * diakrytyki poprawnie, ale okno "Media Playback Status" w DHU czyta UTF-8 jak
+ * Latin-1 i zamiast "TYT.WYSW" pokazuje "TYT.WYAW". Skoro etykieta ma sluzyc do
+ * rozpoznania pola, a nie do typografii, ASCII jest czytelne wszedzie - lacznie
+ * z ekranem w desce, o ktorego mozliwosciach nic pewnego nie wiemy.
  */
 object DiagnosticFields {
 
     data class Field(val api: String, val label: String)
 
     val TEXT: List<Field> = listOf(
-        Field("title", "TYTUŁ"),
+        Field("title", "TYTUL"),
         Field("artist", "ARTYSTA"),
         Field("albumTitle", "ALBUM"),
         Field("albumArtist", "ART.ALBUMU"),
-        Field("displayTitle", "TYT.WYŚW"),
-        Field("subtitle", "PODTYTUŁ"),
+        Field("displayTitle", "TYT.WYSW"),
+        Field("subtitle", "PODTYTUL"),
         Field("description", "OPIS"),
         Field("station", "STACJA"),
         Field("genre", "GATUNEK"),
         Field("composer", "KOMPOZYTOR"),
         Field("writer", "AUTOR"),
         Field("conductor", "DYRYGENT"),
-        Field("compilation", "SKŁADANKA")
+        Field("compilation", "SKLADANKA")
     )
 
     /** Pola liczbowe dostaja rozpoznawalne, nieprzypadkowe wartosci. */
