@@ -150,6 +150,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun play(station: Station) {
         val c = controller ?: return
+
+        // Ta sama stacja, ktora wlasnie gra - nie ruszamy strumienia, tylko
+        // otwieramy ekran odtwarzania. Ponowne ustawienie pozycji zrywalo
+        // polaczenie i bylo slychac przerwe.
+        if (PlaybackStatusBus.stationId.value == station.id && c.isPlaying) {
+            startActivity(Intent(this, NowPlayingActivity::class.java))
+            return
+        }
+
         c.setMediaItem(MediaItem.Builder().setMediaId(station.mediaId).build())
         c.prepare()
         c.play()

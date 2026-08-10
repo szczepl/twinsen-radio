@@ -122,7 +122,7 @@ class RadioService : MediaLibraryService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        session = MediaLibrarySession.Builder(this, player, LibraryCallback())
+        session = MediaLibrarySession.Builder(this, KeepCurrentStreamPlayer(player), LibraryCallback())
             .setSessionActivity(sessionActivity)
             .setCustomLayout(customLayout())
             .build()

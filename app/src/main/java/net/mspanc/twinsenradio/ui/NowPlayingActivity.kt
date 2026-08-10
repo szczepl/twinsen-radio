@@ -142,7 +142,7 @@ class NowPlayingActivity : AppCompatActivity() {
 
         val isFav = station != null && station.id in prefs.favourites
         b.favourite.setImageResource(
-            if (isFav) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
+            if (isFav) R.drawable.ic_star_filled else R.drawable.ic_star_outline
         )
         b.favourite.contentDescription =
             getString(if (isFav) R.string.fav_remove else R.string.fav_add)
