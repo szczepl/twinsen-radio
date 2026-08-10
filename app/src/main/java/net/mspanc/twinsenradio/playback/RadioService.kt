@@ -563,6 +563,14 @@ class RadioService : MediaLibraryService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
+            ConnectionLog.connected(
+                this@RadioService,
+                controller.packageName,
+                controller.uid,
+                controller.controllerVersion,
+                controller.interfaceVersion,
+                controller.connectionHints
+            )
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
                 .add(CMD_TOGGLE_DIAG)
@@ -634,6 +642,7 @@ class RadioService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<MediaItem>> {
+            ConnectionLog.libraryRoot(this@RadioService, browser.packageName, params?.extras)
             Log.i(
                 TAG,
                 "onGetLibraryRoot od ${browser.packageName} (uid=${browser.uid}), " +
