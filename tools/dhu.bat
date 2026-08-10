@@ -48,8 +48,8 @@ echo %* | findstr /I /C:"ontop" >nul && set "ONTOP=-t"
 
 "%ADB%" forward tcp:5277 tcp:5277
 
-rem Okienko podgladu metadanych - osobne okno Windows, obok projekcji
-start "" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0meta-watch.ps1"
+rem Podglad metadanych w osobnym oknie konsoli
+start "Twinsen Radio - metadane" cmd.exe /k "%~dp0meta-log.bat"
 
 pushd "C:\Android\Sdk\extras\google\auto"
 echo Startuje DHU, profil: %CFG% %EXTRA% %ONTOP%
