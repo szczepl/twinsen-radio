@@ -149,6 +149,18 @@ class RadioService : MediaLibraryService() {
         scheduleClockTick()
 
         scope.launch { repo.refreshUserLists() }
+
+        // Zmiana ulubionych - skadkolwiek przyszla - musi od razu przelozyc sie na
+        // gwiazdke przy odtwarzaczu i na listy, ktore ja pokazuja.
+        scope.launch {
+            Prefs.favouritesFlow.collect {
+                if (!this@RadioService::session.isInitialized) return@collect
+                session.setCustomLayout(customLayout())
+                listOf(NODE_FAVOURITES, NODE_ALL, NODE_RECENT).forEach { node ->
+                    session.notifyChildrenChanged(node, Int.MAX_VALUE, null)
+                }
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession = session

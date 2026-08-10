@@ -62,7 +62,8 @@ class NowPlayingActivity : AppCompatActivity() {
             PlaybackStatusBus.nowPlaying,
             PlaybackStatusBus.status,
             PlaybackStatusBus.coverArtUrl,
-            PlaybackStatusBus.trackInfo
+            PlaybackStatusBus.trackInfo,
+            Prefs.favouritesFlow
         ).forEach { flow ->
             lifecycleScope.launch { flow.collect { render() } }
         }

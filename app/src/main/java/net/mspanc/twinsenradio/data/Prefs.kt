@@ -3,6 +3,8 @@ package net.mspanc.twinsenradio.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Ustawienia aplikacji. Swiadomie na SharedPreferences - czyta z nich takze
@@ -97,9 +99,22 @@ class Prefs(context: Context) {
             .lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
         set(v) = sp.edit { putString(KEY_M3U, v.joinToString("\n")) }
 
+    init {
+        // Jedno zrodlo prawdy dla wszystkich ekranow, zasilone przy pierwszym uzyciu
+        synchronized(FAV_LOCK) {
+            if (!favouritesSeeded) {
+                _favourites.value = sp.getStringSet(KEY_FAV, emptySet()).orEmpty()
+                favouritesSeeded = true
+            }
+        }
+    }
+
     var favourites: Set<String>
-        get() = sp.getStringSet(KEY_FAV, emptySet()).orEmpty()
-        set(v) = sp.edit { putStringSet(KEY_FAV, v) }
+        get() = _favourites.value
+        set(v) {
+            sp.edit { putStringSet(KEY_FAV, v) }
+            _favourites.value = v
+        }
 
     /** @return true jesli stacja zostala dodana do ulubionych, false jesli usunieta. */
     fun toggleFavourite(stationId: String): Boolean {
@@ -131,6 +146,21 @@ class Prefs(context: Context) {
         sp.unregisterOnSharedPreferenceChangeListener(l)
 
     companion object {
+        /**
+         * Ulubione jako strumien, a nie odpytywanie preferencji przy okazji.
+         *
+         * Wczesniej kazdy ekran czytal je we wlasnym momencie - lista przy
+         * wchodzeniu na wierzch, ekran odtwarzania przy renderowaniu, Android Auto
+         * przy budowaniu przyciskow - i stany rozjezdzaly sie miedzy soba.
+         * Teraz jest jedno zrodlo prawdy, ktore oglasza zmiane, a wszyscy
+         * zainteresowani ja obserwuja.
+         */
+        private val _favourites = MutableStateFlow<Set<String>>(emptySet())
+        val favouritesFlow: StateFlow<Set<String>> = _favourites
+
+        private var favouritesSeeded = false
+        private val FAV_LOCK = Any()
+
         const val KEY_DIAG = "diagnostic_mode"
         const val KEY_DIAG_API = "diagnostic_api_names"
         const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"

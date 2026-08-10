@@ -90,15 +90,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Ulubione mozna przelaczyc na ekranie odtwarzania albo w aucie, a stan
-        // gwiazdki nie jest czescia modelu stacji - DiffUtil nie ma wiec po czym
-        // poznac zmiany i sam listy nie odswiezy.
-        adapter.notifyItemRangeChanged(0, adapter.itemCount)
-        renderMiniPlayer()
-    }
-
     override fun onStart() {
         super.onStart()
         val token = SessionToken(this, ComponentName(this, RadioService::class.java))
@@ -185,6 +176,13 @@ class MainActivity : AppCompatActivity() {
         }
         lifecycleScope.launch {
             PlaybackStatusBus.coverArtUrl.collect { renderMiniPlayer() }
+        }
+        // Ulubione moga zmienic sie na ekranie odtwarzania albo w aucie. Stan nie
+        // jest czescia modelu stacji, wiec DiffUtil sam z siebie nic nie odswiezy.
+        lifecycleScope.launch {
+            Prefs.favouritesFlow.collect {
+                adapter.notifyItemRangeChanged(0, adapter.itemCount)
+            }
         }
     }
 
