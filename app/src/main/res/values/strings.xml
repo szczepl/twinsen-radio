@@ -17,6 +17,9 @@
     <string name="status_playing">Odtwarzanie</string>
     <string name="status_idle">Zatrzymane</string>
     <string name="nothing_playing">Nic nie gra</string>
+    <string name="now_playing_title">Odtwarzanie</string>
+    <string name="prev_station">Poprzednia stacja</string>
+    <string name="next_station">Następna stacja</string>
 
     <string name="opt_diag">Tryb diagnostyczny metadanych</string>
     <string name="opt_diag_sub">Każde pole metadanych dostaje swoją polską nazwę zamiast realnej wartości. Do pozycjonowania z AID.</string>

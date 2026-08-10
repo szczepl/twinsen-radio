@@ -45,6 +45,12 @@
         </activity>
 
         <activity
+            android:name=".ui.NowPlayingActivity"
+            android:exported="false"
+            android:label="@string/now_playing_title"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"

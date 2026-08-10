@@ -73,6 +73,12 @@ class MainActivity : AppCompatActivity() {
             val c = controller ?: return@setOnClickListener
             if (c.isPlaying) c.pause() else c.play()
         }
+        // Stukniecie w pasek rozwija pelnoekranowy odtwarzacz
+        b.miniPlayer.setOnClickListener {
+            if (PlaybackStatusBus.stationId.value != null) {
+                startActivity(Intent(this, NowPlayingActivity::class.java))
+            }
+        }
 
         askForNotificationPermission()
         observeStatus()

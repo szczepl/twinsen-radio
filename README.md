@@ -400,10 +400,18 @@ tekstu i małą grafikę** — czyli o jedną linię więcej niż ekran centraln
         tytul
 ```
 
-Istotny szczegół: oficjalna apka RNŚ **nie** wyświetla nazwy stacji w środkowej
-linii, ReplaIO wyświetla ją zawsze. To znaczy, że środkowa linia nie jest
-generowana przez głowicę z nazwy źródła — bierze się z pola, które aplikacja
-albo wypełnia, albo nie.
+Gdy nie leci utwór, wygląda to gorzej — u RNŚ na desce widać wtedy:
+
+```
+        [ logo stacji ]
+        Radio Nowy Swiat
+        Radio Nowy Swiat
+        (pusto)
+```
+
+czyli nazwa stacji zdublowana i pusta trzecia linia. Marnuje się miejsce, w
+którym mogłoby stać coś sensownego — na przykład slogan audycji, który przecież
+przychodzi w ICY („Pion i poziom!").
 
 Stąd hipoteza do potwierdzenia jednym spojrzeniem w trybie diagnostycznym:
 
@@ -419,11 +427,21 @@ jego nazwę razem z zegarem, więc wystarczy odczytać, co się wyświetli.
 
 ### Czego robić nie należy: podwójna nazwa stacji
 
-ReplaIO ma wadę wartą uniknięcia. Gdy nie leci utwór, wpisuje nazwę stacji
-także w `displayTitle`, przez co na ekranie widać dwa razy to samo —
-„Radio Nowy Świat" nad „Radio Nowy Świat". Docelowe metadane muszą traktować
-brak utworu jako osobny przypadek, a nie powielać tę samą wartość w kilku
-polach.
+To ta sama pułapka, w którą wpadają i ReplaIO, i oficjalna apka RNŚ. Bierze się
+stąd, że rozgłośnie używają pola `StreamTitle` do dwóch różnych rzeczy:
+
+```
+StreamTitle='Bonobo & Joy Crookes - Always on Your Side'   <- wykonawca i utwor
+StreamTitle='Radio Nowy Świat - Pion i poziom!'            <- stacja i slogan
+```
+
+Naiwne dzielenie po " - " daje w drugim przypadku „wykonawcę" równego nazwie
+stacji — i nazwa ląduje na ekranie dwa razy. Widać to u nas na ekranie
+odtwarzania w telefonie.
+
+Docelowe metadane muszą to rozpoznawać: jeśli lewa strona `StreamTitle` jest
+zbliżona do nazwy stacji, to nie jest wykonawca, tylko slogan albo nazwa
+audycji — i należy ją potraktować inaczej, a nie powielać w kilku polach.
 
 ### Co zostało do sprawdzenia w aucie
 

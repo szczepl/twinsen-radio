@@ -21,9 +21,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.metadata.icy.IcyHeaders
 import androidx.media3.extractor.metadata.icy.IcyInfo
+import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -101,6 +105,7 @@ class RadioService : MediaLibraryService() {
 
         session = MediaLibrarySession.Builder(this, player, LibraryCallback())
             .setSessionActivity(sessionActivity)
+            .setCustomLayout(ImmutableList.of(diagnosticButton()))
             .build()
 
         reconnect = ReconnectController(this, player) { status ->
@@ -325,7 +330,54 @@ class RadioService : MediaLibraryService() {
 
     // --- drzewo przegladania dla Android Auto ---------------------------------
 
+    /**
+     * Przycisk w szablonie odtwarzacza Android Auto. To jedyny sposob, zeby dac
+     * uzytkownikowi jakiekolwiek wlasne sterowanie - AA nie pozwala rysowac
+     * wlasnego UI, ale custom actions renderuje w swoim layoucie (to samo robi
+     * ReplaIO ze swoja gwiazdka i serduszkiem).
+     *
+     * Po co akurat ten: pozwala przelaczyc tryb diagnostyczny wprost z ekranu
+     * auta, bez siegania po telefon w trakcie jazdy.
+     */
+    private fun diagnosticButton(): CommandButton =
+        CommandButton.Builder()
+            .setSessionCommand(CMD_TOGGLE_DIAG)
+            .setDisplayName(
+                if (prefs.diagnosticMode) "Diagnostyka: WL" else "Diagnostyka: WYL"
+            )
+            .setIconResId(net.mspanc.twinsenradio.R.drawable.ic_radio)
+            .build()
+
     private inner class LibraryCallback : MediaLibrarySession.Callback {
+
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+                .buildUpon()
+                .add(CMD_TOGGLE_DIAG)
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == CMD_TOGGLE_DIAG.customAction) {
+                prefs.diagnosticMode = !prefs.diagnosticMode
+                Log.i(TAG, "przelaczono tryb diagnostyczny na ${prefs.diagnosticMode}")
+                // prefsListener zajmie sie odswiezeniem metadanych
+                session.setCustomLayout(ImmutableList.of(diagnosticButton()))
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+        }
 
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
@@ -518,6 +570,9 @@ class RadioService : MediaLibraryService() {
         private const val TAG = "RadioService"
         private const val TAG_ICY = "IcyMeta"
         private const val TAG_DUMP = "MetaDump"
+
+        private val CMD_TOGGLE_DIAG =
+            SessionCommand("net.mspanc.twinsenradio.TOGGLE_DIAG", Bundle.EMPTY)
 
         const val NODE_ROOT = "/"
         const val NODE_FAVOURITES = "/fav"

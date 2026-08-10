@@ -1,0 +1,124 @@
+package net.mspanc.twinsenradio.ui
+
+import android.content.ComponentName
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.MoreExecutors
+import kotlinx.coroutines.launch
+import net.mspanc.twinsenradio.R
+import net.mspanc.twinsenradio.data.Prefs
+import net.mspanc.twinsenradio.data.Station
+import net.mspanc.twinsenradio.data.StationRepository
+import net.mspanc.twinsenradio.databinding.ActivityNowPlayingBinding
+import net.mspanc.twinsenradio.playback.MetadataFactory
+import net.mspanc.twinsenradio.playback.PlaybackStatusBus
+import net.mspanc.twinsenradio.playback.RadioService
+
+/**
+ * Pelnoekranowy odtwarzacz na telefonie: duza okladka, metadane, sterowanie
+ * i strzalka powrotu do listy stacji. Otwiera sie stuknieciem w pasek
+ * odtwarzania na ekranie glownym.
+ */
+@UnstableApi
+class NowPlayingActivity : AppCompatActivity() {
+
+    private lateinit var b: ActivityNowPlayingBinding
+    private lateinit var repo: StationRepository
+    private lateinit var metadata: MetadataFactory
+    private var controller: MediaController? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        b = ActivityNowPlayingBinding.inflate(layoutInflater)
+        setContentView(b.root)
+
+        repo = StationRepository.get(this)
+        metadata = MetadataFactory(this, Prefs(this))
+
+        b.toolbar.setNavigationOnClickListener { finish() }
+        b.playPause.setOnClickListener {
+            val c = controller ?: return@setOnClickListener
+            if (c.isPlaying) c.pause() else c.play()
+        }
+        b.prev.setOnClickListener { step(-1) }
+        b.next.setOnClickListener { step(+1) }
+
+        listOf(
+            PlaybackStatusBus.stationId,
+            PlaybackStatusBus.nowPlaying,
+            PlaybackStatusBus.status
+        ).forEach { flow ->
+            lifecycleScope.launch { flow.collect { render() } }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val token = SessionToken(this, ComponentName(this, RadioService::class.java))
+        val future = MediaController.Builder(this, token).buildAsync()
+        future.addListener({
+            controller = future.get().also { c ->
+                c.addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) = render()
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = render()
+                })
+            }
+            render()
+        }, MoreExecutors.directExecutor())
+    }
+
+    override fun onStop() {
+        controller?.release()
+        controller = null
+        super.onStop()
+    }
+
+    /** Przeskok na sasiednia stacje z tej samej listy, z zawijaniem. */
+    private fun step(delta: Int) {
+        val all = repo.all()
+        if (all.isEmpty()) return
+        val currentId = PlaybackStatusBus.stationId.value
+        val index = all.indexOfFirst { it.id == currentId }
+        val target = if (index < 0) 0 else ((index + delta) % all.size + all.size) % all.size
+        play(all[target])
+    }
+
+    private fun play(station: Station) {
+        val c = controller ?: return
+        c.setMediaItem(MediaItem.Builder().setMediaId(station.mediaId).build())
+        c.prepare()
+        c.play()
+    }
+
+    private fun render() {
+        val station = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
+        val now = PlaybackStatusBus.nowPlaying.value
+
+        b.stationName.text = station?.name ?: getString(R.string.nothing_playing)
+        b.songTitle.text = now?.songTitle.orEmpty()
+        b.songArtist.text = now?.artist.orEmpty()
+        b.art.setImageResource(
+            station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder
+        )
+        b.status.text = getString(
+            when (PlaybackStatusBus.status.value) {
+                PlaybackStatusBus.Status.CONNECTING -> R.string.status_connecting
+                PlaybackStatusBus.Status.BUFFERING -> R.string.status_buffering
+                PlaybackStatusBus.Status.PLAYING -> R.string.status_playing
+                PlaybackStatusBus.Status.RECONNECTING -> R.string.status_reconnecting
+                PlaybackStatusBus.Status.WAITING_FOR_NETWORK -> R.string.status_waiting_network
+                PlaybackStatusBus.Status.IDLE -> R.string.status_idle
+            }
+        )
+        b.playPause.setImageResource(
+            if (controller?.isPlaying == true) android.R.drawable.ic_media_pause
+            else android.R.drawable.ic_media_play
+        )
+    }
+}
