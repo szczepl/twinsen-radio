@@ -84,6 +84,9 @@ class RadioService : MediaLibraryService() {
     /** Czeka po znaczniku sterujacym na to, co rozglosnia wstawi dalej. */
     private var pendingMarkerJob: Job? = null
 
+    /** Pilnuje, czy opis utworu nie zwietrzal, gdy stacja nic nie oglosila. */
+    private var staleJob: Job? = null
+
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             Prefs.KEY_STYLE_BROWSABLE, Prefs.KEY_STYLE_PLAYABLE, Prefs.KEY_M3U -> {
@@ -335,6 +338,34 @@ class RadioService : MediaLibraryService() {
         PlaybackStatusBus.setNowPlaying(now)
         refreshCurrentMetadata(force = true, now = now)
         updateCoverArt(now)
+        scheduleStaleCheck(now)
+    }
+
+    /**
+     * Sprzataniecie po utworze, ktorego koniec nie zostal ogloszony.
+     *
+     * RMF potrafi wejsc w blok reklamowy bez zadnego zdarzenia ICY - wtedy na
+     * ekranie zostawal tytul sprzed kilku minut, bo nie mielismy sygnalu, ze
+     * cokolwiek sie zmienilo. Zamiast zgadywac stalym limitem, korzystamy z
+     * dlugosci utworu z katalogu: skoro piosenka trwa 3:20, to po 4:20 na pewno
+     * juz nie leci. Gdy dlugosci nie znamy, przyjmujemy [FALLBACK_TRACK_MS].
+     */
+    private fun scheduleStaleCheck(now: NowPlaying?) {
+        staleJob?.cancel()
+        if (now?.isRealSong != true) return
+
+        val known = trackInfo?.durationMs ?: 0
+        val timeout = (if (known > 0) known else FALLBACK_TRACK_MS) + STALE_GRACE_MS
+        staleJob = scope.launch {
+            delay(timeout)
+            if (PlaybackStatusBus.nowPlaying.value?.raw != now.raw) return@launch
+            Log.i(
+                TAG_ICY,
+                "utwor '${now.raw}' powinien byc juz po ${timeout / 1000}s - " +
+                    "stacja nic nie przyslala, czyszcze opis"
+            )
+            apply(null)
+        }
     }
 
     /**
@@ -361,6 +392,8 @@ class RadioService : MediaLibraryService() {
             PlaybackStatusBus.setCoverArt(url)
             PlaybackStatusBus.setTrackInfo(info)
             refreshCurrentMetadata(force = true, now = PlaybackStatusBus.nowPlaying.value)
+            // Znamy juz dlugosc utworu - przelicz moment, w ktorym opis zwietrzeje
+            scheduleStaleCheck(PlaybackStatusBus.nowPlaying.value)
         }
 
         // Reklama albo wlasny slogan stacji - nie ma czego szukac w katalogu.
@@ -848,6 +881,12 @@ class RadioService : MediaLibraryService() {
          * w odstepie kilku sekund, wiec 15 s spokojnie je przykrywa.
          */
         private const val MARKER_GRACE_MS = 15_000L
+
+        /** Przyjmowana dlugosc utworu, gdy katalog jej nie zna. */
+        private const val FALLBACK_TRACK_MS = 5 * 60_000L
+
+        /** Zapas doliczany do dlugosci utworu, zanim uznamy opis za nieaktualny. */
+        private const val STALE_GRACE_MS = 60_000L
 
         const val NODE_ROOT = "/"
         const val NODE_FAVOURITES = "/fav"

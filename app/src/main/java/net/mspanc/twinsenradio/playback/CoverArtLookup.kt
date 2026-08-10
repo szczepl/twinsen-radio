@@ -39,7 +39,9 @@ object CoverArtLookup {
         val artworkUrl: String?,
         val album: String?,
         val year: Int?,
-        val isSingle: Boolean
+        val isSingle: Boolean,
+        /** Dlugosc utworu z katalogu; 0 gdy nieznana. */
+        val durationMs: Long = 0
     ) {
         /** np. "Księga [2024]" albo "singiel [2024]". */
         fun albumLabel(): String? {
@@ -147,8 +149,9 @@ object CoverArtLookup {
             val album = rawAlbum?.removeSuffix(" - Single")?.removeSuffix(" - EP")
 
             val year = row.optString("releaseDate").take(4).toIntOrNull()
+            val duration = row.optLong("trackTimeMillis", 0L)
 
-            return TrackInfo(art, album, year, isSingle)
+            return TrackInfo(art, album, year, isSingle, duration)
         } finally {
             conn.disconnect()
         }
