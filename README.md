@@ -147,12 +147,33 @@ resolution = 1280x720
 marginheight = 80      ; efektywnie 1280x640
 ```
 
-### Układ ekranu to decyzja głowicy
+### Układ ekranu: geometria **i** przełącznik w AA
 
-Przy 1280x640 Android Auto włącza pulpit Coolwalk: odtwarzacz po lewej, mapa po
-prawej, pasek aplikacji przy lewej krawędzi. Przy 800x480 kontrolki wędrują na
-dół. Aplikacja nie ma na to wpływu — to wynik geometrii ekranu, nie ustawień
-`CONTENT_STYLE_*`.
+Geometria robi swoje — nasze pomiary przy `dpi = 160`:
+
+| profil | proporcje | co wyszło |
+|---|---|---|
+| 800x480 | 1,67 | pasek aplikacji na dole |
+| 1280x720 | 1,78 | pulpit Coolwalk, pasek z lewej |
+| 1280x640 | 2,00 | jw. |
+
+Ale to nie cała prawda. Pozycję paska da się przestawić ręcznie, tyle że
+ustawienie jest **w interfejsie Android Auto na ekranie głowicy** (kółko zębate
+w rogu projekcji), a nie w aplikacji Android Auto na telefonie:
+
+> **Szybkie sterowanie aplikacjami** (*Show Quick Controls for Apps*)
+> * włączone → pasek na **dole** (musi zmieścić szybkie sterowanie)
+> * wyłączone → pasek **z boku**
+
+Druga zasada: pełny ekran aplikacji przerzuca pasek z powrotem na bok. Czyli
+„odtwarzacz na całą szerokość" i „pasek na dole" to w dużej mierze wybór
+albo-albo.
+
+Żadne z tego nie zależy od naszej aplikacji — `CONTENT_STYLE_*` steruje wyłącznie
+wyglądem list w przeglądarce mediów, nie układem systemowym.
+
+Źródła: [How to Move the Android Auto Taskbar to the Side (Or Bottom)](https://www.howtogeek.com/how-to-move-the-android-auto-taskbar-to-the-side-or-bottom/),
+[Navigation bar — Android for Cars design](https://developers.google.com/cars/design/android-auto/product-experience/system-ui/nav-bar)
 
 ### Instrument Cluster — czego DHU *nie* pokaże
 

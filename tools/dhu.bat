@@ -25,6 +25,12 @@ set "EXTRA="
 if /I "%~1"=="small" (
   set "CFG=%~dp0dhu-passat-composition.ini"
   if /I "%~2"=="cluster" set "EXTRA=-c "%~dp0dhu-passat-cluster.ini""
+) else if /I "%~1"=="720" (
+  set "CFG=%~dp0dhu-720p.ini"
+  if /I "%~2"=="cluster" set "EXTRA=-c "%~dp0dhu-passat-cluster.ini""
+) else if /I "%~1"=="big" (
+  set "CFG=%~dp0dhu-720p-hidpi.ini"
+  if /I "%~2"=="cluster" set "EXTRA=-c "%~dp0dhu-passat-cluster.ini""
 ) else if /I "%~1"=="cluster" (
   set "EXTRA=-c "%~dp0dhu-passat-cluster.ini""
 )
