@@ -1,5 +1,5 @@
 [
-  { "id": "rns",         "name": "Radio Nowy Świat",        "genre": "Muzyka i rozmowa", "logo": "logo_rns",         "stream": "https://go-audio.toya.net.pl/63214" },
+  { "id": "rns",         "name": "Radio Nowy Świat",        "genre": "Muzyka i rozmowa", "logo": "logo_rns",         "stream": "https://stream.rcs.revma.com/5ws0kfn1x1zuv" },
   { "id": "r357",        "name": "Radio 357",               "genre": "Muzyka i rozmowa", "logo": "logo_r357",        "stream": "https://n-11-21.dcs.redcdn.pl/sc/o2/radio357/live/radio357_pr.livx?preroll=0" },
   { "id": "chillizet",   "name": "Chilli ZET",              "genre": "Chillout",         "logo": "logo_chillizet",   "stream": "https://ch.cdn.eurozet.pl/chi-net.mp3" },
   { "id": "zet",         "name": "Radio ZET",               "genre": "Pop",              "logo": "logo_zet",         "stream": "https://zt01.cdn.eurozet.pl/zet-net.mp3" },
