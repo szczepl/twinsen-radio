@@ -23,6 +23,7 @@ import androidx.media3.extractor.metadata.icy.IcyHeaders
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaConstants
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
@@ -662,22 +663,31 @@ class RadioService : MediaLibraryService() {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
         Log.i(TAG, "buduje gwiazdke dla stacji '$id': ulubiona=$isFav")
+        // Ikona idzie DWOMA kanalami naraz i to nie jest nadmiarowosc.
         //
-        // Ikona jest **semantyczna**, a nie nasza wlasna. Media3 ma na to zestaw
-        // stalych (ICON_STAR_FILLED / ICON_STAR_UNFILLED) podawanych w konstruktorze
-        // - glowica dostaje wtedy informacje "to jest gwiazdka" i rysuje wlasna
-        // grafike, zgodna ze swoim motywem.
+        // Kanal wlasciwy to extras: dokumentacja Androida dla samochodow mowi
+        // wprost, ze jesli ikona odpowiada ktorejs ze stalych CommandButton.ICON_,
+        // nalezy wpisac jej wartosc pod kluczem EXTRAS_KEY_COMMAND_BUTTON_ICON_COMPAT,
+        // bo to "nadpisuje zasob ikony przekazany do CustomAction.Builder i pozwala
+        // systemowi narysowac akcje spojnie z pozostalymi". Innymi slowy glowica
+        // rysuje wtedy WLASNA gwiazdke i nie oglada sie na nasze zasoby.
         //
-        // Droga przez wlasny drawable okazala sie nie do uratowania. Numer zasobu
-        // przesuwa sie przy kazdej przebudowie aplikacji (wystarczy dolozyc jeden
-        // plik do res/drawable), a Android Auto pamieta narysowana ikone wlasnie
-        // pod tym numerem. Efekt: po aktualizacji w miejscu pelnej gwiazdki
-        // pojawiala sie pusta, a w miejscu pustej kwadrat - bo pod tymi numerami
-        // siedzialy wczesniej inne grafiki. Podanie obok tego adresu content://
-        // nic nie dalo, bo stara sciezka przez numer zasobu i tak wygrywala.
-        return CommandButton.Builder(
-            if (isFav) CommandButton.ICON_STAR_FILLED else CommandButton.ICON_STAR_UNFILLED
-        )
+        // Kanal zapasowy to numer zasobu - dla systemow, ktore tego klucza nie
+        // znaja. I tylko tam ma znaczenie, ze wektor jest bez android:tint:
+        // odwolanie do @color/... glowica musialaby rozwiazac w naszym pakiecie
+        // przy inflacji we wlasnym procesie, i wlasnie na tym sie wykladalo.
+        //
+        // Czego NIE robic: podawac stalej semantycznej w konstruktorze
+        // CommandButton.Builder(ICON_STAR_FILLED) i liczyc, ze wystarczy. Media3
+        // zamienia ja wtedy dla starego API na numer wlasnego zasobu z AAR-a, a
+        // Desktop Head Unit narysowal z tego nutke i napis "1.8X".
+        val icon = if (isFav) {
+            CommandButton.ICON_STAR_FILLED
+        } else {
+            CommandButton.ICON_STAR_UNFILLED
+        }
+        @Suppress("DEPRECATION")
+        return CommandButton.Builder()
             .setSessionCommand(CMD_TOGGLE_FAV)
             .setDisplayName(
                 getString(
@@ -685,16 +695,27 @@ class RadioService : MediaLibraryService() {
                     else net.mspanc.twinsenradio.R.string.fav_add
                 )
             )
+            .setIconResId(
+                if (isFav) net.mspanc.twinsenradio.R.drawable.ic_star_filled_aa
+                else net.mspanc.twinsenradio.R.drawable.ic_star_outline_aa
+            )
+            .setExtras(
+                Bundle().apply {
+                    putInt(MediaConstants.EXTRAS_KEY_COMMAND_BUTTON_ICON_COMPAT, icon)
+                }
+            )
             .build()
     }
 
-    /** Tak samo jak gwiazdka - ikona semantyczna, zeby nie zalezec od numeru zasobu. */
+    /** Tak samo jak gwiazdka - wlasny wektor, numer zasobu przybity na stale. */
     private fun diagnosticButton(): CommandButton =
-        CommandButton.Builder(CommandButton.ICON_SETTINGS)
+        @Suppress("DEPRECATION")
+        CommandButton.Builder()
             .setSessionCommand(CMD_TOGGLE_DIAG)
             .setDisplayName(
                 if (prefs.diagnosticMode) "Diagnostyka: WL" else "Diagnostyka: WYL"
             )
+            .setIconResId(net.mspanc.twinsenradio.R.drawable.ic_diag_aa)
             .build()
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {

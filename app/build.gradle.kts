@@ -1,4 +1,4 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+﻿import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -13,8 +13,8 @@ android {
         applicationId = "net.mspanc.twinsenradio"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1-diag"
+        versionCode = 2
+        versionName = "0.2-diag"
     }
 
     buildTypes {
@@ -60,3 +60,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.google.guava:guava:33.3.1-android")
 }
+
+
