@@ -87,6 +87,10 @@ class RadioService : MediaLibraryService() {
     /** Pilnuje, czy opis utworu nie zwietrzal, gdy stacja nic nie oglosila. */
     private var staleJob: Job? = null
 
+    /** Ostatni slogan stacji - pokazujemy go, gdy nie wiemy, co akurat leci. */
+    @Volatile
+    private var lastSlogan: String? = null
+
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             Prefs.KEY_STYLE_BROWSABLE, Prefs.KEY_STYLE_PLAYABLE, Prefs.KEY_M3U -> {
@@ -213,6 +217,7 @@ class RadioService : MediaLibraryService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             lastRawIcyTitle = null
+            lastSlogan = null
             val id = mediaItem?.mediaId?.let { Station.idFromMediaId(it) }
             PlaybackStatusBus.setStation(id)
             id?.let { prefs.pushRecent(it) }
@@ -335,6 +340,7 @@ class RadioService : MediaLibraryService() {
     }
 
     private fun apply(now: NowPlaying?) {
+        now?.slogan?.let { lastSlogan = it }
         PlaybackStatusBus.setNowPlaying(now)
         refreshCurrentMetadata(force = true, now = now)
         updateCoverArt(now)
@@ -364,7 +370,21 @@ class RadioService : MediaLibraryService() {
                 "utwor '${now.raw}' powinien byc juz po ${timeout / 1000}s - " +
                     "stacja nic nie przyslala, czyszcze opis"
             )
-            apply(null)
+            // Jesli stacja kiedykolwiek podala swoj slogan, lepiej pokazac jego
+            // niz pusta linie - RNS ma "Pion i poziom!", RMF "FAKTY" przy serwisie.
+            val slogan = lastSlogan
+            if (slogan != null) {
+                apply(
+                    NowPlaying(
+                        raw = slogan,
+                        artist = null,
+                        songTitle = slogan,
+                        isStationSelfTitle = true
+                    )
+                )
+            } else {
+                apply(null)
+            }
         }
     }
 
@@ -886,8 +906,15 @@ class RadioService : MediaLibraryService() {
         /** Przyjmowana dlugosc utworu, gdy katalog jej nie zna. */
         private const val FALLBACK_TRACK_MS = 5 * 60_000L
 
-        /** Zapas doliczany do dlugosci utworu, zanim uznamy opis za nieaktualny. */
-        private const val STALE_GRACE_MS = 60_000L
+        /**
+         * Zapas doliczany do dlugosci utworu, zanim uznamy opis za nieaktualny.
+         *
+         * Rozglosnie skracaja utwory, zagaduja koncowki i puszczaja wersje radiowe
+         * krotsze niz katalogowe, wiec czekanie dlugo po czasie nic nie daje.
+         * Pol minuty pokrywa naturalny rozjazd, a jednoczesnie nie zostawia
+         * nieaktualnego tytulu na ekranie na dluzej.
+         */
+        private const val STALE_GRACE_MS = 30_000L
 
         const val NODE_ROOT = "/"
         const val NODE_FAVOURITES = "/fav"
