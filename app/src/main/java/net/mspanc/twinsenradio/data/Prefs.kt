@@ -59,6 +59,21 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_CLOCK_ALWAYS, false)
         set(v) = sp.edit { putBoolean(KEY_CLOCK_ALWAYS, v) }
 
+    /** Kolor tla zegara rysowanego zamiast okladki. */
+    var clockBackground: Int
+        get() = sp.getInt(KEY_CLOCK_BG, 0)
+        set(v) = sp.edit { putInt(KEY_CLOCK_BG, v) }
+
+    /** Kolor cyfr i wskazowek zegara; indeks 0 to dobor automatyczny. */
+    var clockForeground: Int
+        get() = sp.getInt(KEY_CLOCK_FG, 0)
+        set(v) = sp.edit { putInt(KEY_CLOCK_FG, v) }
+
+    /** Czy uzupelniac linie wykonawcy o wydawnictwo i rok z katalogu iTunes. */
+    var enrichWithAlbum: Boolean
+        get() = sp.getBoolean(KEY_ENRICH_ALBUM, true)
+        set(v) = sp.edit { putBoolean(KEY_ENRICH_ALBUM, v) }
+
     /** Indeks profilu bufora, patrz [BufferProfile.ALL]. */
     var bufferProfile: Int
         get() = sp.getInt(KEY_BUFFER, 1)
@@ -113,6 +128,9 @@ class Prefs(context: Context) {
         const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"
         const val KEY_PRESENTATION = "presentation_mode"
         const val KEY_CLOCK_ALWAYS = "clock_cover_always"
+        const val KEY_CLOCK_BG = "clock_background"
+        const val KEY_CLOCK_FG = "clock_foreground"
+        const val KEY_ENRICH_ALBUM = "enrich_with_album"
         const val KEY_STYLE_BROWSABLE = "aa_style_browsable"
         const val KEY_STYLE_PLAYABLE = "aa_style_playable"
         const val KEY_BUFFER = "buffer_profile"

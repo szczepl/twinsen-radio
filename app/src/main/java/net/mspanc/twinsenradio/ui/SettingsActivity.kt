@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.BufferProfile
+import net.mspanc.twinsenradio.data.ClockColors
 import net.mspanc.twinsenradio.data.ContentStyle
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Presentation
@@ -34,6 +35,9 @@ class SettingsActivity : AppCompatActivity() {
 
         fill(b.spPresentation, Presentation.LABELS, prefs.presentationMode)
         b.swClockAlways.isChecked = prefs.clockCoverAlways
+        fill(b.spClockBg, ClockColors.BACKGROUND_LABELS, prefs.clockBackground)
+        fill(b.spClockFg, ClockColors.FOREGROUND_LABELS, prefs.clockForeground)
+        b.swEnrich.isChecked = prefs.enrichWithAlbum
 
         fill(b.spBrowsable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.browsableStyle))
         fill(b.spPlayable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.playableStyle))
@@ -70,6 +74,9 @@ class SettingsActivity : AppCompatActivity() {
         prefs.diagnosticShowApiName = b.swDiagApi.isChecked
         prefs.presentationMode = b.spPresentation.selectedItemPosition
         prefs.clockCoverAlways = b.swClockAlways.isChecked
+        prefs.clockBackground = b.spClockBg.selectedItemPosition
+        prefs.clockForeground = b.spClockFg.selectedItemPosition
+        prefs.enrichWithAlbum = b.swEnrich.isChecked
         prefs.browsableStyle = ContentStyle.indexToValue(b.spBrowsable.selectedItemPosition)
         prefs.playableStyle = ContentStyle.indexToValue(b.spPlayable.selectedItemPosition)
         prefs.bufferProfile = b.spBuffer.selectedItemPosition

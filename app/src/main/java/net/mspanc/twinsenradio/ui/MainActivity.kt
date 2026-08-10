@@ -165,6 +165,9 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             PlaybackStatusBus.stationId.collect { renderMiniPlayer() }
         }
+        lifecycleScope.launch {
+            PlaybackStatusBus.coverArtUrl.collect { renderMiniPlayer() }
+        }
     }
 
     private fun renderMiniPlayer() {
@@ -194,7 +197,7 @@ class MainActivity : AppCompatActivity() {
         )
         ArtworkLoader.into(
             lifecycleScope,
-            controller?.mediaMetadata?.artworkUri,
+            PlaybackStatusBus.coverArtUrl.value?.let { android.net.Uri.parse(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.miniLogo
         )

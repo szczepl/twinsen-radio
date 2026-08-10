@@ -66,17 +66,33 @@
         android:gravity="center"
         android:textAppearance="?attr/textAppearanceLabelMedium" />
 
-    <TextView
+    <LinearLayout
         android:id="@+id/diagnosticBanner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:gravity="center"
-        android:text="@string/diagnostic_banner"
-        android:textColor="@color/diagnostic"
-        android:textStyle="bold"
-        android:textAppearance="?attr/textAppearanceLabelMedium"
-        android:visibility="gone" />
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="10dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:letterSpacing="0.08"
+            android:text="@string/diagnostic_banner_line1"
+            android:textAppearance="?attr/textAppearanceLabelLarge"
+            android:textColor="@color/diagnostic"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/diagnostic_banner_line2"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="@color/diagnostic" />
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"

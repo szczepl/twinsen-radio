@@ -18,7 +18,12 @@
     <string name="status_idle">Zatrzymane</string>
     <string name="nothing_playing">Nic nie gra</string>
     <string name="now_playing_title">Odtwarzanie</string>
-    <string name="diagnostic_banner">TRYB DIAGNOSTYCZNY — metadane zastąpione etykietami pól</string>
+    <string name="diagnostic_banner_line1">TRYB DIAGNOSTYCZNY</string>
+    <string name="diagnostic_banner_line2">Dotyczy tylko Android Auto — tam pola metadanych są zastąpione etykietami. Tutaj widzisz prawdziwe dane.</string>
+    <string name="opt_clock_bg">Tło zegara</string>
+    <string name="opt_clock_fg">Kolor zegara</string>
+    <string name="opt_enrich">Uzupełniaj wykonawcę o album i rok</string>
+    <string name="opt_enrich_sub">Gdy stacja podaje samego wykonawcę, dopisujemy wydawnictwo z katalogu iTunes — np. „Kaeyra / singiel [2024]”. Stacje, które już podają album (RMF: „Wiktoria Kida / Księga”), zostawiamy bez zmian.</string>
     <string name="ad">Reklama</string>
     <string name="ad_with_length">Reklama · %1$d s</string>
     <string name="opt_presentation">Układ opisu utworu</string>

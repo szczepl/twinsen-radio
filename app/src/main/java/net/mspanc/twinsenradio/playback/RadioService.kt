@@ -73,6 +73,10 @@ class RadioService : MediaLibraryService() {
     @Volatile
     private var coverArtUrl: String? = null
 
+    /** Nazwa wydawnictwa z roku z katalogu, np. "Księga [2024]" albo "singiel [2024]". */
+    @Volatile
+    private var albumLabel: String? = null
+
     /** Rosnie przy kazdej zmianie utworu - odsiewa spoznione wyniki wyszukiwania. */
     private var coverGeneration = 0
     private var coverRevertJob: Job? = null
@@ -95,7 +99,8 @@ class RadioService : MediaLibraryService() {
                 }
             }
             Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK,
-            Prefs.KEY_PRESENTATION, Prefs.KEY_CLOCK_ALWAYS -> refreshCurrentMetadata(force = true)
+            Prefs.KEY_PRESENTATION, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
+            Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM -> refreshCurrentMetadata(force = true)
             Prefs.KEY_BUFFER -> Log.i(TAG, "Zmieniono bufor - zadziala po restarcie odtwarzania")
         }
     }
@@ -346,10 +351,13 @@ class RadioService : MediaLibraryService() {
         val generation = ++coverGeneration
         coverRevertJob?.cancel()
 
-        fun applyIfCurrent(url: String?) {
+        fun applyIfCurrent(info: CoverArtLookup.TrackInfo?) {
             if (generation != coverGeneration) return
-            if (coverArtUrl == url) return
+            val url = info?.artworkUrl
+            if (coverArtUrl == url && albumLabel == info?.albumLabel()) return
             coverArtUrl = url
+            albumLabel = info?.albumLabel()
+            PlaybackStatusBus.setCoverArt(url)
             refreshCurrentMetadata(force = true, now = PlaybackStatusBus.nowPlaying.value)
         }
 
@@ -369,10 +377,10 @@ class RadioService : MediaLibraryService() {
         }
 
         scope.launch {
-            val art = CoverArtLookup.find(now.artist, now.songTitle)
+            val info = CoverArtLookup.find(now.artist, now.songTitle)
             if (generation != coverGeneration) return@launch
             coverRevertJob?.cancel()
-            applyIfCurrent(art)
+            applyIfCurrent(info)
         }
     }
 
@@ -400,7 +408,7 @@ class RadioService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return
         val station = repo.byMediaId(item.mediaId) ?: return
         if (!force && prefs.diagnosticMode) return
-        val fresh = metadata.forPlayback(station, now, coverArtUrl)
+        val fresh = metadata.forPlayback(station, now, coverArtUrl, albumLabel)
         player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(fresh).build())
         dumpMetadata(station, fresh)
     }

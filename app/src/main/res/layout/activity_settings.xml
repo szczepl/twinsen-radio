@@ -58,8 +58,45 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingBottom="16dp"
+            android:paddingBottom="8dp"
             android:text="@string/opt_clock_always_sub"
+            android:textAppearance="?attr/textAppearanceBodySmall" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/opt_clock_bg"
+            android:textAppearance="?attr/textAppearanceTitleSmall" />
+
+        <Spinner
+            android:id="@+id/spClockBg"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/opt_clock_fg"
+            android:textAppearance="?attr/textAppearanceTitleSmall" />
+
+        <Spinner
+            android:id="@+id/spClockFg"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/swEnrich"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/opt_enrich" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="16dp"
+            android:text="@string/opt_enrich_sub"
             android:textAppearance="?attr/textAppearanceBodySmall" />
 
         <TextView

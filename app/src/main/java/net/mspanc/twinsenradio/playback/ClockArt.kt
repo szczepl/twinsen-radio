@@ -24,10 +24,15 @@ object ClockArt {
 
     private const val SIZE = 512
 
-    fun pngBytes(face: ClockFace, time: LocalTime = LocalTime.now()): ByteArray? {
+    fun pngBytes(
+        face: ClockFace,
+        backgroundColor: Int,
+        foregroundColor: Int,
+        time: LocalTime = LocalTime.now()
+    ): ByteArray? {
         val bitmap = when (face) {
-            ClockFace.DIGITAL -> digital(time)
-            ClockFace.ANALOG -> analog(time)
+            ClockFace.DIGITAL -> digital(time, backgroundColor, foregroundColor)
+            ClockFace.ANALOG -> analog(time, backgroundColor, foregroundColor)
             ClockFace.NONE -> return null
         }
         return ByteArrayOutputStream().use { out ->
@@ -37,18 +42,18 @@ object ClockArt {
         }
     }
 
-    private fun newCanvas(): Pair<Bitmap, Canvas> {
+    private fun newCanvas(backgroundColor: Int): Pair<Bitmap, Canvas> {
         val bmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        canvas.drawColor(Color.rgb(11, 61, 145))
+        canvas.drawColor(backgroundColor)
         return bmp to canvas
     }
 
-    private fun digital(time: LocalTime): Bitmap {
-        val (bmp, canvas) = newCanvas()
+    private fun digital(time: LocalTime, bg: Int, fg: Int): Bitmap {
+        val (bmp, canvas) = newCanvas(bg)
         val text = "%02d:%02d".format(time.hour, time.minute)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
+            color = fg
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             textSize = SIZE * 0.30f
@@ -60,14 +65,14 @@ object ClockArt {
         return bmp
     }
 
-    private fun analog(time: LocalTime): Bitmap {
-        val (bmp, canvas) = newCanvas()
+    private fun analog(time: LocalTime, bg: Int, fg: Int): Bitmap {
+        val (bmp, canvas) = newCanvas(bg)
         val cx = SIZE / 2f
         val cy = SIZE / 2f
         val radius = SIZE * 0.42f
 
         val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
+            color = fg
             style = Paint.Style.STROKE
             strokeWidth = SIZE * 0.02f
         }
@@ -75,7 +80,7 @@ object ClockArt {
 
         // kreski godzinowe
         val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
+            color = fg
             strokeWidth = SIZE * 0.012f
             strokeCap = Paint.Cap.ROUND
         }
@@ -93,7 +98,7 @@ object ClockArt {
         fun hand(angleDeg: Double, length: Float, width: Float) {
             val angle = Math.toRadians(angleDeg - 90.0)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.WHITE
+                color = fg
                 strokeWidth = width
                 strokeCap = Paint.Cap.ROUND
             }

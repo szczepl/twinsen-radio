@@ -15,6 +15,18 @@ object PlaybackStatusBus {
     private val _nowPlaying = MutableStateFlow<NowPlaying?>(null)
     val nowPlaying: StateFlow<NowPlaying?> = _nowPlaying
 
+    /**
+     * Okladka biezacego utworu, niezaleznie od tego, co poszlo do Android Auto.
+     * Telefon ma zawsze pokazywac okladke albo logo stacji - zegar zamiast
+     * okladki jest ficzerem wylacznie dla ekranu w aucie.
+     */
+    private val _coverArtUrl = MutableStateFlow<String?>(null)
+    val coverArtUrl: StateFlow<String?> = _coverArtUrl
+
+    fun setCoverArt(url: String?) {
+        _coverArtUrl.value = url
+    }
+
     private val _status = MutableStateFlow(Status.IDLE)
     val status: StateFlow<Status> = _status
 
@@ -24,6 +36,7 @@ object PlaybackStatusBus {
         if (_stationId.value != id) {
             _stationId.value = id
             _nowPlaying.value = null
+            _coverArtUrl.value = null
         }
     }
 

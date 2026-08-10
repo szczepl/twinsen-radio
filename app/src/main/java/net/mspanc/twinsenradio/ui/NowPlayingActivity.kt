@@ -55,7 +55,8 @@ class NowPlayingActivity : AppCompatActivity() {
         listOf(
             PlaybackStatusBus.stationId,
             PlaybackStatusBus.nowPlaying,
-            PlaybackStatusBus.status
+            PlaybackStatusBus.status,
+            PlaybackStatusBus.coverArtUrl
         ).forEach { flow ->
             lifecycleScope.launch { flow.collect { render() } }
         }
@@ -136,11 +137,12 @@ class NowPlayingActivity : AppCompatActivity() {
 
         b.diagnosticBanner.visibility =
             if (prefs.diagnosticMode) android.view.View.VISIBLE else android.view.View.GONE
-        // Okladka pochodzi z metadanych sesji - to tam laduje wynik wyszukiwania
-        // w katalogu iTunes. Gdy jej nie ma, wraca logo stacji.
+        // Okladke bierzemy z wlasnej magistrali, a nie z metadanych sesji.
+        // W sesji moze siedziec zegar zamiast okladki - to ficzer wylacznie dla
+        // ekranu w aucie, na telefonie ma byc zawsze okladka albo logo stacji.
         ArtworkLoader.into(
             lifecycleScope,
-            controller?.mediaMetadata?.artworkUri,
+            PlaybackStatusBus.coverArtUrl.value?.let { android.net.Uri.parse(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.art
         )
