@@ -90,6 +90,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Ulubione mozna przelaczyc na ekranie odtwarzania albo w aucie, a stan
+        // gwiazdki nie jest czescia modelu stacji - DiffUtil nie ma wiec po czym
+        // poznac zmiany i sam listy nie odswiezy.
+        adapter.notifyItemRangeChanged(0, adapter.itemCount)
+        renderMiniPlayer()
+    }
+
     override fun onStart() {
         super.onStart()
         val token = SessionToken(this, ComponentName(this, RadioService::class.java))

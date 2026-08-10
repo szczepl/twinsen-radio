@@ -221,6 +221,13 @@ class RadioService : MediaLibraryService() {
             val id = mediaItem?.mediaId?.let { Station.idFromMediaId(it) }
             PlaybackStatusBus.setStation(id)
             id?.let { prefs.pushRecent(it) }
+
+            // Gwiazdka dotyczy konkretnej stacji, wiec przy zmianie trzeba zbudowac
+            // uklad przyciskow na nowo. Bez tego po wejsciu w stacje pokazywala stan
+            // poprzedniej i pierwsze klikniecie wygladalo, jakby nic nie robilo.
+            if (this@RadioService::session.isInitialized) {
+                session.setCustomLayout(customLayout())
+            }
         }
 
         override fun onPlaybackStateChanged(state: Int) {
@@ -578,6 +585,8 @@ class RadioService : MediaLibraryService() {
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
+                // Swiezo podlaczony kontroler musi dostac aktualny stan gwiazdki
+                .setCustomLayout(customLayout())
                 .build()
         }
 
