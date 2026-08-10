@@ -537,12 +537,18 @@ class RadioService : MediaLibraryService() {
      */
     private fun notifyBrowseNodesChanged(vararg nodes: String) {
         val controllers = session.connectedControllers
+        // Media3 dopasowuje powiadomienia do parametrow, z jakimi kontroler sie
+        // zapisal. Wyslanie z null trafialo w prozne - Android Auto subskrybuje
+        // z parametrami stylu tresci, wiec podajemy te same.
+        val params = contentStyleParams()
         for (node in nodes) {
-            // Prawdziwa liczba pozycji, nie Int.MAX_VALUE - glowica dostaje wtedy
+            // Prawdziwa liczba pozycji, nie Int.MAX_VALUE - HDU dostaje wtedy
             // sensowna informacje o tym, jak bardzo zmienila sie lista.
             val count = childrenOf(node).size
+            session.notifyChildrenChanged(node, count, params)
             session.notifyChildrenChanged(node, count, null)
             for (controller in controllers) {
+                session.notifyChildrenChanged(controller, node, count, params)
                 session.notifyChildrenChanged(controller, node, count, null)
             }
         }
@@ -772,6 +778,25 @@ class RadioService : MediaLibraryService() {
             return Futures.immediateFuture(
                 LibraryResult.ofItemList(ImmutableList.copyOf(children), contentStyleParams())
             )
+        }
+
+        override fun onSubscribe(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            params: LibraryParams?
+        ): ListenableFuture<LibraryResult<Void>> {
+            Log.i(TAG, "SUBSKRYPCJA $parentId od ${browser.packageName}")
+            return Futures.immediateFuture(LibraryResult.ofVoid())
+        }
+
+        override fun onUnsubscribe(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String
+        ): ListenableFuture<LibraryResult<Void>> {
+            Log.i(TAG, "KONIEC SUBSKRYPCJI $parentId od ${browser.packageName}")
+            return Futures.immediateFuture(LibraryResult.ofVoid())
         }
 
         override fun onGetItem(
