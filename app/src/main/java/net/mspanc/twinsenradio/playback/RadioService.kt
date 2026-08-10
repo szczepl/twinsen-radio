@@ -19,6 +19,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.metadata.icy.IcyHeaders
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -205,9 +206,13 @@ class RadioService : MediaLibraryService() {
 
         override fun onMetadata(meta: Metadata) {
             for (i in 0 until meta.length()) {
-                val entry = meta.get(i)
-                if (entry is IcyInfo) {
-                    handleIcyTitle(entry.title)
+                when (val entry = meta.get(i)) {
+                    is IcyHeaders -> logIcyHeaders(entry)
+                    is IcyInfo -> {
+                        logIcyInfo(entry)
+                        handleIcyTitle(entry.title)
+                    }
+                    else -> Log.i(TAG_ICY, "inny typ metadanych: ${entry.javaClass.simpleName} | $entry")
                 }
             }
         }
@@ -217,6 +222,35 @@ class RadioService : MediaLibraryService() {
      * Nowy tytul z Icecasta. Aktualizujemy metadane pozycji, a nie sam strumien -
      * `replaceMediaItem` z ta sama konfiguracja zrodla nie przerywa odtwarzania.
      */
+    /** Naglowki icy-* z odpowiedzi HTTP - stale dla calego strumienia. */
+    private fun logIcyHeaders(h: IcyHeaders) {
+        Log.i(TAG_ICY, "== naglowki ICY strumienia ==")
+        h.name?.let { Log.i(TAG_ICY, "icy-name = $it") }
+        h.genre?.let { Log.i(TAG_ICY, "icy-genre = $it") }
+        h.url?.let { Log.i(TAG_ICY, "icy-url = $it") }
+        if (h.bitrate > 0) Log.i(TAG_ICY, "icy-br = ${h.bitrate}")
+        if (h.metadataInterval > 0) Log.i(TAG_ICY, "icy-metaint = ${h.metadataInterval}")
+        Log.i(TAG_ICY, "icy-pub = ${h.isPublic}")
+    }
+
+    /**
+     * Blok metadanych wstrzykiwany w strumien. ExoPlayer parsuje z niego tylko
+     * StreamTitle i StreamUrl, ale rozglosnie wpychaja tam wiecej par klucz=wartosc
+     * (RMF np. oznacza reklamy przez adw_ad i durationMilliseconds). Dlatego obok
+     * pol rozpoznanych logujemy tez cala surowa zawartosc.
+     */
+    private fun logIcyInfo(info: IcyInfo) {
+        val raw = runCatching { String(info.rawMetadata, Charsets.UTF_8).trim(Char(0), ' ') }
+            .getOrDefault("<nieczytelne>")
+        Log.i(TAG_ICY, "surowy blok: $raw")
+        info.url?.let { Log.i(TAG_ICY, "StreamUrl = $it") }
+
+        // rozbij wszystkie pary klucz='wartosc', zeby bylo widac pola nietypowe
+        Regex("""(\w+)='([^']*)'""").findAll(raw).forEach { m ->
+            Log.i(TAG_ICY, "  ${m.groupValues[1]} = ${m.groupValues[2]}")
+        }
+    }
+
     private fun handleIcyTitle(rawTitle: String?) {
         val title = rawTitle?.trim().orEmpty()
         if (title == lastRawIcyTitle) return
