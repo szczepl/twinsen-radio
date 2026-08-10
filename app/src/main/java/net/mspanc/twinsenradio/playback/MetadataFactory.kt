@@ -108,11 +108,16 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             // zrodlo srodkowej linii na desce. `station` zostawiamy zawsze na
             // nazwie rozglosni, bo to pole ma znaczenie semantyczne i inne
             // aplikacje moga na nim polegac.
+            // Nazwa stacji tylko raz. Gdy stoi juz w srodkowej linii, nie powtarzamy
+            // jej w albumArtist - inaczej glowica potrafi pokazac "RMF FM" dwa razy
+            // pod rzad, co widac zwlaszcza podczas reklam i serwisow.
+            val albumArtist = if (middle == station.name) "" else station.name
+
             b.setArtist(top)
                 .setAlbumTitle(middle)
                 .setStation(station.name)
                 .setTitle(bottom)
-                .setAlbumArtist(station.name)
+                .setAlbumArtist(albumArtist)
                 // Android Auto pokazuje na duzym ekranie wlasnie te dwa pola
                 .setDisplayTitle(bottom)
                 .setSubtitle(top)
@@ -143,6 +148,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         Slot.ARTIST -> if (now?.isRealSong == true) artistLine(now, trackInfo) else ""
         Slot.TITLE -> when {
             now?.isRealSong == true -> now.songTitle.orEmpty()
+            now?.isNews == true -> "${now.slogan} — serwis informacyjny"
             now?.slogan != null -> now.slogan!!
             now?.isAd == true -> adText(now)
             else -> ""
@@ -323,6 +329,14 @@ data class NowPlaying(
     /** Slogan albo nazwa audycji - to, co stacja wpisala zamiast utworu. */
     val slogan: String? get() = if (isStationSelfTitle) songTitle else null
 
+    /**
+     * Serwis informacyjny. RMF oznacza go jako "RMF FM - FAKTY", inne stacje
+     * uzywaja slow "wiadomosci", "informacje", "serwis". To nie jest utwor, ale
+     * warto to nazwac po imieniu zamiast pokazywac pusta linie.
+     */
+    val isNews: Boolean
+        get() = slogan?.let { s -> NEWS_WORDS.any { s.contains(it, ignoreCase = true) } } == true
+
     /** Czy naprawde leci utwor, a nie reklama, znacznik ani wlasna zapowiedz stacji. */
     val isRealSong: Boolean
         get() = !isAd && !isStationSelfTitle && !isControlMarker && !songTitle.isNullOrBlank()
@@ -347,6 +361,16 @@ data class NowPlaying(
                 .find(block)?.groupValues?.get(1)?.toLongOrNull() ?: 0
 
             val raw = streamTitle?.trim().orEmpty()
+
+            // Rozglosnie oznaczaja reklamy na dwa sposoby i potrafia je zmieniac:
+            // RMF wysylal blok z adw_ad='true', a teraz przysyla po prostu
+            // StreamTitle='Reklama'. Bez tego wykazu slowo "Reklama" trafialo do
+            // wyszukiwarki okladek i wracalo z okladka uzbeckiej piosenki o tym
+            // tytule.
+            if (raw.isNotEmpty() && AD_WORDS.any { it.equals(raw, ignoreCase = true) }) {
+                return NowPlaying(raw, null, null, isAd = true, adDurationMs = adMs)
+            }
+
             if (raw.isEmpty()) {
                 // Pusty tytul sam w sobie nie niesie nic, ale jesli towarzyszy mu
                 // znacznik reklamy, to jest konkretna informacja warta pokazania.
@@ -387,6 +411,18 @@ data class NowPlaying(
          * znaczniki sterujace rozglosni, a nie tytuly utworow.
          */
         private val CONTROL_MARKER = Regex("^[A-Z0-9][A-Z0-9_]{3,}$")
+
+        /** Slowa, po ktorych rozpoznajemy serwis informacyjny. */
+        private val NEWS_WORDS = listOf(
+            "fakty", "wiadomosci", "wiadomości", "informacje", "serwis", "news"
+        )
+
+        /** Tytuly, ktore w istocie oznaczaja blok reklamowy, a nie utwor. */
+        private val AD_WORDS = listOf(
+            "reklama", "reklamy", "reklamа",
+            "spot reklamowy", "blok reklamowy",
+            "advertisement", "advert", "commercial", "ad break", "ads"
+        )
 
         /** Porownanie odporne na diakrytyki, wielkosc liter i slowo "radio". */
         private fun similar(a: String, b: String): Boolean {

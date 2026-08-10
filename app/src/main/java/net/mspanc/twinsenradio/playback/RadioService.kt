@@ -467,13 +467,17 @@ class RadioService : MediaLibraryService() {
     private fun favouriteButton(): CommandButton {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
-        // Stale ICON_STAR_* sa w Media3 1.8.1, ale nie kazda wersja Android Auto
-        // potrafi je narysowac - sama stala dawala w projekcji pusty kwadrat.
-        // setCustomIconResId dodaje wlasna grafike jako zapas; to nowsza metoda
-        // niz deprecjonowane setIconResId, ktore probowalem wczesniej.
-        return CommandButton.Builder(
-            if (isFav) CommandButton.ICON_STAR_FILLED else CommandButton.ICON_STAR_UNFILLED
-        )
+        // Bez stalej semantycznej, sam zasob graficzny.
+        //
+        // Historia trzech nieudanych prob: same stale ICON_STAR_* daly pusty
+        // kwadrat, stala + setIconResId i stala + setCustomIconResId - losowe
+        // ikonki. Android Auto jest tu klientem starego API i dostaje
+        // PlaybackStateCompat.CustomAction, ktore ma jedno pole na ikone: zasob.
+        // Gdy podamy takze stala semantyczna, Media3 wysyla ja i glowica z 2022
+        // roku jej nie rozumie. Aplikacje sprzed Media3 1.4 - ReplaIO, TuneIn -
+        // podaja wylacznie zasob i dlatego rysuja sie poprawnie.
+        @Suppress("DEPRECATION")
+        return CommandButton.Builder()
             .setSessionCommand(CMD_TOGGLE_FAV)
             .setDisplayName(
                 getString(
@@ -481,7 +485,7 @@ class RadioService : MediaLibraryService() {
                     else net.mspanc.twinsenradio.R.string.fav_add
                 )
             )
-            .setCustomIconResId(
+            .setIconResId(
                 if (isFav) net.mspanc.twinsenradio.R.drawable.ic_star_filled
                 else net.mspanc.twinsenradio.R.drawable.ic_star_outline
             )
@@ -492,11 +496,13 @@ class RadioService : MediaLibraryService() {
         // Ikona musi byc semantyczna stala z zestawu Media3, nie nasz drawable.
         // Stare setIconResId jest deprecjonowane i Android Auto go nie honoruje -
         // pierwsza wersja wyswietlala z tego powodu przypadkowa lupke.
-        CommandButton.Builder(CommandButton.ICON_SETTINGS)
+        @Suppress("DEPRECATION")
+        CommandButton.Builder()
             .setSessionCommand(CMD_TOGGLE_DIAG)
             .setDisplayName(
                 if (prefs.diagnosticMode) "Diagnostyka: WL" else "Diagnostyka: WYL"
             )
+            .setIconResId(net.mspanc.twinsenradio.R.drawable.ic_radio)
             .build()
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
