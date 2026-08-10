@@ -30,6 +30,9 @@ object CoverArtLookup {
 
     private const val TAG = "CoverArt"
     private const val ENDPOINT = "https://itunes.apple.com/search"
+    private const val MUSICBRAINZ = "https://musicbrainz.org/ws/2/recording"
+    private const val COVER_ART = "https://coverartarchive.org"
+    private const val MUSICBRAINZ_AGENT = "TwinsenRadio/0.1 (twinsen@mspanc.net)"
 
     /**
      * Co udalo sie ustalic o utworze. Poza okladka katalog zna tez nazwe wydawnictwa
@@ -114,14 +117,85 @@ object CoverArtLookup {
         val key = "$a|$t".lowercase()
         synchronized(cache) { if (cache.containsKey(key)) return@withContext cache[key] }
 
-        val result = runCatching { query("$a $t".trim()) }
-            .onFailure { Log.w(TAG, "zapytanie nie wyszlo: ${it.message}") }
+        var result = runCatching { query("$a $t".trim()) }
+            .onFailure { Log.w(TAG, "iTunes nie odpowiedzial: ${it.message}") }
             .getOrNull()
+
+        // iTunes ma slabe pokrycie starszego polskiego repertuaru - "Czesław
+        // Niemen - Lipowa łyżka" nie ma tam wcale, a MusicBrainz zna i utwor,
+        // i wydawnictwo. Pytamy go tylko wtedy, gdy Apple nie zna utworu.
+        if (result == null && a.isNotEmpty()) {
+            result = runCatching { queryMusicBrainz(a, t) }
+                .onFailure { Log.w(TAG, "MusicBrainz nie odpowiedzial: ${it.message}") }
+                .getOrNull()
+        }
 
         synchronized(cache) { cache[key] = result }
         Log.i(TAG, "'$a - $t' -> okladka=${result?.artworkUrl != null} album='${result?.albumLabel()}'")
         result
     }
+
+    /**
+     * Zapas dla utworow, ktorych nie ma w iTunes. MusicBrainz to otwarta baza
+     * z duzo lepszym pokryciem polskiej i starszej muzyki; okladki bierzemy
+     * z powiazanego Cover Art Archive.
+     */
+    private fun queryMusicBrainz(artist: String, title: String): TrackInfo? {
+        val query = "artist:\"$artist\" AND recording:\"$title\""
+        val url = "$MUSICBRAINZ?query=${URLEncoder.encode(query, "UTF-8")}&fmt=json&limit=1"
+        val body = httpGet(url) ?: return null
+
+        val recordings = JSONObject(body).optJSONArray("recordings") ?: return null
+        if (recordings.length() == 0) return null
+        val releases = recordings.getJSONObject(0).optJSONArray("releases") ?: return null
+        if (releases.length() == 0) return null
+        val release = releases.getJSONObject(0)
+
+        val album = release.optString("title").ifBlank { null }
+        val year = release.optString("date").take(4).toIntOrNull()
+        val mbid = release.optString("id").ifBlank { null }
+
+        // Cover Art Archive nie ma okladek do wszystkiego, wiec sprawdzamy, czy
+        // adres w ogole cokolwiek zwraca - inaczej wyslalibysmy do auta martwy link.
+        val art = mbid?.let { id ->
+            val candidate = "$COVER_ART/release/$id/front-500"
+            if (headOk(candidate)) candidate else null
+        }
+
+        if (album == null && art == null) return null
+        return TrackInfo(art, album, year, isSingle = false, durationMs = 0)
+    }
+
+    private fun httpGet(url: String): String? {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 8_000
+            instanceFollowRedirects = true
+            // MusicBrainz wymaga rozpoznawalnego User-Agenta z kontaktem
+            setRequestProperty("User-Agent", MUSICBRAINZ_AGENT)
+        }
+        try {
+            if (conn.responseCode != 200) return null
+            return conn.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun headOk(url: String): Boolean = runCatching {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "HEAD"
+            connectTimeout = 6_000
+            readTimeout = 6_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", MUSICBRAINZ_AGENT)
+        }
+        try {
+            conn.responseCode == 200
+        } finally {
+            conn.disconnect()
+        }
+    }.getOrDefault(false)
 
     private fun query(term: String): TrackInfo? {
         val url = "$ENDPOINT?term=${URLEncoder.encode(term, "UTF-8")}&media=music&entity=song&limit=1"

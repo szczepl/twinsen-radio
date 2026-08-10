@@ -153,12 +153,11 @@ class RadioService : MediaLibraryService() {
         // Zmiana ulubionych - skadkolwiek przyszla - musi od razu przelozyc sie na
         // gwiazdke przy odtwarzaczu i na listy, ktore ja pokazuja.
         scope.launch {
-            Prefs.favouritesFlow.collect {
+            Prefs.favouritesFlow.collect { favourites ->
                 if (!this@RadioService::session.isInitialized) return@collect
+                Log.i(TAG, "ulubione zmienione (${favourites.size}) - odswiezam przyciski i wezly")
                 session.setCustomLayout(customLayout())
-                listOf(NODE_FAVOURITES, NODE_ALL, NODE_RECENT).forEach { node ->
-                    session.notifyChildrenChanged(node, Int.MAX_VALUE, null)
-                }
+                notifyBrowseNodesChanged(NODE_FAVOURITES, NODE_ALL, NODE_RECENT)
             }
         }
     }
@@ -527,6 +526,39 @@ class RadioService : MediaLibraryService() {
      * Po co akurat ten: pozwala przelaczyc tryb diagnostyczny wprost z ekranu
      * auta, bez siegania po telefon w trakcie jazdy.
      */
+    /**
+     * Ogloszenie zmiany zawartosci wezlow przegladania.
+     *
+     * Wersja bez wskazania odbiorcy trafia tylko do kontrolerow zapisanych jako
+     * subskrybenci po stronie Media3. Android Auto laczy sie starym API i jego
+     * subskrypcje sa prowadzone gdzie indziej, przez co przy otwartej liscie
+     * ulubionych nie dostawalo nic i lista zostawala nieodswiezona. Dlatego
+     * powiadamiamy adresowo kazdy podlaczony kontroler.
+     */
+    private fun notifyBrowseNodesChanged(vararg nodes: String) {
+        val controllers = session.connectedControllers
+        for (node in nodes) {
+            // Prawdziwa liczba pozycji, nie Int.MAX_VALUE - glowica dostaje wtedy
+            // sensowna informacje o tym, jak bardzo zmienila sie lista.
+            val count = childrenOf(node).size
+            session.notifyChildrenChanged(node, count, null)
+            for (controller in controllers) {
+                session.notifyChildrenChanged(controller, node, count, null)
+            }
+        }
+        Log.i(TAG, "powiadomiono ${controllers.size} kontroler(ow) o ${nodes.joinToString()}")
+    }
+
+    /** Zawartosc wezla przegladania - wspolna dla odpowiedzi i dla powiadomien. */
+    private fun childrenOf(parentId: String): List<Station> = when {
+        parentId == NODE_FAVOURITES -> repo.favourites()
+        parentId == NODE_ALL -> repo.all()
+        parentId == NODE_RECENT -> repo.recent()
+        parentId.startsWith(NODE_GENRE_PREFIX) ->
+            repo.byGenre(parentId.removePrefix(NODE_GENRE_PREFIX))
+        else -> emptyList()
+    }
+
     /** Przyciski w szablonie odtwarzacza Android Auto. */
     private fun customLayout(): ImmutableList<CommandButton> =
         ImmutableList.of(favouriteButton(), diagnosticButton())
