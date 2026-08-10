@@ -77,6 +77,9 @@ class RadioService : MediaLibraryService() {
     private var coverGeneration = 0
     private var coverRevertJob: Job? = null
 
+    /** Czeka po znaczniku sterujacym na to, co rozglosnia wstawi dalej. */
+    private var pendingMarkerJob: Job? = null
+
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             Prefs.KEY_STYLE_BROWSABLE, Prefs.KEY_STYLE_PLAYABLE, Prefs.KEY_M3U -> {
@@ -289,8 +292,40 @@ class RadioService : MediaLibraryService() {
         Log.i(
             TAG_ICY,
             "  -> artist='${now?.artist}' title='${now?.songTitle}' " +
-                "slogan='${now?.slogan}' reklama=${now?.isAd} utwor=${now?.isRealSong}"
+                "slogan='${now?.slogan}' reklama=${now?.isAd} " +
+                "znacznik=${now?.isControlMarker} utwor=${now?.isRealSong}"
         )
+        publish(now)
+    }
+
+    /**
+     * Decyduje, czy zdarzenie z ICY ma od razu zmienic to, co widac na ekranie.
+     *
+     * Znacznik sterujacy (np. STOP_AD_BREAK) sam z siebie nie znaczy, ze wraca
+     * muzyka - RMF potrafi zaraz po nim wstawic kolejna reklame. Gdybysmy od razu
+     * wracali do widoku stacji, ekran mrugalby miedzy "Reklama" a nazwa stacji
+     * przy kazdej wstawce. Dlatego znacznik jedynie uzbraja timer: jesli w ciagu
+     * [MARKER_GRACE_MS] przyjdzie cokolwiek konkretnego - utwor albo nastepna
+     * reklama - to ono wygrywa, a jesli nie przyjdzie nic, dopiero wtedy
+     * zostawiamy sama stacje.
+     */
+    private fun publish(now: NowPlaying?) {
+        pendingMarkerJob?.cancel()
+
+        if (now?.isControlMarker == true && now.isAd != true) {
+            Log.i(TAG_ICY, "znacznik '${now.raw}' - czekam ${MARKER_GRACE_MS}ms na to, co dalej")
+            pendingMarkerJob = scope.launch {
+                delay(MARKER_GRACE_MS)
+                Log.i(TAG_ICY, "po znaczniku nic nie przyszlo - zostawiam sama stacje")
+                apply(null)
+            }
+            return
+        }
+
+        apply(now)
+    }
+
+    private fun apply(now: NowPlaying?) {
         PlaybackStatusBus.setNowPlaying(now)
         refreshCurrentMetadata(force = true, now = now)
         updateCoverArt(now)
@@ -653,6 +688,13 @@ class RadioService : MediaLibraryService() {
          * nie zostawia na ekranie okladki poprzedniego utworu na dluzej.
          */
         private const val COVER_GRACE_MS = 4_000L
+
+        /**
+         * Ile czekamy po znaczniku sterujacym, zanim uznamy, ze rozglosnia nie
+         * ma nam nic wiecej do powiedzenia. Wstawki w RMF ida jedna za druga
+         * w odstepie kilku sekund, wiec 15 s spokojnie je przykrywa.
+         */
+        private const val MARKER_GRACE_MS = 15_000L
 
         const val NODE_ROOT = "/"
         const val NODE_FAVOURITES = "/fav"

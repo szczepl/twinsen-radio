@@ -249,13 +249,16 @@ data class NowPlaying(
     val songTitle: String?,
     val isStationSelfTitle: Boolean = false,
     val isAd: Boolean = false,
-    val adDurationMs: Long = 0
+    val adDurationMs: Long = 0,
+    /** Znacznik sterujacy rozglosni, np. STOP_AD_BREAK - nie jest trescia. */
+    val isControlMarker: Boolean = false
 ) {
     /** Slogan albo nazwa audycji - to, co stacja wpisala zamiast utworu. */
     val slogan: String? get() = if (isStationSelfTitle) songTitle else null
 
-    /** Czy naprawde leci utwor, a nie reklama ani wlasna zapowiedz stacji. */
-    val isRealSong: Boolean get() = !isAd && !isStationSelfTitle && !songTitle.isNullOrBlank()
+    /** Czy naprawde leci utwor, a nie reklama, znacznik ani wlasna zapowiedz stacji. */
+    val isRealSong: Boolean
+        get() = !isAd && !isStationSelfTitle && !isControlMarker && !songTitle.isNullOrBlank()
 
     companion object {
         /**
@@ -283,6 +286,23 @@ data class NowPlaying(
                 return if (isAd) NowPlaying("", null, null, isAd = true, adDurationMs = adMs) else null
             }
 
+            // Znaczniki sterujace: RMF wysyla w StreamTitle np. STOP_AD_BREAK,
+            // zeby oznaczyc koniec bloku reklamowego. To nie jest tytul utworu -
+            // potraktowany doslownie zostawal na ekranie razem z okladka
+            // poprzedniej piosenki.
+            if (CONTROL_MARKER.matches(raw)) {
+                val upper = raw.uppercase()
+                val breakStarts = upper.contains("START") && upper.contains("AD")
+                return NowPlaying(
+                    raw = raw,
+                    artist = null,
+                    songTitle = null,
+                    isAd = isAd || breakStarts,
+                    adDurationMs = adMs,
+                    isControlMarker = true
+                )
+            }
+
             val dash = raw.indexOf(" - ")
             if (dash <= 0) {
                 val selfTitled = stationName != null && similar(raw, stationName)
@@ -294,6 +314,12 @@ data class NowPlaying(
             val selfTitled = stationName != null && similar(left, stationName)
             return NowPlaying(raw, left, right, selfTitled, isAd, adMs)
         }
+
+        /**
+         * Same wielkie litery, cyfry i podkreslniki, bez spacji - tak wygladaja
+         * znaczniki sterujace rozglosni, a nie tytuly utworow.
+         */
+        private val CONTROL_MARKER = Regex("^[A-Z0-9][A-Z0-9_]{3,}$")
 
         /** Porownanie odporne na diakrytyki, wielkosc liter i slowo "radio". */
         private fun similar(a: String, b: String): Boolean {
