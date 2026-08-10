@@ -120,18 +120,28 @@ adb shell "cat /proc/net/tcp /proc/net/tcp6" | Select-String ':149D'
 `149D` to szesnastkowo 5277. Pusty wynik = serwer head unit nie działa, wróć do
 punktu 3.
 
-### Rozdzielczości: sztuczka z marginesem
+### Profil Passata: 1280x720 przy 240 dpi
 
-DHU przyjmuje wyłącznie 800x480, 1280x720 i 1920x1080. Natywnych 1280x640
-Discover Pro nie da się wpisać wprost — bierzemy 1280x720 i obcinamy:
+Domyślny profil (`dhu.bat` bez argumentów) to **1280x720, dpi 240**, bez
+marginesu. Rozpoznane jako identyczne z tym, co widać w aucie (2026-08-10).
 
-```ini
-resolution = 1280x720
-marginheight = 80      ; efektywnie 1280x640
-```
+To **nie jest** profil wierny fizycznie i tak ma być:
 
-**DPI trzymamy na 160**, mimo że fizycznie Discover Pro ma ~156. Niestandardowe
-DPI psuje rasteryzację wektorów w projekcji — ikony przestają się rysować.
+* **Gęstość 240, nie 156.** Fizycznie Discover Pro 9,2" przy 1280x640 ma ~156
+  dpi. Ale głowica deklaruje gęstość dobraną do odległości patrzenia — ekran
+  w aucie ogląda się z ~70 cm zamiast ~30 cm jak telefon — czyli mniej więcej
+  półtora raza więcej: 156 × 1,5 ≈ 234, czyli standardowy kubełek **hdpi**.
+  Przy okazji znika stary problem: niestandardowe dpi psuło rasteryzację
+  wektorów w projekcji.
+* **Bez marginesu**, choć panel ma fizycznie 1280x640. Margines 80 px zmienia
+  proporcje z 1,78 na 2,00, a przy 2:1 Android Auto przerzuca pasek aplikacji
+  na lewą krawędź i nie da się go zepchnąć na dół. W aucie pasek jest **na
+  dole**, a odtwarzacz zajmuje całą szerokość — czyli głowica zachowuje się jak
+  układ 1,78. Wierność układu wygrywa z wiernością geometrii.
+
+Sztuczka z marginesem zostaje udokumentowana, bo bywa potrzebna gdzie indziej:
+DHU przyjmuje wyłącznie 800x480, 1280x720 i 1920x1080, więc nietypowe
+geometrie robi się przez `marginheight` / `marginwidth`.
 
 ### Układ ekranu
 
