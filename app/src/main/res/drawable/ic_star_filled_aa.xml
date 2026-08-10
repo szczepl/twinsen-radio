@@ -1,0 +1,18 @@
+<!--
+  Gwiazdka dla Android Auto. Celowo BEZ android:tint.
+
+  Glowica inflatuje ten wektor we wlasnym procesie. Tint zapisany jako odwolanie
+  do zasobu (@color/...) musi wtedy zostac rozwiazany w naszym pakiecie i wlasnie
+  na tym sie wykladalo - w projekcji zamiast gwiazdki pojawialy sie przypadkowe
+  ksztalty. Sam kolor podajemy wprost w fillColor, tak jak robi to ReplaIO,
+  ktore renderuje sie poprawnie na tym samym DHU.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21z" />
+</vector>

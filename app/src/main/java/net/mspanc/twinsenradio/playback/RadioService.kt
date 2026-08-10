@@ -500,13 +500,14 @@ class RadioService : MediaLibraryService() {
     private fun favouriteButton(): CommandButton {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
-        // Ikona MUSI byc bitmapa, nie wektor.
+        // Ikona musi byc wektorem BEZ android:tint.
         //
-        // Dumpsys pokazal, ze custom actions wychodza poprawnie, z prawidlowymi
-        // identyfikatorami zasobow - czyli Media3 dziala, a glowica po prostu nie
-        // potrafi zainflatowac VectorDrawable z cudzego pakietu i rysuje w tym
-        // miejscu placeholder. Stad osobne PNG-i tylko na potrzeby Android Auto;
-        // w UI telefonu zostaja wektory.
+        // Ustalone przez porownanie z ReplaIO, ktore na tym samym DHU rysuje sie
+        // poprawnie: publikuje custom actions dokladnie tak jak my, z tym samym
+        // pathData gwiazdki - roznica byla wylacznie w tincie. Nasza wersja miala
+        // android:tint="@color/brand_accent", czyli odwolanie, ktore glowica musi
+        // rozwiazac w naszym pakiecie przy inflacji we wlasnym procesie, i wlasnie
+        // to sie wykladalo. Kolor podajemy wprost w fillColor.
         @Suppress("DEPRECATION")
         return CommandButton.Builder()
             .setSessionCommand(CMD_TOGGLE_FAV)
