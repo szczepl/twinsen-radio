@@ -9,7 +9,10 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaMetadata
 import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.ArtworkMode
+import net.mspanc.twinsenradio.data.ClockFace
+import net.mspanc.twinsenradio.data.Presentation
 import net.mspanc.twinsenradio.data.Prefs
+import net.mspanc.twinsenradio.data.Slot
 import net.mspanc.twinsenradio.data.Station
 import java.io.ByteArrayOutputStream
 import java.time.LocalTime
@@ -90,16 +93,24 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 .setRecordingYear(DiagnosticFields.RECORDING_YEAR)
                 .setReleaseYear(DiagnosticFields.RELEASE_YEAR)
         } else {
-            val song = now?.songTitle
-            val artist = now?.artist
-            b.setTitle(song ?: station.name)
-                .setArtist(artist ?: station.name)
-                .setAlbumTitle(station.name)
-                .setAlbumArtist(station.name)
-                .setDisplayTitle(song ?: station.name)
-                .setSubtitle(artist ?: station.genre)
-                .setDescription(now?.raw ?: station.genre)
+            val p = Presentation.at(prefs.presentationMode)
+            val top = textFor(p.top, station, now)
+            val middle = textFor(p.middle, station, now)
+            val bottom = textFor(p.bottom, station, now)
+
+            // Srodkowa linia idzie w albumTitle - to najbardziej prawdopodobne
+            // zrodlo srodkowej linii na desce. `station` zostawiamy zawsze na
+            // nazwie rozglosni, bo to pole ma znaczenie semantyczne i inne
+            // aplikacje moga na nim polegac.
+            b.setArtist(top)
+                .setAlbumTitle(middle)
                 .setStation(station.name)
+                .setTitle(bottom)
+                .setAlbumArtist(station.name)
+                // Android Auto pokazuje na duzym ekranie wlasnie te dwa pola
+                .setDisplayTitle(bottom)
+                .setSubtitle(top)
+                .setDescription(describe(station, now))
                 .setGenre(station.genre)
         }
 
@@ -107,7 +118,51 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         return b.build()
     }
 
+    /**
+     * Tresc pojedynczej linii. Celowo zwraca pusty napis zamiast nazwy stacji,
+     * gdy nie ma utworu - powielanie nazwy w kilku liniach to dokladnie ta wada,
+     * ktora widac w ReplaIO i w oficjalnej aplikacji RNS.
+     */
+    private fun textFor(slot: Slot, station: Station, now: NowPlaying?): String = when (slot) {
+        Slot.CLOCK -> clockText()
+        Slot.STATION -> station.name
+        Slot.EMPTY -> ""
+        // Etykieta reklamy trafia wylacznie w linie tytulu - powtorzona w dwoch
+        // liniach wygladalaby dokladnie tak, jak zdublowana nazwa stacji.
+        Slot.ARTIST -> if (now?.isRealSong == true) now.artist.orEmpty() else ""
+        Slot.TITLE -> when {
+            now?.isRealSong == true -> now.songTitle.orEmpty()
+            now?.slogan != null -> now.slogan!!
+            now?.isAd == true -> adText(now)
+            else -> ""
+        }
+    }
+
+    private fun adText(now: NowPlaying): String {
+        val seconds = now.adDurationMs / 1000
+        return if (seconds > 0) "$AD_LABEL · ${seconds}s" else AD_LABEL
+    }
+
+    private fun describe(station: Station, now: NowPlaying?): String = when {
+        now?.isRealSong == true -> now.raw
+        now?.slogan != null -> now.slogan!!
+        now?.isAd == true -> adText(now)
+        else -> station.genre
+    }
+
     private fun applyArtwork(b: MediaMetadata.Builder, station: Station, coverArtUrl: String?) {
+        // Zegar zamiast okladki - rysowany w locie, wiec nie ma adresu i musi
+        // pojechac jako bajty.
+        val p = Presentation.at(prefs.presentationMode)
+        if (p.clockFace != ClockFace.NONE) {
+            val useClock = prefs.clockCoverAlways || coverArtUrl == null
+            if (useClock) {
+                ClockArt.pngBytes(p.clockFace)?.let {
+                    b.setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    return
+                }
+            }
+        }
         // Doszukana okladka utworu ma pierwszenstwo przed logo stacji.
         // Celowo niezalezne od trybu diagnostycznego: tryb podmienia wylacznie
         // pola tekstowe na etykiety, grafika ma zachowywac sie zawsze tak samo.
@@ -173,6 +228,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
         private val CLOCK_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+        const val AD_LABEL = "Reklama"
+
         /** Zawsze dwucyfrowa godzina i minuta, np. "09:07". */
         fun clockText(): String = LocalTime.now().format(CLOCK_FORMAT)
     }
@@ -190,26 +247,52 @@ data class NowPlaying(
     val raw: String,
     val artist: String?,
     val songTitle: String?,
-    val isStationSelfTitle: Boolean = false
+    val isStationSelfTitle: Boolean = false,
+    val isAd: Boolean = false,
+    val adDurationMs: Long = 0
 ) {
+    /** Slogan albo nazwa audycji - to, co stacja wpisala zamiast utworu. */
+    val slogan: String? get() = if (isStationSelfTitle) songTitle else null
+
+    /** Czy naprawde leci utwor, a nie reklama ani wlasna zapowiedz stacji. */
+    val isRealSong: Boolean get() = !isAd && !isStationSelfTitle && !songTitle.isNullOrBlank()
+
     companion object {
         /**
-         * Typowy StreamTitle to "Wykonawca - Tytul". Reklamy wstrzykiwane przez
-         * niektore rozglosnie (RMF) przychodza jako pusty tytul z adw_ad='true' -
-         * takie wpisy odrzucamy, zeby na desce nie migala pustka.
+         * Typowy StreamTitle to "Wykonawca - Tytul".
          *
-         * @param stationName nazwa stacji, potrzebna do rozpoznania sloganu
+         * @param stationName nazwa stacji, potrzebna do rozpoznania wlasnego sloganu
+         * @param rawBlock caly blok ICY - stad rozpoznajemy reklamy. RMF wysyla
+         *   pusty StreamTitle wraz z adw_ad='true', adId i durationMilliseconds.
          */
-        fun parse(streamTitle: String?, stationName: String? = null): NowPlaying? {
+        fun parse(
+            streamTitle: String?,
+            stationName: String? = null,
+            rawBlock: String? = null
+        ): NowPlaying? {
+            val block = rawBlock.orEmpty()
+            val isAd = Regex("""adw_ad='true'""").containsMatchIn(block) ||
+                Regex("""adId='[^']+'""").containsMatchIn(block)
+            val adMs = Regex("""durationMilliseconds='(\d+)'""")
+                .find(block)?.groupValues?.get(1)?.toLongOrNull() ?: 0
+
             val raw = streamTitle?.trim().orEmpty()
-            if (raw.isEmpty()) return null
+            if (raw.isEmpty()) {
+                // Pusty tytul sam w sobie nie niesie nic, ale jesli towarzyszy mu
+                // znacznik reklamy, to jest konkretna informacja warta pokazania.
+                return if (isAd) NowPlaying("", null, null, isAd = true, adDurationMs = adMs) else null
+            }
+
             val dash = raw.indexOf(" - ")
-            if (dash <= 0) return NowPlaying(raw, null, raw)
+            if (dash <= 0) {
+                val selfTitled = stationName != null && similar(raw, stationName)
+                return NowPlaying(raw, null, raw, selfTitled, isAd, adMs)
+            }
 
             val left = raw.substring(0, dash).trim()
             val right = raw.substring(dash + 3).trim()
             val selfTitled = stationName != null && similar(left, stationName)
-            return NowPlaying(raw, left, right, selfTitled)
+            return NowPlaying(raw, left, right, selfTitled, isAd, adMs)
         }
 
         /** Porownanie odporne na diakrytyki, wielkosc liter i slowo "radio". */

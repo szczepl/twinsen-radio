@@ -32,6 +32,7 @@ class NowPlayingActivity : AppCompatActivity() {
     private lateinit var b: ActivityNowPlayingBinding
     private lateinit var repo: StationRepository
     private lateinit var metadata: MetadataFactory
+    private lateinit var prefs: Prefs
     private var controller: MediaController? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,7 +41,8 @@ class NowPlayingActivity : AppCompatActivity() {
         setContentView(b.root)
 
         repo = StationRepository.get(this)
-        metadata = MetadataFactory(this, Prefs(this))
+        prefs = Prefs(this)
+        metadata = MetadataFactory(this, prefs)
 
         b.toolbar.setNavigationOnClickListener { finish() }
         b.playPause.setOnClickListener {
@@ -105,8 +107,35 @@ class NowPlayingActivity : AppCompatActivity() {
         val now = PlaybackStatusBus.nowPlaying.value
 
         b.stationName.text = station?.name ?: getString(R.string.nothing_playing)
-        b.songTitle.text = now?.songTitle.orEmpty()
-        b.songArtist.text = now?.artist.orEmpty()
+
+        // Ta sama logika co w metadanych dla auta: prawdziwy utwor, slogan stacji
+        // albo reklama - nigdy powielona nazwa stacji.
+        when {
+            now?.isRealSong == true -> {
+                b.songTitle.text = now.songTitle.orEmpty()
+                b.songArtist.text = now.artist.orEmpty()
+            }
+            now?.slogan != null -> {
+                b.songTitle.text = now.slogan
+                b.songArtist.text = ""
+            }
+            now?.isAd == true -> {
+                val seconds = now.adDurationMs / 1000
+                b.songTitle.text = if (seconds > 0) {
+                    getString(R.string.ad_with_length, seconds)
+                } else {
+                    getString(R.string.ad)
+                }
+                b.songArtist.text = ""
+            }
+            else -> {
+                b.songTitle.text = ""
+                b.songArtist.text = ""
+            }
+        }
+
+        b.diagnosticBanner.visibility =
+            if (prefs.diagnosticMode) android.view.View.VISIBLE else android.view.View.GONE
         // Okladka pochodzi z metadanych sesji - to tam laduje wynik wyszukiwania
         // w katalogu iTunes. Gdy jej nie ma, wraca logo stacji.
         ArtworkLoader.into(

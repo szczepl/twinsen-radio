@@ -172,9 +172,14 @@ class MainActivity : AppCompatActivity() {
         val now = PlaybackStatusBus.nowPlaying.value
 
         b.miniTitle.text = station?.name ?: getString(R.string.nothing_playing)
+        // Na telefonie metadane maja byc metadanymi - tryb diagnostyczny dotyczy
+        // tego, co wysylamy do auta, i sygnalizujemy go tylko na ekranie odtwarzania.
         b.miniSubtitle.text = when {
-            prefs.diagnosticMode -> "tryb diagnostyczny — metadane zastąpione etykietami"
-            now != null -> now.raw
+            now?.isRealSong == true -> listOfNotNull(now.artist, now.songTitle)
+                .filter { it.isNotBlank() }
+                .joinToString(" — ")
+            now?.slogan != null -> now.slogan
+            now?.isAd == true -> getString(R.string.ad)
             else -> station?.genre.orEmpty()
         }
         b.miniStatus.text = getString(

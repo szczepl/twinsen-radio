@@ -91,7 +91,8 @@ class RadioService : MediaLibraryService() {
                     player.prepare()
                 }
             }
-            Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK -> refreshCurrentMetadata(force = true)
+            Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK,
+            Prefs.KEY_PRESENTATION, Prefs.KEY_CLOCK_ALWAYS -> refreshCurrentMetadata(force = true)
             Prefs.KEY_BUFFER -> Log.i(TAG, "Zmieniono bufor - zadziala po restarcie odtwarzania")
         }
     }
@@ -224,8 +225,8 @@ class RadioService : MediaLibraryService() {
                 when (val entry = meta.get(i)) {
                     is IcyHeaders -> logIcyHeaders(entry)
                     is IcyInfo -> {
-                        logIcyInfo(entry)
-                        handleIcyTitle(entry.title)
+                        val raw = logIcyInfo(entry)
+                        handleIcyTitle(entry.title, raw)
                     }
                     else -> Log.i(TAG_ICY, "inny typ metadanych: ${entry.javaClass.simpleName} | $entry")
                 }
@@ -254,9 +255,9 @@ class RadioService : MediaLibraryService() {
      * (RMF np. oznacza reklamy przez adw_ad i durationMilliseconds). Dlatego obok
      * pol rozpoznanych logujemy tez cala surowa zawartosc.
      */
-    private fun logIcyInfo(info: IcyInfo) {
+    private fun logIcyInfo(info: IcyInfo): String {
         val raw = runCatching { String(info.rawMetadata, Charsets.UTF_8).trim(Char(0), ' ') }
-            .getOrDefault("<nieczytelne>")
+            .getOrDefault("")
         Log.i(TAG_ICY, "surowy blok: $raw")
         info.url?.let { Log.i(TAG_ICY, "StreamUrl = $it") }
 
@@ -264,12 +265,16 @@ class RadioService : MediaLibraryService() {
         Regex("""(\w+)='([^']*)'""").findAll(raw).forEach { m ->
             Log.i(TAG_ICY, "  ${m.groupValues[1]} = ${m.groupValues[2]}")
         }
+        return raw
     }
 
-    private fun handleIcyTitle(rawTitle: String?) {
+    private fun handleIcyTitle(rawTitle: String?, rawBlock: String? = null) {
         val title = rawTitle?.trim().orEmpty()
-        if (title == lastRawIcyTitle) return
-        lastRawIcyTitle = title
+        // Sam tytul nie wystarczy do rozpoznania powtorki: reklamy maja pusty
+        // tytul, a rozne wstawki roznia sie dopiero polami adId.
+        val fingerprint = title + "|" + rawBlock.orEmpty()
+        if (fingerprint == lastRawIcyTitle) return
+        lastRawIcyTitle = fingerprint
 
         // Odstep miedzy blokami ICY jest tym, czego nie wiemy o rozglosniach:
         // czy metadane leca raz na utwor, czy okresowo. Logujemy, zeby dalo sie
@@ -280,11 +285,11 @@ class RadioService : MediaLibraryService() {
         Log.i(TAG_ICY, "po ${sinceLast}s | StreamTitle='$title'")
 
         val stationName = player.currentMediaItem?.mediaId?.let { repo.byMediaId(it)?.name }
-        val now = NowPlaying.parse(title, stationName)
+        val now = NowPlaying.parse(title, stationName, rawBlock)
         Log.i(
             TAG_ICY,
             "  -> artist='${now?.artist}' title='${now?.songTitle}' " +
-                "slogan_stacji=${now?.isStationSelfTitle}"
+                "slogan='${now?.slogan}' reklama=${now?.isAd} utwor=${now?.isRealSong}"
         )
         PlaybackStatusBus.setNowPlaying(now)
         refreshCurrentMetadata(force = true, now = now)
@@ -314,7 +319,7 @@ class RadioService : MediaLibraryService() {
         }
 
         // Reklama albo wlasny slogan stacji - nie ma czego szukac w katalogu.
-        if (now == null || now.isStationSelfTitle) {
+        if (now == null || !now.isRealSong) {
             coverRevertJob = scope.launch {
                 delay(COVER_GRACE_MS)
                 applyIfCurrent(null)
@@ -344,7 +349,11 @@ class RadioService : MediaLibraryService() {
         clockTick?.let { clockHandler.removeCallbacks(it) }
         val delayToNextMinute = 60_000L - (System.currentTimeMillis() % 60_000L)
         val runnable = Runnable {
-            if (prefs.diagnosticMode) refreshCurrentMetadata(force = true)
+            // Zegar odswiezamy tylko wtedy, gdy jest gdzie go pokazac - w trybie
+            // diagnostycznym zawsze, poza nim jedynie w ukladach z zegarem.
+            val needed = prefs.diagnosticMode ||
+                net.mspanc.twinsenradio.data.Presentation.at(prefs.presentationMode).needsClock
+            if (needed) refreshCurrentMetadata(force = true)
             scheduleClockTick()
         }
         clockTick = runnable
@@ -387,6 +396,7 @@ class RadioService : MediaLibraryService() {
         m.trackNumber?.let { Log.i(TAG_DUMP, "trackNumber = $it") }
         m.recordingYear?.let { Log.i(TAG_DUMP, "recordingYear = $it") }
         Log.i(TAG_DUMP, "artworkUri = ${m.artworkUri}")
+        m.artworkData?.let { Log.i(TAG_DUMP, "artworkData = ${it.size} B (grafika w metadanych)") }
     }
 
     // --- drzewo przegladania dla Android Auto ---------------------------------

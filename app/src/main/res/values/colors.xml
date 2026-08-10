@@ -5,4 +5,5 @@
     <color name="brand_accent">#FFF2A900</color>
     <color name="on_brand">#FFFFFFFF</color>
     <color name="launcher_bg">#FF0B3D91</color>
+    <color name="diagnostic">#FFE53935</color>
 </resources>

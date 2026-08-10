@@ -46,6 +46,19 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_STYLE_PLAYABLE, ContentStyle.LIST)
         set(v) = sp.edit { putInt(KEY_STYLE_PLAYABLE, v) }
 
+    /** Uklad linii opisu utworu, patrz [Presentation.ALL]. */
+    var presentationMode: Int
+        get() = sp.getInt(KEY_PRESENTATION, 0)
+        set(v) = sp.edit { putInt(KEY_PRESENTATION, v) }
+
+    /**
+     * Przy zegarze zamiast okladki: czy ma byc widoczny zawsze (true), czy tylko
+     * wtedy, gdy i tak pokazalibysmy logo stacji, bo okladki nie znaleziono.
+     */
+    var clockCoverAlways: Boolean
+        get() = sp.getBoolean(KEY_CLOCK_ALWAYS, false)
+        set(v) = sp.edit { putBoolean(KEY_CLOCK_ALWAYS, v) }
+
     /** Indeks profilu bufora, patrz [BufferProfile.ALL]. */
     var bufferProfile: Int
         get() = sp.getInt(KEY_BUFFER, 1)
@@ -98,6 +111,8 @@ class Prefs(context: Context) {
         const val KEY_DIAG = "diagnostic_mode"
         const val KEY_DIAG_API = "diagnostic_api_names"
         const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"
+        const val KEY_PRESENTATION = "presentation_mode"
+        const val KEY_CLOCK_ALWAYS = "clock_cover_always"
         const val KEY_STYLE_BROWSABLE = "aa_style_browsable"
         const val KEY_STYLE_PLAYABLE = "aa_style_playable"
         const val KEY_BUFFER = "buffer_profile"

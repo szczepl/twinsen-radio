@@ -12,6 +12,7 @@ import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ContentStyle
 import net.mspanc.twinsenradio.data.Prefs
+import net.mspanc.twinsenradio.data.Presentation
 import net.mspanc.twinsenradio.data.StationRepository
 import net.mspanc.twinsenradio.databinding.ActivitySettingsBinding
 import net.mspanc.twinsenradio.playback.DiagnosticFields
@@ -30,6 +31,9 @@ class SettingsActivity : AppCompatActivity() {
 
         b.swDiag.isChecked = prefs.diagnosticMode
         b.swDiagApi.isChecked = prefs.diagnosticShowApiName
+
+        fill(b.spPresentation, Presentation.LABELS, prefs.presentationMode)
+        b.swClockAlways.isChecked = prefs.clockCoverAlways
 
         fill(b.spBrowsable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.browsableStyle))
         fill(b.spPlayable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.playableStyle))
@@ -64,6 +68,8 @@ class SettingsActivity : AppCompatActivity() {
     private fun save() {
         prefs.diagnosticMode = b.swDiag.isChecked
         prefs.diagnosticShowApiName = b.swDiagApi.isChecked
+        prefs.presentationMode = b.spPresentation.selectedItemPosition
+        prefs.clockCoverAlways = b.swClockAlways.isChecked
         prefs.browsableStyle = ContentStyle.indexToValue(b.spBrowsable.selectedItemPosition)
         prefs.playableStyle = ContentStyle.indexToValue(b.spPlayable.selectedItemPosition)
         prefs.bufferProfile = b.spBuffer.selectedItemPosition

@@ -35,26 +35,28 @@
         android:ellipsize="end"
         android:gravity="center"
         android:maxLines="1"
-        android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+        android:textAppearance="?attr/textAppearanceHeadlineMedium"
+        android:textStyle="bold" />
 
     <TextView
         android:id="@+id/songTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="24dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="12dp"
         android:gravity="center"
         android:maxLines="2"
-        android:textAppearance="?attr/textAppearanceTitleMedium" />
+        android:textAppearance="?attr/textAppearanceHeadlineSmall" />
 
     <TextView
         android:id="@+id/songArtist"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="4dp"
         android:gravity="center"
         android:maxLines="1"
-        android:textAppearance="?attr/textAppearanceBodyMedium" />
+        android:textAppearance="?attr/textAppearanceTitleLarge" />
 
     <TextView
         android:id="@+id/status"
@@ -63,6 +65,18 @@
         android:layout_marginTop="12dp"
         android:gravity="center"
         android:textAppearance="?attr/textAppearanceLabelMedium" />
+
+    <TextView
+        android:id="@+id/diagnosticBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="@string/diagnostic_banner"
+        android:textColor="@color/diagnostic"
+        android:textStyle="bold"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        android:visibility="gone" />
 
     <LinearLayout
         android:layout_width="match_parent"
