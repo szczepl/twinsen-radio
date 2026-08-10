@@ -59,18 +59,23 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
         if (prefs.diagnosticMode) {
             val withApi = prefs.diagnosticShowApiName
-            fun v(api: String) = DiagnosticFields.TEXT.first { it.api == api }
-                .let { DiagnosticFields.value(it, withApi) }
+            val clock = clockText()
+
+            // Kazde pole niesie swoja nazwe ORAZ zegar, np. "TYT.WYSW 16:44".
+            // Jeden wyjazd daje wtedy odpowiedz na dwa pytania naraz: ktore pole
+            // glowica pokazuje i czy odswieza je w trakcie odtwarzania, czy
+            // zamraza na wartosci z chwili rozpoczecia utworu.
+            fun v(api: String): String {
+                val field = DiagnosticFields.TEXT.first { it.api == api }
+                return DiagnosticFields.value(field, withApi) + " " + clock
+            }
 
             b.setTitle(v("title"))
                 .setArtist(v("artist"))
                 .setAlbumTitle(v("albumTitle"))
                 .setAlbumArtist(v("albumArtist"))
                 .setDisplayTitle(v("displayTitle"))
-                // Zamiast etykiety wstawiamy tu zegar - sprawdzamy, czy glowica
-                // odswieza to pole w trakcie odtwarzania, czy zapamietuje wartosc
-                // z chwili rozpoczecia utworu.
-                .setSubtitle(clockText())
+                .setSubtitle(v("subtitle"))
                 .setDescription(v("description"))
                 .setStation(v("station"))
                 .setGenre(v("genre"))
