@@ -467,15 +467,13 @@ class RadioService : MediaLibraryService() {
     private fun favouriteButton(): CommandButton {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
-        // Bez stalej semantycznej, sam zasob graficzny.
+        // Ikona MUSI byc bitmapa, nie wektor.
         //
-        // Historia trzech nieudanych prob: same stale ICON_STAR_* daly pusty
-        // kwadrat, stala + setIconResId i stala + setCustomIconResId - losowe
-        // ikonki. Android Auto jest tu klientem starego API i dostaje
-        // PlaybackStateCompat.CustomAction, ktore ma jedno pole na ikone: zasob.
-        // Gdy podamy takze stala semantyczna, Media3 wysyla ja i glowica z 2022
-        // roku jej nie rozumie. Aplikacje sprzed Media3 1.4 - ReplaIO, TuneIn -
-        // podaja wylacznie zasob i dlatego rysuja sie poprawnie.
+        // Dumpsys pokazal, ze custom actions wychodza poprawnie, z prawidlowymi
+        // identyfikatorami zasobow - czyli Media3 dziala, a glowica po prostu nie
+        // potrafi zainflatowac VectorDrawable z cudzego pakietu i rysuje w tym
+        // miejscu placeholder. Stad osobne PNG-i tylko na potrzeby Android Auto;
+        // w UI telefonu zostaja wektory.
         @Suppress("DEPRECATION")
         return CommandButton.Builder()
             .setSessionCommand(CMD_TOGGLE_FAV)
@@ -486,8 +484,8 @@ class RadioService : MediaLibraryService() {
                 )
             )
             .setIconResId(
-                if (isFav) net.mspanc.twinsenradio.R.drawable.ic_star_filled
-                else net.mspanc.twinsenradio.R.drawable.ic_star_outline
+                if (isFav) net.mspanc.twinsenradio.R.drawable.ic_star_filled_aa
+                else net.mspanc.twinsenradio.R.drawable.ic_star_outline_aa
             )
             .build()
     }
@@ -502,7 +500,7 @@ class RadioService : MediaLibraryService() {
             .setDisplayName(
                 if (prefs.diagnosticMode) "Diagnostyka: WL" else "Diagnostyka: WYL"
             )
-            .setIconResId(net.mspanc.twinsenradio.R.drawable.ic_radio)
+            .setIconResId(net.mspanc.twinsenradio.R.drawable.ic_diag_aa)
             .build()
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
@@ -773,12 +771,12 @@ class RadioService : MediaLibraryService() {
             action(
                 ACTION_FAVOURITE,
                 net.mspanc.twinsenradio.R.string.fav_add,
-                net.mspanc.twinsenradio.R.drawable.ic_star_outline
+                net.mspanc.twinsenradio.R.drawable.ic_star_outline_aa
             ),
             action(
                 ACTION_UNFAVOURITE,
                 net.mspanc.twinsenradio.R.string.fav_remove,
-                net.mspanc.twinsenradio.R.drawable.ic_star_filled
+                net.mspanc.twinsenradio.R.drawable.ic_star_filled_aa
             )
         )
     }

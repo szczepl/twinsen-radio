@@ -45,7 +45,7 @@ object CoverArtLookup {
         fun albumLabel(): String? {
             val name = when {
                 isSingle -> "singiel"
-                !album.isNullOrBlank() -> album
+                !album.isNullOrBlank() -> tameCaps(album)
                 else -> return null
             }
             return if (year != null) "$name [$year]" else name
@@ -67,6 +67,29 @@ object CoverArtLookup {
 
         private fun normalize(s: String) = s.lowercase()
             .replace(Regex("[^\\p{L}\\p{N}]"), "")
+
+        /**
+         * Sprowadza tytuly pisane w calosci wersalikami do zapisu z wielkiej
+         * litery. Wytwornie potrafia wpisac do katalogu "NO ME ARREPIENTO DE
+         * SENTIR TANTO", co na waskim ekranie zjada dwie linie i krzyczy.
+         *
+         * Celowo bez odpytywania innego katalogu na krzyz: to kwestia typografii,
+         * a nie danych, i nie warto za nia placic kolejnym zapytaniem sieciowym.
+         *
+         * Warunki sa zachowawcze - zmieniamy tylko napisy wielowyrazowe, w calosci
+         * wersalikowe. Dzieki temu "ABBA", "U2" czy "AC/DC" zostaja nietkniete.
+         */
+        internal fun tameCaps(text: String): String {
+            val letters = text.filter { it.isLetter() }
+            if (letters.length < 5) return text
+            if (!text.contains(' ')) return text
+            if (letters.any { it.isLowerCase() }) return text
+
+            return text.split(' ').joinToString(" ") { word ->
+                if (word.length <= 1) word
+                else word.first() + word.drop(1).lowercase()
+            }
+        }
     }
 
     /** Male, ograniczone cache - w aucie i tak krecimy sie po kilku stacjach. */
