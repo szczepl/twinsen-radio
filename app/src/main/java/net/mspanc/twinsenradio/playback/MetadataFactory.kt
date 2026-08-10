@@ -12,6 +12,8 @@ import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Station
 import java.io.ByteArrayOutputStream
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 /**
  * Buduje metadane, ktore trafiaja do MediaSession, a stamtad do Android Auto
@@ -65,7 +67,10 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 .setAlbumTitle(v("albumTitle"))
                 .setAlbumArtist(v("albumArtist"))
                 .setDisplayTitle(v("displayTitle"))
-                .setSubtitle(v("subtitle"))
+                // Zamiast etykiety wstawiamy tu zegar - sprawdzamy, czy glowica
+                // odswieza to pole w trakcie odtwarzania, czy zapamietuje wartosc
+                // z chwili rozpoczecia utworu.
+                .setSubtitle(clockText())
                 .setDescription(v("description"))
                 .setStation(v("station"))
                 .setGenre(v("genre"))
@@ -150,9 +155,14 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             }.getOrNull()
         }
 
-    private companion object {
+    companion object {
         /** 512 px to rozsadny kompromis: HU dostaje ostry obrazek, a Binder nie puchnie. */
-        const val ART_SIZE = 512
+        private const val ART_SIZE = 512
+
+        private val CLOCK_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+        /** Zawsze dwucyfrowa godzina i minuta, np. "09:07". */
+        fun clockText(): String = LocalTime.now().format(CLOCK_FORMAT)
     }
 }
 

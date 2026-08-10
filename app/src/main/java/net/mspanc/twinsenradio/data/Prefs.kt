@@ -18,6 +18,19 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_DIAG, true)
         set(v) = sp.edit { putBoolean(KEY_DIAG, v) }
 
+    /**
+     * Czy w trybie diagnostycznym odcinac metadane ICY.
+     *
+     * Domyslnie NIE. Odcinanie daje pelna determinizm etykiet, ale odbiera
+     * mozliwosc podgladania, co i jak czesto nadaje rozglosnia - a to jest
+     * osobny, ciekawy watek. ICY nadpisuje tylko `title`, `station` i `genre`;
+     * pola, ktore Android Auto faktycznie pokazuje (`displayTitle`, `subtitle`),
+     * pozostaja nasze.
+     */
+    var stripIcyInDiagnostic: Boolean
+        get() = sp.getBoolean(KEY_STRIP_ICY, false)
+        set(v) = sp.edit { putBoolean(KEY_STRIP_ICY, v) }
+
     /** Czy do polskiej etykiety dokleic nazwe pola z API, np. "TYTUL<title>". */
     var diagnosticShowApiName: Boolean
         get() = sp.getBoolean(KEY_DIAG_API, false)
@@ -84,6 +97,7 @@ class Prefs(context: Context) {
     companion object {
         const val KEY_DIAG = "diagnostic_mode"
         const val KEY_DIAG_API = "diagnostic_api_names"
+        const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"
         const val KEY_STYLE_BROWSABLE = "aa_style_browsable"
         const val KEY_STYLE_PLAYABLE = "aa_style_playable"
         const val KEY_BUFFER = "buffer_profile"

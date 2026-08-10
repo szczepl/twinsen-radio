@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -56,6 +58,10 @@ class RadioService : MediaLibraryService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var lastRawIcyTitle: String? = null
 
+    private val clockHandler = Handler(Looper.getMainLooper())
+    private var clockTick: Runnable? = null
+    private var lastIcyAtMs = 0L
+
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             Prefs.KEY_STYLE_BROWSABLE, Prefs.KEY_STYLE_PLAYABLE, Prefs.KEY_M3U -> {
@@ -107,6 +113,7 @@ class RadioService : MediaLibraryService() {
         }
         reconnect.start()
         prefs.registerListener(prefsListener)
+        scheduleClockTick()
 
         scope.launch { repo.refreshUserLists() }
     }
@@ -114,6 +121,7 @@ class RadioService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession = session
 
     override fun onDestroy() {
+        clockTick?.let { clockHandler.removeCallbacks(it) }
         prefs.unregisterListener(prefsListener)
         reconnect.stop()
         session.release()
@@ -145,10 +153,9 @@ class RadioService : MediaLibraryService() {
             .setAllowCrossProtocolRedirects(true)
             .setKeepPostFor302Redirects(false)
 
-        // W trybie diagnostycznym odcinamy ICY, zeby nie nadpisalo naszych etykiet.
         val filtered = IcyFilteringDataSource.Factory(
             DefaultDataSource.Factory(this, httpFactory)
-        ) { prefs.diagnosticMode }
+        ) { prefs.diagnosticMode && prefs.stripIcyInDiagnostic }
 
         val mediaSourceFactory = DefaultMediaSourceFactory(filtered)
             .setLoadErrorHandlingPolicy(InfiniteLoadErrorHandlingPolicy())
@@ -197,7 +204,6 @@ class RadioService : MediaLibraryService() {
         }
 
         override fun onMetadata(meta: Metadata) {
-            if (prefs.diagnosticMode) return
             for (i in 0 until meta.length()) {
                 val entry = meta.get(i)
                 if (entry is IcyInfo) {
@@ -216,9 +222,33 @@ class RadioService : MediaLibraryService() {
         if (title == lastRawIcyTitle) return
         lastRawIcyTitle = title
 
+        // Odstep miedzy blokami ICY jest tym, czego nie wiemy o rozglosniach:
+        // czy metadane leca raz na utwor, czy okresowo. Logujemy, zeby dalo sie
+        // to policzyc z zewnatrz.
+        val nowMs = System.currentTimeMillis()
+        val sinceLast = if (lastIcyAtMs == 0L) -1 else (nowMs - lastIcyAtMs) / 1000
+        lastIcyAtMs = nowMs
+        Log.i(TAG_ICY, "po ${sinceLast}s | StreamTitle='$title'")
+
         val now = NowPlaying.parse(title)
+        Log.i(TAG_ICY, "  -> artist='${now?.artist}' title='${now?.songTitle}'")
         PlaybackStatusBus.setNowPlaying(now)
         refreshCurrentMetadata(force = false, now = now)
+    }
+
+    /**
+     * Odswieza metadane rowno na granicy minuty, a nie co 60 s od startu - inaczej
+     * zegar w podtytule dryfowalby wzgledem zegara w aucie.
+     */
+    private fun scheduleClockTick() {
+        clockTick?.let { clockHandler.removeCallbacks(it) }
+        val delayToNextMinute = 60_000L - (System.currentTimeMillis() % 60_000L)
+        val runnable = Runnable {
+            if (prefs.diagnosticMode) refreshCurrentMetadata(force = true)
+            scheduleClockTick()
+        }
+        clockTick = runnable
+        clockHandler.postDelayed(runnable, delayToNextMinute + 100)
     }
 
     private fun refreshCurrentMetadata(force: Boolean, now: NowPlaying? = PlaybackStatusBus.nowPlaying.value) {
@@ -228,6 +258,35 @@ class RadioService : MediaLibraryService() {
         if (!force && prefs.diagnosticMode) return
         val fresh = metadata.forPlayback(station, now)
         player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(fresh).build())
+        dumpMetadata(station, fresh)
+    }
+
+    /**
+     * Wypisuje komplet pol wyslanych do sesji. Sluzy okienku podgladu na Windows
+     * (tools/meta-watch.ps1), ktore czyta to przez `adb logcat -s MetaDump`.
+     */
+    private fun dumpMetadata(station: Station, m: MediaMetadata) {
+        Log.i(TAG_DUMP, "--- ${station.name} @ ${MetadataFactory.clockText()} ---")
+        listOf(
+            "title" to m.title,
+            "artist" to m.artist,
+            "albumTitle" to m.albumTitle,
+            "albumArtist" to m.albumArtist,
+            "displayTitle" to m.displayTitle,
+            "subtitle" to m.subtitle,
+            "description" to m.description,
+            "station" to m.station,
+            "genre" to m.genre,
+            "composer" to m.composer,
+            "writer" to m.writer,
+            "conductor" to m.conductor,
+            "compilation" to m.compilation
+        ).forEach { (name, value) ->
+            if (value != null) Log.i(TAG_DUMP, "$name = $value")
+        }
+        m.trackNumber?.let { Log.i(TAG_DUMP, "trackNumber = $it") }
+        m.recordingYear?.let { Log.i(TAG_DUMP, "recordingYear = $it") }
+        Log.i(TAG_DUMP, "artworkUri = ${m.artworkUri}")
     }
 
     // --- drzewo przegladania dla Android Auto ---------------------------------
@@ -423,6 +482,8 @@ class RadioService : MediaLibraryService() {
 
     companion object {
         private const val TAG = "RadioService"
+        private const val TAG_ICY = "IcyMeta"
+        private const val TAG_DUMP = "MetaDump"
 
         const val NODE_ROOT = "/"
         const val NODE_FAVOURITES = "/fav"

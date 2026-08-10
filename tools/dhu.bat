@@ -47,6 +47,10 @@ set "ONTOP="
 echo %* | findstr /I /C:"ontop" >nul && set "ONTOP=-t"
 
 "%ADB%" forward tcp:5277 tcp:5277
+
+rem Okienko podgladu metadanych - osobne okno Windows, obok projekcji
+start "" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0meta-watch.ps1"
+
 pushd "C:\Android\Sdk\extras\google\auto"
 echo Startuje DHU, profil: %CFG% %EXTRA% %ONTOP%
 "%DHUEXE%" %ONTOP% -c "%CFG%" %EXTRA%
