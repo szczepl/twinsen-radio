@@ -662,26 +662,22 @@ class RadioService : MediaLibraryService() {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
         Log.i(TAG, "buduje gwiazdke dla stacji '$id': ulubiona=$isFav")
-        // Ikona musi byc wektorem BEZ android:tint.
         //
-        // Ustalone przez porownanie z ReplaIO, ktore na tym samym DHU rysuje sie
-        // poprawnie: publikuje custom actions dokladnie tak jak my, z tym samym
-        // pathData gwiazdki - roznica byla wylacznie w tincie. Nasza wersja miala
-        // android:tint="@color/brand_accent", czyli odwolanie, ktore glowica musi
-        // rozwiazac w naszym pakiecie przy inflacji we wlasnym procesie, i wlasnie
-        // to sie wykladalo. Kolor podajemy wprost w fillColor.
+        // Ikona jest **semantyczna**, a nie nasza wlasna. Media3 ma na to zestaw
+        // stalych (ICON_STAR_FILLED / ICON_STAR_UNFILLED) podawanych w konstruktorze
+        // - glowica dostaje wtedy informacje "to jest gwiazdka" i rysuje wlasna
+        // grafike, zgodna ze swoim motywem.
         //
-        // Ikone podajemy dwoma drogami naraz. Numer zasobu rozumie kazda glowica,
-        // ale jest niestabilny miedzy wersjami aplikacji i wlasnie na nim opiera
-        // sie pamiec podreczna Android Auto. Adres content:// jest staly i opisuje
-        // ikone, a nie zasob - HDU, ktore go rozumie, uzyje wlasnie jego.
-        val resId = if (isFav) {
-            net.mspanc.twinsenradio.R.drawable.ic_star_filled_aa
-        } else {
-            net.mspanc.twinsenradio.R.drawable.ic_star_outline_aa
-        }
-        @Suppress("DEPRECATION")
-        return CommandButton.Builder()
+        // Droga przez wlasny drawable okazala sie nie do uratowania. Numer zasobu
+        // przesuwa sie przy kazdej przebudowie aplikacji (wystarczy dolozyc jeden
+        // plik do res/drawable), a Android Auto pamieta narysowana ikone wlasnie
+        // pod tym numerem. Efekt: po aktualizacji w miejscu pelnej gwiazdki
+        // pojawiala sie pusta, a w miejscu pustej kwadrat - bo pod tymi numerami
+        // siedzialy wczesniej inne grafiki. Podanie obok tego adresu content://
+        // nic nie dalo, bo stara sciezka przez numer zasobu i tak wygrywala.
+        return CommandButton.Builder(
+            if (isFav) CommandButton.ICON_STAR_FILLED else CommandButton.ICON_STAR_UNFILLED
+        )
             .setSessionCommand(CMD_TOGGLE_FAV)
             .setDisplayName(
                 getString(
@@ -689,35 +685,15 @@ class RadioService : MediaLibraryService() {
                     else net.mspanc.twinsenradio.R.string.fav_add
                 )
             )
-            .setIconResId(resId)
-            .setIconUri(
-                LogoProvider.iconUri(
-                    this@RadioService,
-                    if (isFav) "star_filled" else "star_outline",
-                    resId
-                )
-            )
             .build()
     }
 
+    /** Tak samo jak gwiazdka - ikona semantyczna, zeby nie zalezec od numeru zasobu. */
     private fun diagnosticButton(): CommandButton =
-        // Ikona musi byc semantyczna stala z zestawu Media3, nie nasz drawable.
-        // Stare setIconResId jest deprecjonowane i Android Auto go nie honoruje -
-        // pierwsza wersja wyswietlala z tego powodu przypadkowa lupke.
-        @Suppress("DEPRECATION")
-        CommandButton.Builder()
+        CommandButton.Builder(CommandButton.ICON_SETTINGS)
             .setSessionCommand(CMD_TOGGLE_DIAG)
             .setDisplayName(
                 if (prefs.diagnosticMode) "Diagnostyka: WL" else "Diagnostyka: WYL"
-            )
-            .setIconResId(net.mspanc.twinsenradio.R.drawable.ic_diag_aa)
-            // Staly adres obok numeru zasobu - patrz komentarz przy gwiazdce.
-            .setIconUri(
-                LogoProvider.iconUri(
-                    this@RadioService,
-                    if (prefs.diagnosticMode) "diag_on" else "diag_off",
-                    net.mspanc.twinsenradio.R.drawable.ic_diag_aa
-                )
             )
             .build()
 
@@ -1039,23 +1015,28 @@ class RadioService : MediaLibraryService() {
 
     /** Definicje akcji, ktore glowica pokaze przy pozycjach listy. */
     private fun browseActionsRootList(): ArrayList<Bundle> {
-        fun action(id: String, labelRes: Int, iconRes: Int) = Bundle().apply {
+        // Tu ikona moze byc podana wylacznie adresem, wiec zamiast
+        // android.resource:// z numerem zasobu (niestabilnym miedzy wersjami
+        // i cache'owanym przez glowice) idzie staly adres z LogoProvider.
+        fun action(id: String, labelRes: Int, iconName: String, iconRes: Int) = Bundle().apply {
             putString(KEY_ACTION_ID, id)
             putString(KEY_ACTION_LABEL, getString(labelRes))
             putString(
                 KEY_ACTION_ICON_URI,
-                "android.resource://$packageName/$iconRes"
+                LogoProvider.iconUri(this@RadioService, iconName, iconRes).toString()
             )
         }
         return arrayListOf(
             action(
                 ACTION_FAVOURITE,
                 net.mspanc.twinsenradio.R.string.fav_add,
+                "star_outline",
                 net.mspanc.twinsenradio.R.drawable.ic_star_outline_aa
             ),
             action(
                 ACTION_UNFAVOURITE,
                 net.mspanc.twinsenradio.R.string.fav_remove,
+                "star_filled",
                 net.mspanc.twinsenradio.R.drawable.ic_star_filled_aa
             )
         )
