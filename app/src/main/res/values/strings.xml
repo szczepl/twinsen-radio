@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Twinsen Radio</string>
+    <string name="settings_title">Opcje</string>
+
+    <string name="node_favourites">Ulubione</string>
+    <string name="node_all">Wszystkie stacje</string>
+    <string name="node_recent">Ostatnio słuchane</string>
+    <string name="node_genres">Gatunki</string>
+    <string name="root_title">Twinsen Radio</string>
+
+    <string name="search_hint">Szukaj stacji…</string>
+    <string name="status_connecting">Łączenie…</string>
+    <string name="status_buffering">Buforowanie…</string>
+    <string name="status_waiting_network">Czekam na sieć…</string>
+    <string name="status_reconnecting">Ponawiam połączenie…</string>
+    <string name="status_playing">Odtwarzanie</string>
+    <string name="status_idle">Zatrzymane</string>
+    <string name="nothing_playing">Nic nie gra</string>
+
+    <string name="opt_diag">Tryb diagnostyczny metadanych</string>
+    <string name="opt_diag_sub">Każde pole metadanych dostaje swoją polską nazwę zamiast realnej wartości. Do pozycjonowania z AID.</string>
+    <string name="opt_diag_api">Dopisz nazwę pola z API</string>
+    <string name="opt_diag_api_sub">np. „TYTUŁ‹title›” zamiast samego „TYTUŁ”.</string>
+    <string name="opt_style_browsable">Schemat Android Auto — foldery</string>
+    <string name="opt_style_playable">Schemat Android Auto — stacje</string>
+    <string name="opt_buffer">Bufor strumienia</string>
+    <string name="opt_artwork">Źródło okładki („płyty”)</string>
+    <string name="opt_m3u">Własne listy M3U (po jednym URL w linii)</string>
+    <string name="opt_save">Zapisz i przeładuj</string>
+    <string name="opt_saved">Zapisano. Android Auto odświeży listę.</string>
+</resources>
