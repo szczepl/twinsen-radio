@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
@@ -67,6 +68,9 @@ class NowPlayingActivity : AppCompatActivity() {
                 c.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) = render()
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = render()
+                    // bez tego okladka doszukana juz w trakcie utworu nigdy by sie
+                    // nie pojawila - metadane zmieniaja sie osobno od pozycji
+                    override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) = render()
                 })
             }
             render()
@@ -103,8 +107,13 @@ class NowPlayingActivity : AppCompatActivity() {
         b.stationName.text = station?.name ?: getString(R.string.nothing_playing)
         b.songTitle.text = now?.songTitle.orEmpty()
         b.songArtist.text = now?.artist.orEmpty()
-        b.art.setImageResource(
-            station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder
+        // Okladka pochodzi z metadanych sesji - to tam laduje wynik wyszukiwania
+        // w katalogu iTunes. Gdy jej nie ma, wraca logo stacji.
+        ArtworkLoader.into(
+            lifecycleScope,
+            controller?.mediaMetadata?.artworkUri,
+            station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
+            b.art
         )
         b.status.text = getString(
             when (PlaybackStatusBus.status.value) {

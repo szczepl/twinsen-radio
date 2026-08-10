@@ -109,7 +109,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
     private fun applyArtwork(b: MediaMetadata.Builder, station: Station, coverArtUrl: String?) {
         // Doszukana okladka utworu ma pierwszenstwo przed logo stacji.
-        if (coverArtUrl != null && !prefs.diagnosticMode) {
+        // Celowo niezalezne od trybu diagnostycznego: tryb podmienia wylacznie
+        // pola tekstowe na etykiety, grafika ma zachowywac sie zawsze tak samo.
+        if (coverArtUrl != null) {
             b.setArtworkUri(Uri.parse(coverArtUrl))
             return
         }

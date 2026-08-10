@@ -33,8 +33,10 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ContentStyle
@@ -70,6 +72,10 @@ class RadioService : MediaLibraryService() {
     /** Okladka doszukana dla biezacego utworu; null = pokazujemy logo stacji. */
     @Volatile
     private var coverArtUrl: String? = null
+
+    /** Rosnie przy kazdej zmianie utworu - odsiewa spoznione wyniki wyszukiwania. */
+    private var coverGeneration = 0
+    private var coverRevertJob: Job? = null
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
@@ -281,19 +287,52 @@ class RadioService : MediaLibraryService() {
                 "slogan_stacji=${now?.isStationSelfTitle}"
         )
         PlaybackStatusBus.setNowPlaying(now)
-        coverArtUrl = null
-        refreshCurrentMetadata(force = false, now = now)
+        refreshCurrentMetadata(force = true, now = now)
+        updateCoverArt(now)
+    }
 
-        // Okladki nie ma w strumieniu - trzeba ja doszukac w zewnetrznym katalogu.
-        // Dla wlasnego sloganu stacji nie ma czego szukac.
-        if (now != null && !now.isStationSelfTitle && !prefs.diagnosticMode) {
-            scope.launch {
-                val art = CoverArtLookup.find(now.artist, now.songTitle)
-                if (art != null && PlaybackStatusBus.nowPlaying.value?.raw == now.raw) {
-                    coverArtUrl = art
-                    refreshCurrentMetadata(force = true, now = now)
-                }
+    /**
+     * Podmienia okladke przy zmianie utworu.
+     *
+     * Kluczowa zasada: **nie zdejmujemy starej okladki, dopoki nie mamy czym jej
+     * zastapic**. Wczesniejsza wersja zerowala ja od razu, przez co miedzy
+     * utworami logo stacji migalo na ulamek sekundy, zanim doszlo wyszukiwanie.
+     *
+     * Do logo wracamy dopiero, gdy katalog nic nie znajdzie albo gdy odpowiedz
+     * nie przyjdzie w [COVER_GRACE_MS] - wtedy lepiej pokazac logo niz zostawiac
+     * okladke poprzedniego utworu na stale.
+     */
+    private fun updateCoverArt(now: NowPlaying?) {
+        val generation = ++coverGeneration
+        coverRevertJob?.cancel()
+
+        fun applyIfCurrent(url: String?) {
+            if (generation != coverGeneration) return
+            if (coverArtUrl == url) return
+            coverArtUrl = url
+            refreshCurrentMetadata(force = true, now = PlaybackStatusBus.nowPlaying.value)
+        }
+
+        // Reklama albo wlasny slogan stacji - nie ma czego szukac w katalogu.
+        if (now == null || now.isStationSelfTitle) {
+            coverRevertJob = scope.launch {
+                delay(COVER_GRACE_MS)
+                applyIfCurrent(null)
             }
+            return
+        }
+
+        // bezpiecznik: gdyby katalog milczal, po chwili i tak wracamy do logo
+        coverRevertJob = scope.launch {
+            delay(COVER_GRACE_MS)
+            applyIfCurrent(null)
+        }
+
+        scope.launch {
+            val art = CoverArtLookup.find(now.artist, now.songTitle)
+            if (generation != coverGeneration) return@launch
+            coverRevertJob?.cancel()
+            applyIfCurrent(art)
         }
     }
 
@@ -597,6 +636,13 @@ class RadioService : MediaLibraryService() {
 
         private val CMD_TOGGLE_DIAG =
             SessionCommand("net.mspanc.twinsenradio.TOGGLE_DIAG", Bundle.EMPTY)
+
+        /**
+         * Ile czekamy na okladke, zanim wrocimy do logo stacji. Wyszukiwanie
+         * trwa zwykle 200-800 ms, wiec 4 s spokojnie je przykrywa i jednoczesnie
+         * nie zostawia na ekranie okladki poprzedniego utworu na dluzej.
+         */
+        private const val COVER_GRACE_MS = 4_000L
 
         const val NODE_ROOT = "/"
         const val NODE_FAVOURITES = "/fav"

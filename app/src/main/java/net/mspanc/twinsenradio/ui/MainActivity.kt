@@ -99,6 +99,8 @@ class MainActivity : AppCompatActivity() {
                 c.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) = renderMiniPlayer()
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = renderMiniPlayer()
+                    override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) =
+                        renderMiniPlayer()
                 })
             }
             pendingStationId?.let { id ->
@@ -185,8 +187,11 @@ class MainActivity : AppCompatActivity() {
                 PlaybackStatusBus.Status.IDLE -> R.string.status_idle
             }
         )
-        b.miniLogo.setImageResource(
-            station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder
+        ArtworkLoader.into(
+            lifecycleScope,
+            controller?.mediaMetadata?.artworkUri,
+            station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
+            b.miniLogo
         )
         b.playPause.setImageResource(
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause
