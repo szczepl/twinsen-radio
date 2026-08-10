@@ -67,6 +67,10 @@ class RadioService : MediaLibraryService() {
     private var clockTick: Runnable? = null
     private var lastIcyAtMs = 0L
 
+    /** Okladka doszukana dla biezacego utworu; null = pokazujemy logo stacji. */
+    @Volatile
+    private var coverArtUrl: String? = null
+
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             Prefs.KEY_STYLE_BROWSABLE, Prefs.KEY_STYLE_PLAYABLE, Prefs.KEY_M3U -> {
@@ -269,10 +273,28 @@ class RadioService : MediaLibraryService() {
         lastIcyAtMs = nowMs
         Log.i(TAG_ICY, "po ${sinceLast}s | StreamTitle='$title'")
 
-        val now = NowPlaying.parse(title)
-        Log.i(TAG_ICY, "  -> artist='${now?.artist}' title='${now?.songTitle}'")
+        val stationName = player.currentMediaItem?.mediaId?.let { repo.byMediaId(it)?.name }
+        val now = NowPlaying.parse(title, stationName)
+        Log.i(
+            TAG_ICY,
+            "  -> artist='${now?.artist}' title='${now?.songTitle}' " +
+                "slogan_stacji=${now?.isStationSelfTitle}"
+        )
         PlaybackStatusBus.setNowPlaying(now)
+        coverArtUrl = null
         refreshCurrentMetadata(force = false, now = now)
+
+        // Okladki nie ma w strumieniu - trzeba ja doszukac w zewnetrznym katalogu.
+        // Dla wlasnego sloganu stacji nie ma czego szukac.
+        if (now != null && !now.isStationSelfTitle && !prefs.diagnosticMode) {
+            scope.launch {
+                val art = CoverArtLookup.find(now.artist, now.songTitle)
+                if (art != null && PlaybackStatusBus.nowPlaying.value?.raw == now.raw) {
+                    coverArtUrl = art
+                    refreshCurrentMetadata(force = true, now = now)
+                }
+            }
+        }
     }
 
     /**
@@ -295,7 +317,7 @@ class RadioService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return
         val station = repo.byMediaId(item.mediaId) ?: return
         if (!force && prefs.diagnosticMode) return
-        val fresh = metadata.forPlayback(station, now)
+        val fresh = metadata.forPlayback(station, now, coverArtUrl)
         player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(fresh).build())
         dumpMetadata(station, fresh)
     }
@@ -340,12 +362,14 @@ class RadioService : MediaLibraryService() {
      * auta, bez siegania po telefon w trakcie jazdy.
      */
     private fun diagnosticButton(): CommandButton =
-        CommandButton.Builder()
+        // Ikona musi byc semantyczna stala z zestawu Media3, nie nasz drawable.
+        // Stare setIconResId jest deprecjonowane i Android Auto go nie honoruje -
+        // pierwsza wersja wyswietlala z tego powodu przypadkowa lupke.
+        CommandButton.Builder(CommandButton.ICON_SETTINGS)
             .setSessionCommand(CMD_TOGGLE_DIAG)
             .setDisplayName(
                 if (prefs.diagnosticMode) "Diagnostyka: WL" else "Diagnostyka: WYL"
             )
-            .setIconResId(net.mspanc.twinsenradio.R.drawable.ic_radio)
             .build()
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {

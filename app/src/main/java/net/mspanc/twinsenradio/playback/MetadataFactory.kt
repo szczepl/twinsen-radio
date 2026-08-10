@@ -51,7 +51,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
      * W trybie diagnostycznym kazde pole dostaje swoja polska nazwe - to jest ta
      * wersja, ktora sluzy do rozpoznania ukladu na AID w Passacie.
      */
-    fun forPlayback(station: Station, now: NowPlaying?): MediaMetadata {
+    fun forPlayback(station: Station, now: NowPlaying?, coverArtUrl: String? = null): MediaMetadata {
         val b = MediaMetadata.Builder()
             .setIsBrowsable(false)
             .setIsPlayable(true)
@@ -103,11 +103,16 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 .setGenre(station.genre)
         }
 
-        applyArtwork(b, station)
+        applyArtwork(b, station, coverArtUrl)
         return b.build()
     }
 
-    private fun applyArtwork(b: MediaMetadata.Builder, station: Station) {
+    private fun applyArtwork(b: MediaMetadata.Builder, station: Station, coverArtUrl: String?) {
+        // Doszukana okladka utworu ma pierwszenstwo przed logo stacji.
+        if (coverArtUrl != null && !prefs.diagnosticMode) {
+            b.setArtworkUri(Uri.parse(coverArtUrl))
+            return
+        }
         when (prefs.artworkMode) {
             ArtworkMode.NONE -> Unit
             ArtworkMode.EMBEDDED_BYTES -> {
@@ -171,27 +176,51 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 }
 
-/** To, co przyszlo w metadanych ICY (Icecast/SHOUTcast) dla biezacego strumienia. */
+/**
+ * To, co przyszlo w metadanych ICY (Icecast/SHOUTcast) dla biezacego strumienia.
+ *
+ * [isStationSelfTitle] oznacza przypadek, w ktorym rozglosnia wpisala w to samo
+ * pole nie utwor, tylko wlasna nazwe i slogan albo nazwe audycji - np.
+ * "Radio Nowy Świat - Pion i poziom!". Naiwny podzial po " - " robi wtedy
+ * "wykonawce" rownego nazwie stacji i nazwa laduje na ekranie dwa razy.
+ */
 data class NowPlaying(
     val raw: String,
     val artist: String?,
-    val songTitle: String?
+    val songTitle: String?,
+    val isStationSelfTitle: Boolean = false
 ) {
     companion object {
         /**
          * Typowy StreamTitle to "Wykonawca - Tytul". Reklamy wstrzykiwane przez
          * niektore rozglosnie (RMF) przychodza jako pusty tytul z adw_ad='true' -
          * takie wpisy odrzucamy, zeby na desce nie migala pustka.
+         *
+         * @param stationName nazwa stacji, potrzebna do rozpoznania sloganu
          */
-        fun parse(streamTitle: String?): NowPlaying? {
+        fun parse(streamTitle: String?, stationName: String? = null): NowPlaying? {
             val raw = streamTitle?.trim().orEmpty()
             if (raw.isEmpty()) return null
             val dash = raw.indexOf(" - ")
-            return if (dash > 0) {
-                NowPlaying(raw, raw.substring(0, dash).trim(), raw.substring(dash + 3).trim())
-            } else {
-                NowPlaying(raw, null, raw)
-            }
+            if (dash <= 0) return NowPlaying(raw, null, raw)
+
+            val left = raw.substring(0, dash).trim()
+            val right = raw.substring(dash + 3).trim()
+            val selfTitled = stationName != null && similar(left, stationName)
+            return NowPlaying(raw, left, right, selfTitled)
+        }
+
+        /** Porownanie odporne na diakrytyki, wielkosc liter i slowo "radio". */
+        private fun similar(a: String, b: String): Boolean {
+            fun norm(s: String) = s.lowercase()
+                .replace("ł", "l")
+                .let { java.text.Normalizer.normalize(it, java.text.Normalizer.Form.NFD) }
+                .replace(Regex("\\p{Mn}+"), "")
+                .replace(Regex("[^a-z0-9]"), "")
+                .replace("radio", "")
+            val na = norm(a)
+            val nb = norm(b)
+            return na.isNotEmpty() && (na == nb || na.contains(nb) || nb.contains(na))
         }
     }
 }
