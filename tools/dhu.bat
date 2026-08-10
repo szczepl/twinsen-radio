@@ -5,17 +5,18 @@ rem Dlaczego przez `start` / wlasna konsole: DHU ma interaktywny prompt. Gdy
 rem dostanie stdin z NUL - a tak jest, gdy odpala je skrypt bez konsoli -
 rem czyta EOF i natychmiast konczy prace, zabierajac ze soba okna projekcji.
 rem
-rem KOLEJNOSC MA ZNACZENIE. Przed uruchomieniem na telefonie:
-rem   Android Auto -> menu ... -> "Wlacz serwer radioodtwarzacza"
-rem Kazde uruchomienie DHU zuzywa jedna sesje serwera. Jesli DHU sie rozlaczy,
-rem przelacznik trzeba przeklikac WYLACZ -> WLACZ (sam napis "Wylacz serwer"
-rem nie gwarantuje, ze nasluch faktycznie zyje).
+rem Serwer head unit wlacza sie raz: Android Auto -> menu ... -> "Wlacz serwer
+rem radioodtwarzacza". Potem mozna zamykac i otwierac DHU do woli - Android Auto
+rem podlacza sie samo. Przeklikiwanie WYLACZ -> WLACZ ratuje tylko wtedy, gdy
+rem polaczenie w ogole nie chce wstac.
 rem
 rem Uzycie:
-rem   dhu.bat              -> 1280x720, duzy ekran (najblizsze Discover Pro 9,2")
+rem   dhu.bat              -> 1280x640, natywna geometria Discover Pro 9,2"
 rem   dhu.bat small        -> 800x480  (Composition / Discover Media 8")
-rem   dhu.bat cluster      -> 1280x720 + wirtualny zegar/AID
-rem   dhu.bat small cluster-> 800x480  + wirtualny zegar/AID
+rem   dhu.bat 720          -> czyste 1280x720
+rem   dhu.bat big          -> 1280x720 przy 240 dpi
+rem   dhu.bat small cluster-> jw. + wirtualny zegar/AID
+rem   dhu.bat small ontop  -> okna projekcji nad innymi (domyslnie wylaczone)
 
 set "ADB=C:\Android\Sdk\platform-tools\adb.exe"
 set "DHUEXE=C:\Android\Sdk\extras\google\auto\desktop-head-unit.exe"
@@ -40,14 +41,19 @@ if not exist "%DHUEXE%" (
   goto :end
 )
 
+rem -t trzyma okna projekcji nad wszystkimi innymi. Domyslnie WYLACZONE, bo
+rem przeszkadza w pracy na innych oknach. Wlacz dopiskiem "ontop" w argumentach.
+set "ONTOP="
+echo %* | findstr /I /C:"ontop" >nul && set "ONTOP=-t"
+
 "%ADB%" forward tcp:5277 tcp:5277
 pushd "C:\Android\Sdk\extras\google\auto"
-echo Startuje DHU, profil: %CFG% %EXTRA%
-rem -t trzyma okna projekcji na wierzchu (nowosc w DHU 2.1)
-"%DHUEXE%" -t -c "%CFG%" %EXTRA%
+echo Startuje DHU, profil: %CFG% %EXTRA% %ONTOP%
+"%DHUEXE%" %ONTOP% -c "%CFG%" %EXTRA%
 popd
 
 :end
 echo.
-echo DHU zakonczylo prace. Zanim sprobujesz ponownie, przeklikaj na telefonie
-echo "Wylacz serwer radioodtwarzacza" a potem "Wlacz serwer radioodtwarzacza".
+echo DHU zakonczylo prace. Wystarczy uruchomic ponownie - Android Auto samo
+echo podlaczy sie na nowo. Przeklikiwanie serwera head unit jest potrzebne
+echo tylko wtedy, gdy polaczenie w ogole nie chce wstac.
