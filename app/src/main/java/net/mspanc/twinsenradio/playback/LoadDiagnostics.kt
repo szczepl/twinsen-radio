@@ -1,7 +1,9 @@
 package net.mspanc.twinsenradio.playback
 
 import android.util.Log
+import androidx.media3.common.Format
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
@@ -16,7 +18,26 @@ import java.io.IOException
  *   adb logcat -s LoadDiag
  */
 @UnstableApi
-class LoadDiagnostics : AnalyticsListener {
+class LoadDiagnostics(
+    /**
+     * Format ustalony przez dekoder. To jedyne miejsce, w ktorym poznajemy
+     * prawdziwy kodek i probkowanie - naglowki stacji bywaja z nimi niezgodne.
+     */
+    private val onAudioFormat: (Format) -> Unit = {}
+) : AnalyticsListener {
+
+    override fun onAudioInputFormatChanged(
+        eventTime: AnalyticsListener.EventTime,
+        format: Format,
+        decoderReuseEvaluation: DecoderReuseEvaluation?
+    ) {
+        Log.i(
+            TAG,
+            "format dzwieku: ${format.sampleMimeType} codecs=${format.codecs} " +
+                "bitrate=${format.bitrate} sr=${format.sampleRate} ch=${format.channelCount}"
+        )
+        onAudioFormat(format)
+    }
 
     override fun onLoadStarted(
         eventTime: AnalyticsListener.EventTime,

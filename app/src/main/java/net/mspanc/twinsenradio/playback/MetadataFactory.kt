@@ -223,11 +223,16 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         }
     }
 
-    /** URI logotypu: wbudowany zasob albo zdalna grafika z listy M3U. */
+    /**
+     * URI logotypu: wbudowany zasob albo zdalna grafika z listy M3U.
+     *
+     * Wbudowane logo idzie przez [LogoProvider], a nie jako android.resource://
+     * z numerem zasobu - patrz komentarz w tamtej klasie: numery zmieniaja sie
+     * miedzy wersjami, a Android Auto cache'uje grafike po adresie.
+     */
     fun logoUri(station: Station): Uri {
         station.logoUrl?.let { return Uri.parse(it) }
-        val resId = logoResId(station)
-        return Uri.parse("android.resource://${context.packageName}/$resId")
+        return LogoProvider.uriFor(context, station, logoResId(station))
     }
 
     fun logoResId(station: Station): Int {

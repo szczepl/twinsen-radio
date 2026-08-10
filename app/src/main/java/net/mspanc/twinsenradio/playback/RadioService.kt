@@ -81,6 +81,19 @@ class RadioService : MediaLibraryService() {
     private var coverGeneration = 0
     private var coverRevertJob: Job? = null
 
+    /**
+     * Utwor, do ktorego nalezy okladka trzymana w [coverArtUrl]. Sluzy do
+     * wykrycia momentu, w ktorym okladka przestaje pasowac do tego, co gra.
+     */
+    private var coverTrackKey: String? = null
+
+    /** Format z dekodera i przeplywnosc z naglowka ICY - razem daja opis jakosci. */
+    @Volatile
+    private var audioFormat: androidx.media3.common.Format? = null
+
+    @Volatile
+    private var icyBitrateKbps = 0
+
     /** Czeka po znaczniku sterujacym na to, co rozglosnia wstawi dalej. */
     private var pendingMarkerJob: Job? = null
 
@@ -121,7 +134,12 @@ class RadioService : MediaLibraryService() {
 
         player = buildPlayer()
         player.addListener(PlayerEvents())
-        player.addAnalyticsListener(LoadDiagnostics())
+        player.addAnalyticsListener(
+            LoadDiagnostics { format ->
+                audioFormat = format
+                publishQuality()
+            }
+        )
 
         val sessionActivity = PendingIntent.getActivity(
             this,
@@ -158,6 +176,16 @@ class RadioService : MediaLibraryService() {
                 Log.i(TAG, "ulubione zmienione (${favourites.size}) - odswiezam przyciski i wezly")
                 session.setCustomLayout(customLayout())
                 notifyBrowseNodesChanged(NODE_FAVOURITES, NODE_ALL, NODE_RECENT)
+            }
+        }
+
+        // Stacja dodana z katalogu ma pojawic sie w aucie bez restartu aplikacji.
+        // Dochodzi tez nowy gatunek, wiec odswiezamy takze ich liste.
+        scope.launch {
+            Prefs.discoveredFlow.collect { stations ->
+                if (!this@RadioService::session.isInitialized) return@collect
+                Log.i(TAG, "stacje z sieci zmienione (${stations.size}) - odswiezam wezly")
+                notifyBrowseNodesChanged(NODE_ALL, NODE_GENRES)
             }
         }
     }
@@ -229,6 +257,14 @@ class RadioService : MediaLibraryService() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             lastRawIcyTitle = null
             lastSlogan = null
+            // Zmiana stacji zaczyna wszystko od zera. Bez tego okladka utworu z
+            // poprzedniej stacji zostawala w polu `coverArtUrl` i wracala na ekran
+            // przy najblizszym odswiezeniu metadanych - po przejsciu z RMF na RNS
+            // przez chwile widac bylo okladke z RMF zamiast logo Nowego Swiata.
+            resetCoverArt()
+            audioFormat = null
+            icyBitrateKbps = 0
+            PlaybackStatusBus.setQuality(null)
             val id = mediaItem?.mediaId?.let { Station.idFromMediaId(it) }
             PlaybackStatusBus.setStation(id)
             id?.let { prefs.pushRecent(it) }
@@ -279,7 +315,13 @@ class RadioService : MediaLibraryService() {
         h.name?.let { Log.i(TAG_ICY, "icy-name = $it") }
         h.genre?.let { Log.i(TAG_ICY, "icy-genre = $it") }
         h.url?.let { Log.i(TAG_ICY, "icy-url = $it") }
-        if (h.bitrate > 0) Log.i(TAG_ICY, "icy-br = ${h.bitrate}")
+        if (h.bitrate > 0) {
+            Log.i(TAG_ICY, "icy-br = ${h.bitrate}")
+            // Zapas na wypadek, gdyby dekoder nie podal przeplywnosci - przy AAC
+            // w ADTS jest to regula, bo w samym strumieniu nie ma jej wcale.
+            icyBitrateKbps = h.bitrate
+            publishQuality()
+        }
         if (h.metadataInterval > 0) Log.i(TAG_ICY, "icy-metaint = ${h.metadataInterval}")
         Log.i(TAG_ICY, "icy-pub = ${h.isPublic}")
     }
@@ -363,15 +405,18 @@ class RadioService : MediaLibraryService() {
         // Dane katalogowe dotycza POPRZEDNIEGO utworu, wiec zerujemy je, zanim
         // cokolwiek narysujemy. Inaczej przez chwile widac nowego wykonawce
         // sklejonego ze stara plyta - "Taylor Swift - Black Gold: The Best of
-        // Soul Asylum [1992]". Okladki celowo nie ruszamy: obrazek moze zostac
-        // do czasu znalezienia nowego, bo mylacy tekst jest gorszy niz mylaca
-        // grafika, ktora i tak zaraz sie podmieni.
+        // Soul Asylum [1992]". Okladke zdejmuje updateCoverArt, tez natychmiast.
         trackInfo = null
         PlaybackStatusBus.setTrackInfo(null)
 
         PlaybackStatusBus.setNowPlaying(now)
-        refreshCurrentMetadata(force = true, now = now)
+
+        // Kolejnosc ma znaczenie: najpierw zdejmujemy okladke, dopiero potem
+        // wysylamy metadane. Odwrotnie do auta trafial nowy opis ze stara
+        // grafika - po piosence wchodzilo studio i przy "Pion i poziom!"
+        // wisiala okladka plyty sprzed chwili.
         updateCoverArt(now)
+        refreshCurrentMetadata(force = true, now = now)
         scheduleStaleCheck(now)
     }
 
@@ -417,15 +462,34 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
+     * Zdejmuje wszystko, co wiedzielismy o poprzednim utworze. Wolane przy
+     * zmianie stacji, gdzie zaden slad po poprzedniej nie ma prawa zostac.
+     */
+    private fun resetCoverArt() {
+        coverGeneration++
+        coverRevertJob?.cancel()
+        staleJob?.cancel()
+        coverTrackKey = null
+        coverArtUrl = null
+        trackInfo = null
+        PlaybackStatusBus.setCoverArt(null)
+        PlaybackStatusBus.setTrackInfo(null)
+    }
+
+    /**
      * Podmienia okladke przy zmianie utworu.
      *
-     * Kluczowa zasada: **nie zdejmujemy starej okladki, dopoki nie mamy czym jej
-     * zastapic**. Wczesniejsza wersja zerowala ja od razu, przez co miedzy
-     * utworami logo stacji migalo na ulamek sekundy, zanim doszlo wyszukiwanie.
+     * Zasada jest jedna: **okladka nigdy nie przezywa utworu, do ktorego nalezy**.
+     * Wczesniej bylo odwrotnie - stara grafika zostawala az do znalezienia nowej,
+     * zeby miedzy utworami nie mrugalo logo stacji. W praktyce dawalo to gorszy
+     * efekt niz mrugniecie: przez ulamek sekundy (a po wygasnieciu opisu nawet
+     * przez [COVER_GRACE_MS]) obok nazwiska nowego wykonawcy wisiala plyta
+     * poprzedniego, co wyglada po prostu na blad.
      *
-     * Do logo wracamy dopiero, gdy katalog nic nie znajdzie albo gdy odpowiedz
-     * nie przyjdzie w [COVER_GRACE_MS] - wtedy lepiej pokazac logo niz zostawiac
-     * okladke poprzedniego utworu na stale.
+     * Dlatego przy kazdej zmianie utworu wracamy natychmiast do logo stacji, a
+     * okladke pokazujemy dopiero wtedy, gdy katalog naprawde ja znajdzie. Gdy
+     * stacja przysyla metadane od razu przy podlaczeniu, wyszukiwanie trwa zwykle
+     * ~200 ms i logo praktycznie nie zdazy sie pojawic.
      */
     private fun updateCoverArt(now: NowPlaying?) {
         val generation = ++coverGeneration
@@ -444,27 +508,37 @@ class RadioService : MediaLibraryService() {
             scheduleStaleCheck(PlaybackStatusBus.nowPlaying.value)
         }
 
-        // Reklama albo wlasny slogan stacji - nie ma czego szukac w katalogu.
-        if (now == null || !now.isRealSong) {
-            coverRevertJob = scope.launch {
-                delay(COVER_GRACE_MS)
-                applyIfCurrent(null)
+        val key = if (now?.isRealSong == true) "${now.artist}|${now.songTitle}" else null
+        if (key != coverTrackKey) {
+            coverTrackKey = key
+            if (coverArtUrl != null) {
+                coverArtUrl = null
+                trackInfo = null
+                PlaybackStatusBus.setCoverArt(null)
+                PlaybackStatusBus.setTrackInfo(null)
             }
-            return
         }
 
-        // bezpiecznik: gdyby katalog milczal, po chwili i tak wracamy do logo
-        coverRevertJob = scope.launch {
-            delay(COVER_GRACE_MS)
-            applyIfCurrent(null)
-        }
+        // Reklama albo wlasny slogan stacji - nie ma czego szukac w katalogu.
+        if (key == null) return
 
         scope.launch {
-            val info = CoverArtLookup.find(now.artist, now.songTitle)
+            val info = CoverArtLookup.find(now!!.artist, now.songTitle)
             if (generation != coverGeneration) return@launch
-            coverRevertJob?.cancel()
             applyIfCurrent(info)
         }
+    }
+
+    /** Sklada opis jakosci z formatu dekodera i z naglowka icy-br. */
+    private fun publishQuality() {
+        val format = audioFormat
+        if (format == null) {
+            PlaybackStatusBus.setQuality(null)
+            return
+        }
+        PlaybackStatusBus.setQuality(
+            StreamQuality.of(format, icyBitrateKbps).label().ifBlank { null }
+        )
     }
 
     /**
@@ -587,6 +661,7 @@ class RadioService : MediaLibraryService() {
     private fun favouriteButton(): CommandButton {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
+        Log.i(TAG, "buduje gwiazdke dla stacji '$id': ulubiona=$isFav")
         // Ikona musi byc wektorem BEZ android:tint.
         //
         // Ustalone przez porownanie z ReplaIO, ktore na tym samym DHU rysuje sie
@@ -595,6 +670,16 @@ class RadioService : MediaLibraryService() {
         // android:tint="@color/brand_accent", czyli odwolanie, ktore glowica musi
         // rozwiazac w naszym pakiecie przy inflacji we wlasnym procesie, i wlasnie
         // to sie wykladalo. Kolor podajemy wprost w fillColor.
+        //
+        // Ikone podajemy dwoma drogami naraz. Numer zasobu rozumie kazda glowica,
+        // ale jest niestabilny miedzy wersjami aplikacji i wlasnie na nim opiera
+        // sie pamiec podreczna Android Auto. Adres content:// jest staly i opisuje
+        // ikone, a nie zasob - HDU, ktore go rozumie, uzyje wlasnie jego.
+        val resId = if (isFav) {
+            net.mspanc.twinsenradio.R.drawable.ic_star_filled_aa
+        } else {
+            net.mspanc.twinsenradio.R.drawable.ic_star_outline_aa
+        }
         @Suppress("DEPRECATION")
         return CommandButton.Builder()
             .setSessionCommand(CMD_TOGGLE_FAV)
@@ -604,9 +689,13 @@ class RadioService : MediaLibraryService() {
                     else net.mspanc.twinsenradio.R.string.fav_add
                 )
             )
-            .setIconResId(
-                if (isFav) net.mspanc.twinsenradio.R.drawable.ic_star_filled_aa
-                else net.mspanc.twinsenradio.R.drawable.ic_star_outline_aa
+            .setIconResId(resId)
+            .setIconUri(
+                LogoProvider.iconUri(
+                    this@RadioService,
+                    if (isFav) "star_filled" else "star_outline",
+                    resId
+                )
             )
             .build()
     }
@@ -622,6 +711,14 @@ class RadioService : MediaLibraryService() {
                 if (prefs.diagnosticMode) "Diagnostyka: WL" else "Diagnostyka: WYL"
             )
             .setIconResId(net.mspanc.twinsenradio.R.drawable.ic_diag_aa)
+            // Staly adres obok numeru zasobu - patrz komentarz przy gwiazdce.
+            .setIconUri(
+                LogoProvider.iconUri(
+                    this@RadioService,
+                    if (prefs.diagnosticMode) "diag_on" else "diag_off",
+                    net.mspanc.twinsenradio.R.drawable.ic_diag_aa
+                )
+            )
             .build()
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
@@ -1017,13 +1114,6 @@ class RadioService : MediaLibraryService() {
             "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_RESULT_REFRESH_ITEM"
         private const val KEY_ACTION_RESULT_MESSAGE =
             "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_RESULT_MESSAGE"
-
-        /**
-         * Ile czekamy na okladke, zanim wrocimy do logo stacji. Wyszukiwanie
-         * trwa zwykle 200-800 ms, wiec 4 s spokojnie je przykrywa i jednoczesnie
-         * nie zostawia na ekranie okladki poprzedniego utworu na dluzej.
-         */
-        private const val COVER_GRACE_MS = 4_000L
 
         /**
          * Ile czekamy po znaczniku sterujacym, zanim uznamy, ze rozglosnia nie

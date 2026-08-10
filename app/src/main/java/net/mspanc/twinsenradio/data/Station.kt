@@ -13,7 +13,13 @@ data class Station(
     val logoUrl: String? = null,
     val source: Source = Source.BUILT_IN
 ) {
-    enum class Source { BUILT_IN, USER_M3U }
+    enum class Source {
+        BUILT_IN,
+        USER_M3U,
+
+        /** Dodana recznie z katalogu radio-browser.info, patrz [RadioBrowser]. */
+        DISCOVERED
+    }
 
     /** Identyfikator uzywany w drzewie przegladania Android Auto. */
     val mediaId: String get() = "$MEDIA_ID_PREFIX$id"

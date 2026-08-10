@@ -35,6 +35,17 @@ object PlaybackStatusBus {
         _trackInfo.value = info
     }
 
+    /**
+     * Opis jakosci biezacego strumienia - kodek, przeplywnosc, probkowanie.
+     * Tylko dla telefonu; w aucie nie ma pola, w ktorym daloby sie to napisac.
+     */
+    private val _quality = MutableStateFlow<String?>(null)
+    val quality: StateFlow<String?> = _quality
+
+    fun setQuality(text: String?) {
+        _quality.value = text
+    }
+
     private val _status = MutableStateFlow(Status.IDLE)
     val status: StateFlow<Status> = _status
 
@@ -45,6 +56,10 @@ object PlaybackStatusBus {
             _stationId.value = id
             _nowPlaying.value = null
             _coverArtUrl.value = null
+            _trackInfo.value = null
+            // Nowa stacja to nowy strumien - stara jakosc przestaje obowiazywac
+            // od razu, a nowa poznamy dopiero po pierwszej ramce z dekodera.
+            _quality.value = null
         }
     }
 

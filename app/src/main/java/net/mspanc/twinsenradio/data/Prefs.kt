@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Ustawienia aplikacji. Swiadomie na SharedPreferences - czyta z nich takze
@@ -107,6 +109,12 @@ class Prefs(context: Context) {
                 favouritesSeeded = true
             }
         }
+        synchronized(DISCOVERED_LOCK) {
+            if (!discoveredSeeded) {
+                _discovered.value = readDiscovered()
+                discoveredSeeded = true
+            }
+        }
     }
 
     var favourites: Set<String>
@@ -129,6 +137,56 @@ class Prefs(context: Context) {
         favourites = cur
         return added
     }
+
+    /**
+     * Stacje dodane recznie z katalogu w sieci. Trzymamy komplet danych, a nie
+     * sam identyfikator: katalog moze przestac odpowiadac albo usunac pozycje,
+     * a stacja raz dodana ma dzialac w aucie takze bez zasiegu do katalogu.
+     */
+    val discovered: List<Station> get() = _discovered.value
+
+    fun addDiscovered(station: Station) {
+        if (discovered.any { it.id == station.id }) return
+        saveDiscovered(discovered + station)
+    }
+
+    fun removeDiscovered(stationId: String) {
+        saveDiscovered(discovered.filterNot { it.id == stationId })
+    }
+
+    fun isDiscovered(stationId: String): Boolean = discovered.any { it.id == stationId }
+
+    private fun saveDiscovered(list: List<Station>) {
+        val arr = JSONArray()
+        list.forEach { s ->
+            arr.put(
+                JSONObject()
+                    .put("id", s.id)
+                    .put("name", s.name)
+                    .put("genre", s.genre)
+                    .put("stream", s.stream)
+                    .put("logoUrl", s.logoUrl ?: "")
+            )
+        }
+        sp.edit { putString(KEY_DISCOVERED, arr.toString()) }
+        _discovered.value = list
+    }
+
+    private fun readDiscovered(): List<Station> = runCatching {
+        val raw = sp.getString(KEY_DISCOVERED, null) ?: return emptyList()
+        val arr = JSONArray(raw)
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            Station(
+                id = o.getString("id"),
+                name = o.getString("name"),
+                genre = o.optString("genre", "Z sieci"),
+                stream = o.getString("stream"),
+                logoUrl = o.optString("logoUrl").ifBlank { null },
+                source = Station.Source.DISCOVERED
+            )
+        }
+    }.getOrElse { emptyList() }
 
     /** Ostatnio sluchane, najnowsze na poczatku. */
     var recent: List<String>
@@ -161,6 +219,17 @@ class Prefs(context: Context) {
         private var favouritesSeeded = false
         private val FAV_LOCK = Any()
 
+        /**
+         * Stacje dociagniete z katalogu - tak samo jak ulubione, jedno zrodlo
+         * prawdy ze strumieniem zmian, zeby lista na telefonie i drzewo w aucie
+         * przebudowaly sie w tej samej chwili.
+         */
+        private val _discovered = MutableStateFlow<List<Station>>(emptyList())
+        val discoveredFlow: StateFlow<List<Station>> = _discovered
+
+        private var discoveredSeeded = false
+        private val DISCOVERED_LOCK = Any()
+
         const val KEY_DIAG = "diagnostic_mode"
         const val KEY_DIAG_API = "diagnostic_api_names"
         const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"
@@ -177,6 +246,7 @@ class Prefs(context: Context) {
         const val KEY_M3U = "user_m3u"
         const val KEY_FAV = "favourites"
         const val KEY_RECENT = "recent"
+        const val KEY_DISCOVERED = "discovered_stations"
     }
 }
 

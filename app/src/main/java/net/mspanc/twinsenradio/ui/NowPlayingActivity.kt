@@ -63,6 +63,7 @@ class NowPlayingActivity : AppCompatActivity() {
             PlaybackStatusBus.status,
             PlaybackStatusBus.coverArtUrl,
             PlaybackStatusBus.trackInfo,
+            PlaybackStatusBus.quality,
             Prefs.favouritesFlow
         ).forEach { flow ->
             lifecycleScope.launch { flow.collect { render() } }
@@ -172,7 +173,7 @@ class NowPlayingActivity : AppCompatActivity() {
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.art
         )
-        b.status.text = getString(
+        val statusText = getString(
             when (PlaybackStatusBus.status.value) {
                 PlaybackStatusBus.Status.CONNECTING -> R.string.status_connecting
                 PlaybackStatusBus.Status.BUFFERING -> R.string.status_buffering
@@ -182,6 +183,10 @@ class NowPlayingActivity : AppCompatActivity() {
                 PlaybackStatusBus.Status.IDLE -> R.string.status_idle
             }
         )
+        // Jakosc znamy dopiero po pierwszej ramce z dekodera, wiec dopisujemy ja
+        // dopiero wtedy, gdy naprawde jest co dopisac.
+        val quality = PlaybackStatusBus.quality.value
+        b.status.text = if (quality.isNullOrBlank()) statusText else "$statusText · $quality"
         b.playPause.setImageResource(
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause
             else android.R.drawable.ic_media_play

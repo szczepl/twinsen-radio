@@ -27,10 +27,17 @@ class StationRepository private constructor(private val appContext: Context) {
     /** Wbudowana lista - zawsze dostepna, nie wymaga sieci. */
     val builtIn: List<Station> by lazy { readBuiltIn() }
 
-    /** Pelna lista: wbudowana + z list M3U, jesli zostaly juz pobrane. */
+    /**
+     * Pelna lista: wbudowana + z list M3U + stacje dodane z katalogu w sieci.
+     *
+     * Dociagniete czytamy przy kazdym wywolaniu, a nie z `cache`: siedza w
+     * strumieniu w [Prefs] i moga zmienic sie w dowolnym momencie, takze z
+     * innego ekranu. Jest ich najwyzej kilkanascie, wiec nie ma czego optymalizowac.
+     */
     fun all(): List<Station> {
         if (cache.isEmpty()) cache = builtIn
-        return cache
+        val extra = prefs.discovered
+        return if (extra.isEmpty()) cache else cache + extra
     }
 
     fun byId(id: String): Station? = all().firstOrNull { it.id == id }

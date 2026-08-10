@@ -51,10 +51,27 @@
             android:parentActivityName=".ui.MainActivity" />
 
         <activity
+            android:name=".ui.DiscoverActivity"
+            android:exported="false"
+            android:label="@string/discover_title"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"
             android:parentActivityName=".ui.MainActivity" />
+
+        <!--
+            Logotypy stacji dla Android Auto. Musi byc exported, bo grafike
+            pobiera proces Android Auto, a nie nasz. Nie wystawia niczego poza
+            logotypami, ktore i tak siedza w APK.
+        -->
+        <provider
+            android:name=".playback.LogoProvider"
+            android:authorities="${applicationId}.logos"
+            android:exported="true"
+            android:grantUriPermissions="true" />
 
         <service
             android:name=".playback.RadioService"

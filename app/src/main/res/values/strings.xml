@@ -15,6 +15,14 @@
     <string name="root_title">Twinsen Radio</string>
 
     <string name="search_hint">Szukaj stacji…</string>
+
+    <!-- Wyszukiwanie stacji spoza wbudowanej listy (katalog radio-browser.info) -->
+    <string name="discover_title">Szukaj stacji w sieci</string>
+    <string name="discover_hint">Nazwa stacji…</string>
+    <string name="discover_intro">Wpisz nazwę, żeby przeszukać katalog radio-browser.info — otwartą bazę około 50 tysięcy rozgłośni z całego świata. Stuknięcie dodaje stację do Twojej listy.</string>
+    <string name="discover_added_header">Stacje dodane z sieci. Stuknij, żeby usunąć.</string>
+    <string name="discover_searching">Szukam…</string>
+    <string name="discover_nothing">Nic nie znaleziono dla „%1$s”.</string>
     <string name="status_connecting">Łączenie…</string>
     <string name="status_buffering">Buforowanie…</string>
     <string name="status_waiting_network">Czekam na sieć…</string>

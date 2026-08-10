@@ -56,10 +56,14 @@ class MainActivity : AppCompatActivity() {
         metadata = MetadataFactory(this, prefs)
 
         adapter = StationAdapter(
-            isFavourite = { it.id in prefs.favourites },
-            logoResFor = { metadata.logoResId(it) },
+            subtitleFor = { it.genre },
+            actionIconFor = {
+                if (it.id in prefs.favourites) android.R.drawable.btn_star_big_on
+                else android.R.drawable.btn_star_big_off
+            },
+            loadLogo = ::showLogo,
             onClick = ::play,
-            onToggleFavourite = { prefs.toggleFavourite(it.id) }
+            onAction = { prefs.toggleFavourite(it.id) }
         )
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
@@ -140,13 +144,30 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean =
-        if (item.itemId == R.id.action_settings) {
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean = when (item.itemId) {
+        R.id.action_settings -> {
             startActivity(Intent(this, SettingsActivity::class.java))
             true
-        } else {
-            super.onOptionsItemSelected(item)
         }
+        R.id.action_discover -> {
+            startActivity(Intent(this, DiscoverActivity::class.java))
+            true
+        }
+        else -> super.onOptionsItemSelected(item)
+    }
+
+    /**
+     * Logo stacji. Wbudowane siedza w APK, ale stacje dociagniete z katalogu maja
+     * je pod adresem w sieci - stad dwie drogi.
+     */
+    private fun showLogo(station: Station, view: android.widget.ImageView) {
+        ArtworkLoader.into(
+            lifecycleScope,
+            station.logoUrl?.let { android.net.Uri.parse(it) },
+            metadata.logoResId(station),
+            view
+        )
+    }
 
     private fun play(station: Station) {
         val c = controller ?: return
@@ -182,6 +203,13 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             Prefs.favouritesFlow.collect {
                 adapter.notifyItemRangeChanged(0, adapter.itemCount)
+            }
+        }
+        // Stacja dodana albo usunieta w wyszukiwarce ma pojawic sie tutaj od razu,
+        // bez wychodzenia z ekranu.
+        lifecycleScope.launch {
+            Prefs.discoveredFlow.collect {
+                adapter.submitList(repo.search(b.search.text?.toString().orEmpty()))
             }
         }
     }
