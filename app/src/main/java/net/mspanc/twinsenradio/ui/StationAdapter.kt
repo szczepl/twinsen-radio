@@ -19,7 +19,9 @@ class StationAdapter(
     private val actionIconFor: (Station) -> Int,
     private val loadLogo: (Station, ImageView) -> Unit,
     private val onClick: (Station) -> Unit,
-    private val onAction: (Station) -> Unit
+    private val onAction: (Station) -> Unit,
+    /** Stukniecie w samo logo; null = logo zachowuje sie jak reszta wiersza. */
+    private val onLogoClick: ((Station) -> Unit)? = null
 ) : ListAdapter<Station, StationAdapter.VH>(DIFF) {
 
     inner class VH(val b: ItemStationBinding) : RecyclerView.ViewHolder(b.root)
@@ -35,6 +37,10 @@ class StationAdapter(
             loadLogo(station, logo)
             fav.setImageResource(actionIconFor(station))
             root.setOnClickListener { onClick(station) }
+            if (onLogoClick != null) {
+                logo.isClickable = true
+                logo.setOnClickListener { onLogoClick.invoke(station) }
+            }
             fav.setOnClickListener {
                 onAction(station)
                 notifyItemChanged(holder.bindingAdapterPosition)

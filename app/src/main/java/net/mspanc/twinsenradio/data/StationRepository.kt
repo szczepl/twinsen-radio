@@ -37,7 +37,17 @@ class StationRepository private constructor(private val appContext: Context) {
     fun all(): List<Station> {
         if (cache.isEmpty()) cache = builtIn
         val extra = prefs.discovered
-        return if (extra.isEmpty()) cache else cache + extra
+        val full = if (extra.isEmpty()) cache else cache + extra
+        // Ukryte pomijamy tu, w jednym miejscu - dzieki temu znikaja wszedzie
+        // naraz: na liscie w telefonie, w wyszukiwaniu i w drzewie w aucie.
+        val hidden = prefs.hidden
+        return if (hidden.isEmpty()) full else full.filterNot { it.id in hidden }
+    }
+
+    /** Pelna lista razem z ukrytymi - potrzebna tylko do ich przywracania. */
+    fun allIncludingHidden(): List<Station> {
+        if (cache.isEmpty()) cache = builtIn
+        return cache + prefs.discovered
     }
 
     fun byId(id: String): Station? = all().firstOrNull { it.id == id }

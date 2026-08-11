@@ -12,7 +12,23 @@
         android:background="?attr/colorPrimary"
         app:navigationIcon="@drawable/ic_arrow_back"
         app:title="@string/info_title"
-        app:titleTextColor="@color/on_brand" />
+        app:titleTextColor="@color/on_brand">
+
+        <!--
+            Gwiazdka ma sens tylko dla stacji, ktora jest juz na liscie. Przy
+            pozycji z wyszukiwarki, ktorej dopiero mozna dodac, jest ukryta.
+        -->
+        <ImageButton
+            android:id="@+id/favourite"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="end"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/fav_add"
+            android:src="@drawable/ic_star_outline"
+            android:visibility="gone" />
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"

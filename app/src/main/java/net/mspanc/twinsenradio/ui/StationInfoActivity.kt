@@ -14,8 +14,10 @@ import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.RadioBrowser
 import net.mspanc.twinsenradio.data.Station
+import net.mspanc.twinsenradio.data.StationRepository
 import net.mspanc.twinsenradio.data.StreamProbe
 import net.mspanc.twinsenradio.databinding.ActivityStationInfoBinding
+import net.mspanc.twinsenradio.playback.MetadataFactory
 import kotlinx.coroutines.launch
 
 /**
@@ -53,6 +55,8 @@ class StationInfoActivity : AppCompatActivity() {
             name = name,
             genre = intent.getStringExtra(EXTRA_GENRE).orEmpty().ifBlank { "Z sieci" },
             stream = stream,
+            // Nazwa wbudowanego zasobu; stacje z katalogu maja zamiast tego adres
+            logo = intent.getStringExtra(EXTRA_LOGO_NAME),
             logoUrl = intent.getStringExtra(EXTRA_LOGO),
             source = Station.Source.DISCOVERED
         )
@@ -72,7 +76,7 @@ class StationInfoActivity : AppCompatActivity() {
         ArtworkLoader.into(
             lifecycleScope,
             station.logoUrl?.let { Uri.parse(it) },
-            R.drawable.logo_placeholder,
+            MetadataFactory(this, prefs).logoResId(station),
             b.logo
         )
 
@@ -116,19 +120,10 @@ class StationInfoActivity : AppCompatActivity() {
             }
         }
 
-        // Dodanie konczy sprawe: wracamy tam, skad przyszlismy, zeby stacja od
-        // razu byla widoczna na liscie "Twoje stacje dodane z sieci". Trzymanie
-        // uzytkownika na ekranie szczegolow po dodaniu nie daje mu juz nic.
-        b.btnToggle.setOnClickListener {
-            val added = !prefs.isDiscovered(station.id)
-            if (added) prefs.addDiscovered(station) else prefs.removeDiscovered(station.id)
-            Toast.makeText(
-                this,
-                if (added) R.string.info_added_toast else R.string.info_removed_toast,
-                Toast.LENGTH_SHORT
-            ).show()
-            setResult(RESULT_OK, Intent().putExtra(RESULT_CHANGED, true))
-            finish()
+        b.btnToggle.setOnClickListener { toggleOnList() }
+        b.favourite.setOnClickListener {
+            prefs.toggleFavourite(station.id)
+            renderFavourite()
         }
         renderToggle()
     }
@@ -190,9 +185,49 @@ class StationInfoActivity : AppCompatActivity() {
         b.details.addView(row)
     }
 
+    /**
+     * Czy stacja jest na liscie uzytkownika. Dotyczy tak samo wbudowanych, jak
+     * i dociagnietych z katalogu - z punktu widzenia tego ekranu roznica jest
+     * tylko taka, ze wbudowanej nie da sie skasowac, wiec ja ukrywamy.
+     */
+    private fun isOnList(): Boolean =
+        StationRepository.get(this).all().any { it.id == station.id }
+
+    private fun toggleOnList() {
+        val onList = isOnList()
+        when {
+            // Byla na liscie - zdejmujemy. Dociagnieta znika, wbudowana chowa sie
+            // do zbioru ukrytych i da sie ja przywrocic w Opcjach.
+            onList && prefs.isDiscovered(station.id) -> prefs.removeDiscovered(station.id)
+            onList -> prefs.hide(station.id)
+            // Nie bylo - wraca. Wbudowana byla tylko ukryta, wiec ja odkrywamy.
+            prefs.isHidden(station.id) -> prefs.unhide(station.id)
+            else -> prefs.addDiscovered(station)
+        }
+        Toast.makeText(
+            this,
+            if (onList) R.string.info_removed_toast else R.string.info_added_toast,
+            Toast.LENGTH_SHORT
+        ).show()
+        setResult(RESULT_OK, Intent().putExtra(RESULT_CHANGED, true))
+        finish()
+    }
+
     private fun renderToggle() {
-        val added = prefs.isDiscovered(station.id)
-        b.btnToggle.setText(if (added) R.string.info_remove else R.string.info_add)
+        val onList = isOnList()
+        b.btnToggle.setText(if (onList) R.string.info_remove else R.string.info_add)
+        // Ulubione dotycza wylacznie stacji, ktora juz jest na liscie
+        b.favourite.visibility = if (onList) android.view.View.VISIBLE else android.view.View.GONE
+        if (onList) renderFavourite()
+    }
+
+    private fun renderFavourite() {
+        val fav = station.id in prefs.favourites
+        b.favourite.setImageResource(
+            if (fav) R.drawable.ic_star_filled else R.drawable.ic_star_outline
+        )
+        b.favourite.contentDescription =
+            getString(if (fav) R.string.fav_remove else R.string.fav_add)
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -206,6 +241,7 @@ class StationInfoActivity : AppCompatActivity() {
         private const val EXTRA_GENRE = "genre"
         private const val EXTRA_STREAM = "stream"
         private const val EXTRA_LOGO = "logo"
+        private const val EXTRA_LOGO_NAME = "logo_name"
         private const val EXTRA_COUNTRY_NAME = "country_name"
         private const val EXTRA_LANGUAGE = "language"
         private const val EXTRA_TAGS = "tags"
@@ -241,6 +277,7 @@ class StationInfoActivity : AppCompatActivity() {
                 .putExtra(EXTRA_GENRE, station.genre)
                 .putExtra(EXTRA_STREAM, station.stream)
                 .putExtra(EXTRA_LOGO, station.logoUrl)
+                .putExtra(EXTRA_LOGO_NAME, station.logo)
                 .putExtra(EXTRA_TAGS, station.genre)
     }
 }

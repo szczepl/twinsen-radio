@@ -141,6 +141,12 @@ class Prefs(context: Context) {
                 discoveredSeeded = true
             }
         }
+        synchronized(HIDDEN_LOCK) {
+            if (!hiddenSeeded) {
+                _hidden.value = sp.getStringSet(KEY_HIDDEN, emptySet()).orEmpty()
+                hiddenSeeded = true
+            }
+        }
     }
 
     var favourites: Set<String>
@@ -244,6 +250,32 @@ class Prefs(context: Context) {
     private fun writeHistory(key: String, values: List<String>) =
         sp.edit { putString(key, values.take(HISTORY_LIMIT).joinToString("\n")) }
 
+    /**
+     * Stacje wbudowane, ktore uzytkownik usunal z listy.
+     *
+     * Wbudowanych nie da sie skasowac - siedza w assets - wiec zamiast tego
+     * trzymamy zbior ukrytych i pomijamy je przy budowaniu listy. Dzieki temu
+     * usuniecie jest odwracalne, a plik z lista zostaje nietkniety.
+     */
+    val hidden: Set<String> get() = _hidden.value
+
+    fun hide(stationId: String) {
+        saveHidden(hidden + stationId)
+    }
+
+    fun unhide(stationId: String) {
+        saveHidden(hidden - stationId)
+    }
+
+    fun restoreAllHidden() = saveHidden(emptySet())
+
+    fun isHidden(stationId: String) = stationId in hidden
+
+    private fun saveHidden(value: Set<String>) {
+        sp.edit { putStringSet(KEY_HIDDEN, value) }
+        _hidden.value = value
+    }
+
     /** Ostatnio sluchane, najnowsze na poczatku. */
     var recent: List<String>
         get() = sp.getString(KEY_RECENT, "").orEmpty().lines().filter { it.isNotBlank() }
@@ -286,6 +318,13 @@ class Prefs(context: Context) {
         private var discoveredSeeded = false
         private val DISCOVERED_LOCK = Any()
 
+        /** Ukryte stacje wbudowane - tak samo obserwowalne jak ulubione. */
+        private val _hidden = MutableStateFlow<Set<String>>(emptySet())
+        val hiddenFlow: StateFlow<Set<String>> = _hidden
+
+        private var hiddenSeeded = false
+        private val HIDDEN_LOCK = Any()
+
         const val KEY_DIAG = "diagnostic_mode"
         const val KEY_DIAG_API = "diagnostic_api_names"
         const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"
@@ -306,6 +345,7 @@ class Prefs(context: Context) {
         const val KEY_FAV = "favourites"
         const val KEY_RECENT = "recent"
         const val KEY_DISCOVERED = "discovered_stations"
+        const val KEY_HIDDEN = "hidden_stations"
         const val KEY_HISTORY_LOCAL = "search_history_local"
         const val KEY_HISTORY_WEB = "search_history_web"
 

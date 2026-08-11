@@ -1,6 +1,7 @@
 package net.mspanc.twinsenradio.ui
 
 import android.os.Bundle
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -67,6 +68,7 @@ class SettingsActivity : AppCompatActivity() {
         bind(b.ddPlayable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.playableStyle))
         bind(b.ddBuffer, BufferProfile.ALL.map { it.label }, prefs.bufferProfile)
         b.etM3u.setText(prefs.userM3uUrls.joinToString("\n"))
+        renderHidden()
 
         b.btnSave.setOnClickListener { save() }
     }
@@ -125,6 +127,29 @@ class SettingsActivity : AppCompatActivity() {
             getString(R.string.opt_line_middle_clock)
         } else {
             Line.MIDDLE.hint
+        }
+    }
+
+    /**
+     * Stacje zdjete z listy. Wbudowanych nie da sie skasowac, wiec sa tylko
+     * ukryte - i to jest jedyne miejsce, z ktorego mozna je odzyskac.
+     */
+    private fun renderHidden() {
+        val repo = StationRepository.get(this)
+        val hidden = prefs.hidden
+        if (hidden.isEmpty()) {
+            b.hiddenBox.visibility = View.GONE
+            return
+        }
+        val names = repo.allIncludingHidden()
+            .filter { it.id in hidden }
+            .joinToString(", ") { it.name }
+        b.hiddenBox.visibility = View.VISIBLE
+        b.hiddenLabel.text = getString(R.string.opt_hidden_label, names.ifBlank { "${hidden.size}" })
+        b.btnRestoreHidden.setOnClickListener {
+            prefs.restoreAllHidden()
+            renderHidden()
+            Toast.makeText(this, R.string.opt_restored_toast, Toast.LENGTH_SHORT).show()
         }
     }
 

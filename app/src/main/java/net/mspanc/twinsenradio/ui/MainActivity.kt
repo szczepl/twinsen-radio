@@ -63,7 +63,10 @@ class MainActivity : AppCompatActivity() {
             },
             loadLogo = ::showLogo,
             onClick = ::play,
-            onAction = { prefs.toggleFavourite(it.id) }
+            onAction = { prefs.toggleFavourite(it.id) },
+            // Logo prowadzi do szczegolow. Sam wiersz zostaje przy graniu - to
+            // najczestsza czynnosc i nie ma jej po co utrudniac.
+            onLogoClick = { startActivity(StationInfoActivity.intent(this, it)) }
         )
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
@@ -262,10 +265,31 @@ class MainActivity : AppCompatActivity() {
         // Stacja dodana albo usunieta w wyszukiwarce ma pojawic sie tutaj od razu,
         // bez wychodzenia z ekranu.
         lifecycleScope.launch {
-            Prefs.discoveredFlow.collect {
-                adapter.submitList(repo.search(b.search.text?.toString().orEmpty()))
-            }
+            Prefs.discoveredFlow.collect { refreshList() }
         }
+        // Ukrycie albo przywrocenie stacji tez musi od razu przebudowac liste
+        lifecycleScope.launch {
+            Prefs.hiddenFlow.collect { refreshList() }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Wracamy ze szczegolow - stacja mogla tam zniknac albo zmienic ulubione
+        refreshList()
+        adapter.notifyItemRangeChanged(0, adapter.itemCount)
+    }
+
+    /**
+     * Przebudowa listy po zmianie jej zawartosci.
+     *
+     * Przewiniecie na gore nie jest kosmetyka: RecyclerView trzyma kotwice na
+     * pozycji, ktora widac, wiec stacja przywrocona na poczatek ladowala nad
+     * widocznym obszarem i wygladalo to, jakby przywrocenie nie zadzialalo.
+     */
+    private fun refreshList() {
+        val query = b.search.text?.toString().orEmpty()
+        adapter.submitList(repo.search(query)) { b.list.scrollToPosition(0) }
     }
 
     private fun renderMiniPlayer() {
