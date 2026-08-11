@@ -1,8 +1,10 @@
 package net.mspanc.twinsenradio.ui
 
 import android.os.Bundle
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.ImageView
+import com.google.android.material.chip.Chip
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
@@ -102,12 +104,45 @@ class DiscoverActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Stan pustego pola.
+     *
+     * Wczesniej lezala tu po prostu lista dodanych stacji, wygladajaca dokladnie
+     * tak samo jak wyniki wyszukiwania - nie dalo sie odroznic, czy to reszta po
+     * poprzednim szukaniu, czy cos wlasnego. Teraz sa dwie wyraznie opisane
+     * rzeczy: ostatnie zapytania do ponowienia jednym stuknieciem i wlasne
+     * stacje z licznikiem w naglowku.
+     */
     private fun showAdded() {
         val added = prefs.discovered
         adapter.submitList(added)
-        b.hint.setText(
-            if (added.isEmpty()) R.string.discover_intro else R.string.discover_added_header
-        )
+        renderHistoryChips()
+
+        if (added.isEmpty()) {
+            b.hint.setText(R.string.discover_empty)
+            b.subhint.setText(R.string.discover_intro)
+        } else {
+            b.hint.text = getString(R.string.discover_added_header, added.size)
+            b.subhint.setText(R.string.discover_added_hint)
+        }
+    }
+
+    /** Chipy z historia - jedno stukniecie ponawia zapytanie. */
+    private fun renderHistoryChips() {
+        val history = prefs.webSearchHistory
+        b.historyChips.removeAllViews()
+        b.historyBox.visibility = if (history.isEmpty()) View.GONE else View.VISIBLE
+        history.forEach { query ->
+            val chip = Chip(this).apply {
+                text = query
+                isCheckable = false
+                setOnClickListener {
+                    b.query.setText(query)
+                    b.query.setSelection(query.length)
+                }
+            }
+            b.historyChips.addView(chip)
+        }
     }
 
     /**
@@ -121,6 +156,10 @@ class DiscoverActivity : AppCompatActivity() {
             showAdded()
             return
         }
+        // Szukamy - historia i licznik dodanych ustepuja miejsca wynikom
+        b.historyBox.visibility = View.GONE
+        b.subhint.text = ""
+
         searchJob = lifecycleScope.launch {
             delay(400)
             b.hint.setText(R.string.discover_searching)

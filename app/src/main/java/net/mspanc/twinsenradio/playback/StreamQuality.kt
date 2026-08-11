@@ -50,12 +50,40 @@ data class StreamQuality(
                 format.averageBitrate > 0 -> (format.averageBitrate + 500) / 1000
                 else -> icyBitrateKbps
             }
+            val sbr = looksLikeSbr(format)
+            val rate = format.sampleRate.takeIf { it > 0 } ?: 0
             return StreamQuality(
-                codec = codecName(format),
+                codec = if (sbr) "AAC+" else codecName(format),
                 bitrateKbps = bitrate,
-                sampleRateHz = format.sampleRate.takeIf { it > 0 } ?: 0,
+                // Przy SBR dekoder oddaje dwa razy wiecej, niz deklaruje naglowek
+                sampleRateHz = if (sbr) rate * 2 else rate,
                 channels = format.channelCount.takeIf { it > 0 } ?: 0
             )
+        }
+
+        /**
+         * Czy to HE-AAC sygnalizowany niejawnie.
+         *
+         * Przy niejawnej sygnalizacji SBR naglowek ADTS klamie dwa razy: podaje
+         * profil AAC-LC i **polowe** docelowej czestotliwosci, bo gorne pasmo
+         * dokleja dopiero dekoder. Radio Nowy Swiat wyglada wtedy tak:
+         *
+         *     audio/mp4a-latm codecs=mp4a.40.2 sr=22050 ch=2
+         *
+         * i bez tej poprawki pokazywalibysmy "AAC 22,1 kHz", czyli wartosc
+         * brzmiaca na duzo gorsza jakosc, niz slychac naprawde.
+         *
+         * Rozpoznajemy to po zestawie: profil LC, stereo i czestotliwosc rzedu
+         * 24 kHz lub mniej. Prawdziwy AAC-LC 22 kHz stereo w muzycznym strumieniu
+         * internetowym praktycznie nie wystepuje - taka przeplywnosc idzie dzis
+         * zawsze przez HE-AAC.
+         */
+        private fun looksLikeSbr(format: Format): Boolean {
+            val isAac = format.sampleMimeType in setOf("audio/mp4a-latm", "audio/aac", "audio/aacp")
+            if (!isAac) return false
+            val profile = format.codecs?.substringAfterLast('.')?.toIntOrNull()
+            if (profile != null && profile != 2) return false
+            return format.sampleRate in 1..24_000 && format.channelCount >= 2
         }
 
         /**
