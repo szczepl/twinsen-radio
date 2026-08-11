@@ -101,10 +101,14 @@ class NowPlayingActivity : AppCompatActivity() {
      * To ta sama nastawa, co w karcie stacji - zapisujemy ja w [Prefs], wiec
      * zmiana zrobiona tutaj widoczna jest tam i odwrotnie. Usluga sama
      * przeladuje strumien, bo obserwuje te preferencje.
+     *
+     * Widoczny zawsze, gdy stacja gra - i przy jednym strumieniu tez, po prostu
+     * informacyjnie. Strzalka i mozliwosc kliknieicia pojawiaja sie dopiero,
+     * gdy faktycznie jest w czym wybierac.
      */
     private fun renderBitrate(station: Station?) {
         val variants = station?.variants().orEmpty()
-        if (station == null || variants.size < 2) {
+        if (station == null || variants.isEmpty()) {
             b.bitrate.visibility = android.view.View.GONE
             return
         }
@@ -113,8 +117,16 @@ class NowPlayingActivity : AppCompatActivity() {
             ?: variants.maxByOrNull { it.kbps }?.url
         val current = variants.firstOrNull { it.url == chosen } ?: variants.first()
         b.bitrate.text = current.kbpsLabel()
-        b.bitrate.setOnClickListener {
-            StreamPicker.show(this, station, prefs) { renderBitrate(station) }
+        if (variants.size >= 2) {
+            b.bitrate.icon = androidx.core.content.ContextCompat.getDrawable(this, R.drawable.ic_expand_more)
+            b.bitrate.isClickable = true
+            b.bitrate.setOnClickListener {
+                StreamPicker.show(this, station, prefs) { renderBitrate(station) }
+            }
+        } else {
+            b.bitrate.icon = null
+            b.bitrate.isClickable = false
+            b.bitrate.setOnClickListener(null)
         }
     }
 
@@ -146,18 +158,18 @@ class NowPlayingActivity : AppCompatActivity() {
         when {
             now?.isRealSong == true -> {
                 val info = PlaybackStatusBus.trackInfo.value
-                // Ta sama linia co w aucie, razem z wydawnictwem i rokiem
-                b.songArtist.text = MetadataFactory.composeArtistLine(
-                    now,
-                    info,
-                    prefs.enrichWithAlbum
-                )
+                // Sam wykonawca - plyta idzie osobno, na wlasna linie ponizej
+                b.songArtist.text = MetadataFactory.composeArtistOnly(now, info)
+                val album = (if (prefs.enrichWithAlbum) info?.albumLabel() else null).orEmpty()
+                b.songAlbum.text = album
+                b.songAlbum.visibility = if (album.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
                 // Ta sama obrobka co w aucie: poprawiona kolejnosc i zapis.
                 b.songTitle.text = MetadataFactory.displayTitle(now, info)
             }
             now?.slogan != null -> {
                 b.songTitle.text = now.slogan
                 b.songArtist.text = ""
+                b.songAlbum.visibility = android.view.View.GONE
             }
             now?.isAd == true -> {
                 val seconds = now.adDurationMs / 1000
@@ -167,10 +179,12 @@ class NowPlayingActivity : AppCompatActivity() {
                     getString(R.string.ad)
                 }
                 b.songArtist.text = ""
+                b.songAlbum.visibility = android.view.View.GONE
             }
             else -> {
                 b.songTitle.text = ""
                 b.songArtist.text = ""
+                b.songAlbum.visibility = android.view.View.GONE
             }
         }
 

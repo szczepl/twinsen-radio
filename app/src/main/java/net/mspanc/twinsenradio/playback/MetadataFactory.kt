@@ -333,23 +333,31 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             return TextCase.tidy(if (swapped) now.songTitle else now.artist, info?.artistName)
         }
 
+        /**
+         * Sam wykonawca, bez plyty - do uzycia tam, gdzie plyta ma isc na
+         * osobna linie (ekran odtwarzania na telefonie), a nie po kropce.
+         */
+        fun composeArtistOnly(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
+            val artist = displayArtist(now, info)
+            if (artist.isBlank() || info == null) return artist
+
+            // Odetnij koncowke tylko wtedy, gdy katalog potwierdza, ze to nazwa
+            // plyty. Inaczej "Shimza / AR/CO / Kasango" stracilby trzeciego wykonawce.
+            val parts = artist.split(Regex("\\s+[/,]\\s+"))
+            return if (parts.size > 1 && info.tailIsAlbum(parts.last())) {
+                parts.dropLast(1).joinToString(" / ")
+            } else {
+                artist
+            }
+        }
+
         fun composeArtistLine(
             now: NowPlaying,
             info: CoverArtLookup.TrackInfo?,
             enrich: Boolean
         ): String {
-            val artist = displayArtist(now, info)
-            if (artist.isBlank()) return ""
-            if (!enrich || info == null) return artist
-
-            // Odetnij koncowke tylko wtedy, gdy katalog potwierdza, ze to nazwa
-            // plyty. Inaczej "Shimza / AR/CO / Kasango" stracilby trzeciego wykonawce.
-            val parts = artist.split(Regex("\\s+[/,]\\s+"))
-            val artistsOnly = if (parts.size > 1 && info.tailIsAlbum(parts.last())) {
-                parts.dropLast(1).joinToString(" / ")
-            } else {
-                artist
-            }
+            val artistsOnly = composeArtistOnly(now, info)
+            if (artistsOnly.isBlank() || !enrich || info == null) return artistsOnly
 
             val album = info.albumLabel() ?: return artistsOnly
             // Wydawnictwo oddzielamy kropka srodkowa, a nie ukosnikiem - przy kilku
