@@ -129,9 +129,8 @@ class NowPlayingActivity : AppCompatActivity() {
                     info,
                     prefs.enrichWithAlbum
                 )
-                // Ten sam porzadek zapisu co w aucie - stacje pokroju Jacaranda FM
-                // podaja wszystko wersalikami.
-                b.songTitle.text = TextCase.tidy(now.songTitle, info?.trackName)
+                // Ta sama obrobka co w aucie: poprawiona kolejnosc i zapis.
+                b.songTitle.text = MetadataFactory.displayTitle(now, info)
             }
             now?.slogan != null -> {
                 b.songTitle.text = now.slogan

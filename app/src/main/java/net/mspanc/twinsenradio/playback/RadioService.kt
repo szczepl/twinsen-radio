@@ -165,6 +165,10 @@ class RadioService : MediaLibraryService() {
                     ReconnectController.Status.OK -> PlaybackStatusBus.Status.PLAYING
                 }
             )
+            // Brak sieci trafia w srodkowy wiersz na desce, wiec metadane musza
+            // pojsc na nowo - inaczej komunikat pojawilby sie dopiero przy
+            // nastepnym utworze, czyli w praktyce nigdy.
+            refreshCurrentMetadata(force = true)
         }
         reconnect.start()
         prefs.registerListener(prefsListener)
@@ -899,15 +903,23 @@ class RadioService : MediaLibraryService() {
         /**
          * Wznawianie odtwarzania po podlaczeniu do auta albo z panelu systemowego.
          *
-         * Bez tego Media3 nie wie, co wlaczyc, i wybor bywal przypadkowy. Bierzemy
-         * ostatnio sluchana stacje, a gdy historia jest pusta - pierwsza ulubiona,
-         * i dopiero na koncu pierwsza z listy.
+         * Zasada: **ma zagrac dokladnie ta stacja, co poprzednio** - niezaleznie
+         * od tego, czy grala z telefonu, czy przez Android Auto. Stan jest jeden
+         * i wspolny (jedna usluga, jedna sesja), a historia w [Prefs.recent] jest
+         * uzupelniana przy kazdej zmianie pozycji, wiec obie drogi zapisuja sie
+         * tak samo.
+         *
+         * Kolejnosc: stacja aktualnie zaladowana w odtwarzaczu (gdy cos juz gralo,
+         * nie wolno tego podmienic), potem ostatnio sluchana z historii, potem
+         * pierwsza ulubiona, a na koncu pierwsza z listy.
          */
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            val station = repo.recent().firstOrNull()
+            val current = player.currentMediaItem?.mediaId?.let { repo.byMediaId(it) }
+            val station = current
+                ?: repo.recent().firstOrNull()
                 ?: repo.favourites().firstOrNull()
                 ?: repo.all().firstOrNull()
 
@@ -917,7 +929,11 @@ class RadioService : MediaLibraryService() {
                 )
             }
 
-            Log.i(TAG, "wznawiam po podlaczeniu: ${station.name} (zlecil ${controller.packageName})")
+            val skad = if (current != null) "juz zaladowana" else "z historii"
+            Log.i(
+                TAG,
+                "wznawiam po podlaczeniu: ${station.name} ($skad, zlecil ${controller.packageName})"
+            )
             return Futures.immediateFuture(
                 MediaSession.MediaItemsWithStartPosition(
                     listOf(playableItem(station)),

@@ -101,13 +101,28 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             val p = prefs.presentation
 
             // Zapis poprawiamy raz, w jednym miejscu - wszystkie wiersze i pola
-            // semantyczne korzystaja potem z tych samych napisow.
-            val title = TextCase.tidy(now?.songTitle, trackInfo?.trackName)
-            val artist = TextCase.tidy(now?.artist, trackInfo?.artistName)
+            // semantyczne korzystaja potem z tych samych napisow. Przy okazji
+            // prostujemy kolejnosc, gdy stacja nadaje "tytul - wykonawca"
+            // zamiast odwrotnie (Jacaranda FM).
+            val title = now?.let { displayTitle(it, trackInfo) }.orEmpty()
+            val artist = now?.let { displayArtist(it, trackInfo) }.orEmpty()
 
             val top = lineText(p.top, station, now, trackInfo, title, artist)
-            val middle = lineText(p.middle, station, now, trackInfo, title, artist)
             val bottom = lineText(p.bottom, station, now, trackInfo, title, artist)
+
+            // Srodkowy wiersz widac wylacznie na AID, wiec to jedyne miejsce, gdzie
+            // mozna cos dopisac bez zasmiecania ekranu centralnego. Dwa przypadki
+            // maja pierwszenstwo przed wyborem uzytkownika:
+            val middle = when {
+                // 1. Brak sieci. Zamiast pustki i ciszy bez wyjasnienia - komunikat.
+                PlaybackStatusBus.status.value == PlaybackStatusBus.Status.WAITING_FOR_NETWORK ->
+                    context.getString(R.string.aid_waiting_network)
+                // 2. Zegar zamiast okladki jest wlaczony, ale wlasnie zaslonila go
+                //    okladka utworu - wtedy godzina przenosi sie tutaj, zeby nie
+                //    znikala na czas piosenki.
+                clockMovesToMiddle(coverArtUrl) -> clockText()
+                else -> lineText(p.middle, station, now, trackInfo, title, artist)
+            }
 
             // Pola, ktore glowica naprawde rysuje. Zmierzone w Passacie
             // (BADANIA.md): AID czyta subtitle / description / displayTitle,
@@ -163,6 +178,18 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 titleLine(now, title)
             }
     }
+
+    /**
+     * Czy godzina ma przejsc do srodkowego wiersza.
+     *
+     * Dotyczy ukladu "zegar zamiast okladki" ustawionego tak, ze zegar ustepuje
+     * miejsca okladce utworu. Bez tego zegar znikalby na kazda piosenke, czyli
+     * przez wiekszosc czasu - a po to sie go wybiera, zeby byl.
+     */
+    private fun clockMovesToMiddle(coverArtUrl: String?): Boolean =
+        prefs.presentation.clockFace != ClockFace.NONE &&
+            !prefs.clockCoverAlways &&
+            coverArtUrl != null
 
     /**
      * Linia tytulu. Poza utworem wstawiamy to, co akurat wiadomo: serwis,
@@ -278,14 +305,27 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
          * ruszamy. Stacjom, ktore daja samego wykonawce, dokladamy to, co wie
          * katalog: "Kaeyra · singiel [2024]".
          */
+        /**
+         * Tytul i wykonawca w postaci nadajacej sie na ekran: z poprawiona
+         * kolejnoscia (gdy stacja nadaje odwrotnie) i uporzadkowanym zapisem.
+         * Wspoldzielone przez auto i telefon, zeby nie rozjechaly sie miedzy soba.
+         */
+        fun displayTitle(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
+            val swapped = info?.looksSwapped(now.artist, now.songTitle) == true
+            return TextCase.tidy(if (swapped) now.artist else now.songTitle, info?.trackName)
+        }
+
+        fun displayArtist(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
+            val swapped = info?.looksSwapped(now.artist, now.songTitle) == true
+            return TextCase.tidy(if (swapped) now.songTitle else now.artist, info?.artistName)
+        }
+
         fun composeArtistLine(
             now: NowPlaying,
             info: CoverArtLookup.TrackInfo?,
             enrich: Boolean
         ): String {
-            // Zapis poprawiamy tu, a nie u wolajacego - dzieki temu telefon
-            // i auto dostaja tak samo uporzadkowany napis.
-            val artist = TextCase.tidy(now.artist, info?.artistName)
+            val artist = displayArtist(now, info)
             if (artist.isBlank()) return ""
             if (!enrich || info == null) return artist
 

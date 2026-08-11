@@ -225,8 +225,8 @@ class MainActivity : AppCompatActivity() {
             now?.isRealSong == true -> {
                 val info = PlaybackStatusBus.trackInfo.value
                 listOf(
-                    net.mspanc.twinsenradio.playback.TextCase.tidy(now.artist, info?.artistName),
-                    net.mspanc.twinsenradio.playback.TextCase.tidy(now.songTitle, info?.trackName)
+                    MetadataFactory.displayArtist(now, info),
+                    MetadataFactory.displayTitle(now, info)
                 ).filter { it.isNotBlank() }.joinToString(" — ")
             }
             now?.slogan != null -> now.slogan

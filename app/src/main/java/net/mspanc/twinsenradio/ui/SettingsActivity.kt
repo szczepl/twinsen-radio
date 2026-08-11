@@ -48,6 +48,9 @@ class SettingsActivity : AppCompatActivity() {
         // --- grafika ---------------------------------------------------------
         bind(b.ddClockFace, ClockFace.LABELS, prefs.clockFace) { updateClockOptionsEnabled(it) }
         b.swClockAlways.isChecked = prefs.clockCoverAlways
+        b.swClockAlways.setOnCheckedChangeListener { _, _ ->
+            updateClockOptionsEnabled(pick(b.ddClockFace))
+        }
         bind(b.ddClockBg, ClockColors.BACKGROUND_LABELS, prefs.clockBackground)
         bind(b.ddClockFg, ClockColors.FOREGROUND_LABELS, prefs.clockForeground)
         bind(b.ddArtwork, ArtworkMode.LABELS, prefs.artworkMode)
@@ -110,6 +113,18 @@ class SettingsActivity : AppCompatActivity() {
         listOf(b.swClockAlways, b.tilClockBg, b.tilClockFg).forEach {
             it.isEnabled = usesClock
             it.alpha = if (usesClock) 1f else 0.4f
+        }
+
+        // Gdy zegar ustepuje miejsca okladce, godzina przenosi sie w srodkowy
+        // wiersz - wybor tresci dla tego wiersza przestaje wtedy cokolwiek
+        // znaczyc, wiec nie udajemy, ze dziala.
+        val middleTakenByClock = usesClock && !b.swClockAlways.isChecked
+        b.tilLineMiddle.isEnabled = !middleTakenByClock
+        b.tilLineMiddle.alpha = if (middleTakenByClock) 0.4f else 1f
+        b.tilLineMiddle.helperText = if (middleTakenByClock) {
+            getString(R.string.opt_line_middle_clock)
+        } else {
+            Line.MIDDLE.hint
         }
     }
 

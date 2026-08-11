@@ -44,6 +44,9 @@
     <string name="opt_sec_stream">Strumień i własne stacje</string>
     <string name="opt_lines_intro">Zmierzone w Passacie: Active Info Display pokazuje trzy wiersze, ekran centralny — pierwszy i trzeci. Wiersz środkowy widać wyłącznie na AID. Pola są wspólne, więc tego, co wstawisz w wiersz 1 lub 3, nie da się ukryć przed ekranem centralnym.</string>
     <string name="opt_clock_face">Zamiast okładki</string>
+    <!-- Trafia w środkowy wiersz AID; ekran centralny tego pola nie pokazuje -->
+    <string name="aid_waiting_network">Oczekuję na sieć…</string>
+    <string name="opt_line_middle_clock">Zajęty przez zegar — przy włączonym zegarze zamiast okładki godzina przenosi się tutaj na czas trwania utworu.</string>
     <string name="opt_m3u_sub">Jeden adres na linię. Parser czyta #EXTINF razem z tvg-logo i group-title.</string>
     <string name="opt_enrich">Uzupełniaj wykonawcę o album i rok</string>
     <string name="opt_enrich_sub">Gdy stacja podaje samego wykonawcę, dopisujemy wydawnictwo z katalogu iTunes — np. „Kaeyra / singiel [2024]”. Stacje, które już podają album (RMF: „Wiktoria Kida / Księga”), zostawiamy bez zmian.</string>

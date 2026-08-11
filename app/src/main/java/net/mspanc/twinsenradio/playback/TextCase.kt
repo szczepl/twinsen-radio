@@ -24,12 +24,14 @@ object TextCase {
     /**
      * Czy napis jest "krzykliwy", czyli zapisany w calosci wersalikami.
      *
-     * Warunki sa zachowawcze - zmieniamy tylko napisy wielowyrazowe i dosc
-     * dlugie. Dzieki temu "ABBA", "U2" czy "AC/DC" nigdy nie zostana ruszone.
+     * Wymagamy spacji, wiec pojedyncze wyrazy - "ABBA", "U2", "AC/DC", "MGMT" -
+     * nigdy tu nie trafiaja. Napisow wielowyrazowych nie ograniczamy dlugoscia:
+     * "I TRY" tez krzyczy, a przy progu pieciu liter przechodzilo bokiem.
+     * Skrotowce wewnatrz zdania chroni osobna regula w [tame].
      */
     fun isShouty(text: String): Boolean {
         val letters = text.filter { it.isLetter() }
-        if (letters.length < 5) return false
+        if (letters.length < 2) return false
         if (!text.contains(' ')) return false
         return letters.none { it.isLowerCase() }
     }

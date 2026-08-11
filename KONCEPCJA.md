@@ -225,6 +225,26 @@ Dwie warstwy, obie celowo ciche — w aucie nie ma migać żaden komunikat:
 Dodatkowo `WAKE_MODE_NETWORK` trzyma radio przy życiu, a
 `handleAudioBecomingNoisy` pauzuje przy rozłączeniu Bluetooth.
 
+### Dziura, przez którą odtwarzacze wiszą godzinami
+
+Cichy ponawiacz z punktu 1 ma skutek uboczny: skoro **nie zgłasza błędu**, to
+`onPlayerError` może się nigdy nie odpalić. Odtwarzacz wisi wtedy w `BUFFERING`
+ze statusem „OK", a warunek „reaguj na powrót sieci tylko gdy status ≠ OK"
+nie przepuszcza niczego. Tak właśnie zachowują się ReplaIO i TuneIn, które
+potrafią wisieć godzinę po wyjeździe z garażu i dopiero potem zorientować się,
+że sieć wróciła.
+
+Dwie poprawki zamykają to szczelnie:
+
+* **Wyzwalacz sieciowy patrzy na odtwarzacz, nie na status** — reaguje zawsze,
+  gdy użytkownik chce grać, a odtwarzacz nie jest gotowy.
+* **Buforowanie ma limit.** Ciągnące się ponad 12 s nie jest napełnianiem
+  bufora, tylko brakiem połączenia — wtedy nazywamy rzecz po imieniu i sami
+  zaczynamy ponawiać.
+
+Gdy sieci nie ma, w **środkowym wierszu AID** pojawia się „Oczekuję na sieć…".
+To jedyne pole widoczne wyłącznie na desce, więc ekran centralny zostaje czysty.
+
 `KeepCurrentStreamPlayer` ignoruje `setMediaItem` dla stacji, która już gra —
 bez tego wejście na grającą stację z listy zrywało połączenie i było słychać
 przerwę.

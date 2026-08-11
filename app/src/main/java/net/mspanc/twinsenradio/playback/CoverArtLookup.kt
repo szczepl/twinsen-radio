@@ -76,6 +76,37 @@ object CoverArtLookup {
             return normalize(tail) == normalize(a)
         }
 
+        /**
+         * Czy rozglosnia podala wykonawce i tytul w odwrotnej kolejnosci.
+         *
+         * Nie wszyscy trzymaja sie schematu "Wykonawca - Tytul". Jacaranda FM
+         * nadaje odwrotnie, co widac w podsluchu strumienia:
+         *
+         *   StreamTitle='THINKING ABOUT YOU - GOODLUCK'
+         *   StreamTitle='WHAT'S LOVE GOT TO DO WITH IT - KYGO [+] TINA TURNER'
+         *
+         * Po samym napisie tego nie rozstrzygniesz - "Nico / Vinz" moze byc
+         * i zespolem, i dwoma slowami tytulu. Rozstrzyga dopiero katalog: jesli
+         * to, co wzielismy za wykonawce, jest u niego tytulem, a to, co wzielismy
+         * za tytul - wykonawca, to znaczy, ze pola sa zamienione.
+         *
+         * Dzieki temu nie trzeba oznaczac stacji recznie w stations.json ani
+         * zgadywac - poprawka wynika z danych i dziala dla kazdej rozglosni,
+         * ktora tak nadaje.
+         */
+        fun looksSwapped(artist: String?, title: String?): Boolean {
+            val a = normalize(artist.orEmpty())
+            val t = normalize(title.orEmpty())
+            val catalogueTitle = normalize(trackName.orEmpty())
+            if (a.isEmpty() || t.isEmpty() || catalogueTitle.isEmpty()) return false
+
+            // Rozstrzyga jeden warunek: czy to, co wzielismy za wykonawce, jest
+            // w katalogu tytulem utworu. Porownywanie takze wykonawcy nie dziala,
+            // bo przy wspolpracach napisy sie rozjezdzaja - stacja podaje
+            // "KYGO [+] TINA TURNER", a katalog samo "Tina Turner".
+            return a == catalogueTitle && t != catalogueTitle
+        }
+
         private fun normalize(s: String) = s.lowercase()
             .replace(Regex("[^\\p{L}\\p{N}]"), "")
     }

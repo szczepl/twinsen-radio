@@ -42,6 +42,7 @@ class ReconnectController(
 
     private var attempt = 0
     private var pendingRetry: Runnable? = null
+    private var stuckCheck: Runnable? = null
     private var registered = false
 
     var status: Status = Status.OK
@@ -54,15 +55,28 @@ class ReconnectController(
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            handler.post { if (status != Status.OK) retryNow("siec wrocila") }
+            handler.post { if (needsRevive()) retryNow("siec wrocila") }
         }
 
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
             if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return
             if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return
-            handler.post { if (status != Status.OK) retryNow("siec zwalidowana") }
+            handler.post { if (needsRevive()) retryNow("siec zwalidowana") }
         }
     }
+
+    /**
+     * Czy jest co ratowac. Celowo NIE pytamy o `status`, tylko o stan odtwarzacza.
+     *
+     * Powod: nasza polityka ponawiania jest cicha - ExoPlayer probuje pobrac
+     * strumien w nieskonczonosc i nie zglasza bledu wyzej, wiec `onPlayerError`
+     * moze sie nigdy nie odpalic. Odtwarzacz wisi wtedy w BUFFERING ze statusem
+     * OK, a warunek "status != OK" nie przepuszczal powrotu sieci. Dokladnie tak
+     * zachowuja sie ReplaIO i TuneIn, ktore potrafia wisiec godzine po wyjezdzie
+     * z garazu i dopiero potem zorientowac sie, ze siec wrocila.
+     */
+    private fun needsRevive(): Boolean =
+        player.playWhenReady && player.playbackState != Player.STATE_READY
 
     fun start() {
         if (registered) return
@@ -77,6 +91,7 @@ class ReconnectController(
 
     fun stop() {
         cancelPending()
+        cancelStuckCheck()
         player.removeListener(this)
         if (registered) {
             runCatching { connectivity?.unregisterNetworkCallback(networkCallback) }
@@ -98,10 +113,19 @@ class ReconnectController(
     }
 
     override fun onPlaybackStateChanged(playbackState: Int) {
-        if (playbackState == Player.STATE_READY) {
-            attempt = 0
-            cancelPending()
-            status = Status.OK
+        when (playbackState) {
+            Player.STATE_READY -> {
+                attempt = 0
+                cancelPending()
+                cancelStuckCheck()
+                status = Status.OK
+            }
+            // Buforowanie samo w sobie jest normalne. Buforowanie, ktore nie
+            // konczy sie przez [STUCK_MS], oznacza, ze cichy ponawiacz nizej
+            // krazy w kolko - wtedy nazywamy rzecz po imieniu i zaczynamy
+            // probowac sami.
+            Player.STATE_BUFFERING -> scheduleStuckCheck()
+            else -> cancelStuckCheck()
         }
     }
 
@@ -135,6 +159,24 @@ class ReconnectController(
         pendingRetry = null
     }
 
+    private fun scheduleStuckCheck() {
+        cancelStuckCheck()
+        if (!player.playWhenReady) return
+        val runnable = Runnable {
+            if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@Runnable
+            status = if (hasUsableNetwork()) Status.RECONNECTING else Status.WAITING_FOR_NETWORK
+            Log.i(TAG, "Buforowanie ciagnie sie ponad ${STUCK_MS}ms - $status")
+            scheduleRetry()
+        }
+        stuckCheck = runnable
+        handler.postDelayed(runnable, STUCK_MS)
+    }
+
+    private fun cancelStuckCheck() {
+        stuckCheck?.let { handler.removeCallbacks(it) }
+        stuckCheck = null
+    }
+
     private fun hasUsableNetwork(): Boolean {
         val caps = connectivity?.getNetworkCapabilities(connectivity.activeNetwork) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -143,5 +185,12 @@ class ReconnectController(
     private companion object {
         const val TAG = "ReconnectController"
         val BACKOFF_MS = longArrayOf(1_000, 2_000, 4_000, 8_000, 15_000, 30_000)
+
+        /**
+         * Po tylu milisekundach nieprzerwanego buforowania uznajemy, ze to nie
+         * jest zwykle napelnianie bufora, tylko brak polaczenia. Wartosc z
+         * zapasem wzgledem najwiekszego profilu bufora (start ~4 s).
+         */
+        const val STUCK_MS = 12_000L
     }
 }

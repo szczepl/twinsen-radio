@@ -146,6 +146,23 @@ sesji.
   oznaczają powrotu muzyki.
 * **Radio Nowy Świat** podaje sensowny `StreamTitle`; przy audycjach wstawia
   slogan „Pion i poziom!" w formacie `Radio Nowy Świat - Pion i poziom!`.
+* **Jacaranda FM** łamie dwie konwencje naraz. Podsłuch strumienia
+  (2026-08-11):
+
+  ```
+  11:39:23  StreamTitle='THINKING ABOUT YOU - GOODLUCK'
+  11:39:43  StreamTitle='WHAT'S LOVE GOT TO DO WITH IT - KYGO [+] TINA TURNER'
+  ```
+
+  Po pierwsze **wszystko wersalikami**. Po drugie — i to ważniejsze —
+  kolejność jest **odwrotna**: najpierw tytuł, potem wykonawca. GOODLUCK to
+  zespół z RPA, Kygo to producent. Przy współpracach używa `[+]` zamiast
+  przecinka.
+
+  Rozpoznajemy to katalogiem, a nie flagą przy stacji: jeśli to, co wzięliśmy
+  za wykonawcę, jest w iTunes tytułem utworu — pola są zamienione. Porównywanie
+  także wykonawcy nie działa, bo przy współpracach napisy się rozjeżdżają
+  (stacja: „KYGO [+] TINA TURNER", katalog: „Tina Turner").
 * **Polskie Radio** — cały plant Shoutcasta (porty 8900–8918) nie odpowiada:
   połączenie TCP wchodzi, danych brak. Działa wyłącznie HLS, po jednym serwerze
   na program: `stream11/pr1`, `stream12/pr2`, `stream13/pr3`, `stream14/pr4`,
