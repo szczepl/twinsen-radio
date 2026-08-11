@@ -94,7 +94,11 @@ if defined DPI    echo Gestosc nadpisana na %DPI% dpi.
 rem marginheight to LACZNA obcinana wysokosc, nie na strone - tak podaje
 rem dokumentacja: 1280x720 z marginheight 120 daje ekran 600 px wysokosci.
 if defined MARGIN echo Wysokosc obcieta o %MARGIN% px.
+
 :nooverride
+
+rem Ostrzezenie o kombinacji, ktora sie nie polaczy - patrz check-dp.ps1.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-dp.ps1" "%CFG%"
 
 rem Przekierowanie portu ginie przy kazdym przepieciu kabla, wiec ustawiamy je
 rem przy kazdym starcie - bez tego DHU stoi na "Waiting for phone...".
