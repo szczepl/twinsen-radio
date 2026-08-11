@@ -29,16 +29,12 @@ data class StreamQuality(
      */
     fun label(): String = buildList {
         if (codec.isNotBlank()) add(codec)
-        channelsLabel().takeIf { it.isNotBlank() }?.let(::add)
+        when (channels) {
+            1 -> add("mono")
+            2 -> add("stereo")
+            in 3..Int.MAX_VALUE -> add("$channels kan.")
+        }
     }.joinToString(" · ")
-
-    /** Sama liczba kanalow, bez kodeka - ten juz widac na przycisku jakosci obok. */
-    fun channelsLabel(): String = when (channels) {
-        1 -> "mono"
-        2 -> "stereo"
-        in 3..Int.MAX_VALUE -> "$channels kan."
-        else -> ""
-    }
 
     private fun khz(hz: Int): String {
         val tenths = (hz + 50) / 100

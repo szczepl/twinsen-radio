@@ -8,17 +8,18 @@ import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StreamVariant
 
 /**
- * Krotki opis wariantu na przycisk: "MP3, 256 kbps". Kodek bierzemy z pierwszego
- * slowa etykiety (nasze etykiety zawsze zaczynaja sie od niego, np. "MP3 256 kb/s
+ * "MP3, 256 kbps" - uzywane tylko jako zapasowa etykieta, gdy przeplywnosc
+ * nie jest znana (patrz [kbpsLabel]). Kodek bierzemy z pierwszego slowa
+ * etykiety (nasze etykiety zawsze zaczynaja sie od niego, np. "MP3 256 kb/s
  * — zapasowy") - to unika osobnego pola tylko na te dwa znaki.
  */
-fun StreamVariant.shortLabel(): String {
+private fun StreamVariant.shortLabel(): String {
     val codec = label.substringBefore(' ').takeIf { it.isNotBlank() && it.any(Char::isLetter) }
         ?: "Strumień"
     return if (kbps > 0) "$codec, $kbps kbps" else codec
 }
 
-/** Sama przeplywnosc, bez kodeka - na ciasny przycisk przy pasku mini-playera. */
+/** Sama przeplywnosc, bez kodeka - na przycisk jakosci, zarowno na Now Playing, jak i przy pasku mini-playera. */
 fun StreamVariant.kbpsLabel(): String = if (kbps > 0) "$kbps kbit" else shortLabel()
 
 /**

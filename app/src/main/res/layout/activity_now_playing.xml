@@ -97,15 +97,15 @@
         android:insetBottom="0dp"
         android:maxLines="1"
         android:minWidth="0dp"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="4dp"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="2dp"
         android:visibility="gone"
-        app:backgroundTint="?attr/colorSurfaceContainerHighest"
-        app:cornerRadius="12dp"
+        app:backgroundTint="?attr/colorSurfaceContainerLow"
+        app:cornerRadius="10dp"
         app:icon="@drawable/ic_expand_more"
         app:iconGravity="end"
-        app:iconPadding="4dp"
-        app:iconSize="16dp"
+        app:iconPadding="2dp"
+        app:iconSize="14dp"
         app:iconTint="?attr/colorOnSurfaceVariant" />
 
     <LinearLayout

@@ -112,7 +112,7 @@ class NowPlayingActivity : AppCompatActivity() {
         val chosen = prefs.selectedStream(station.id)
             ?: variants.maxByOrNull { it.kbps }?.url
         val current = variants.firstOrNull { it.url == chosen } ?: variants.first()
-        b.bitrate.text = current.shortLabel()
+        b.bitrate.text = current.kbpsLabel()
         b.bitrate.setOnClickListener {
             StreamPicker.show(this, station, prefs) { renderBitrate(station) }
         }
