@@ -101,6 +101,9 @@ class RadioService : MediaLibraryService() {
     /** Pilnuje, czy opis utworu nie zwietrzal, gdy stacja nic nie oglosila. */
     private var staleJob: Job? = null
 
+    /** Odcisk ostatniego zrzutu metadanych - odsiewa powtorki w logu. */
+    private var lastDump: String? = null
+
     /** Ostatni slogan stacji - pokazujemy go, gdy nie wiemy, co akurat leci. */
     @Volatile
     private var lastSlogan: String? = null
@@ -575,6 +578,16 @@ class RadioService : MediaLibraryService() {
      * (tools/meta-watch.ps1), ktore czyta to przez `adb logcat -s MetaDump`.
      */
     private fun dumpMetadata(station: Station, m: MediaMetadata) {
+        // Zrzut identyczny z poprzednim nie niesie zadnej informacji, a potrafi
+        // sie powtarzac co minute (tykniecie zegara) albo przy kazdym
+        // odswiezeniu przyciskow. Okno podgladu zalewalo sie wtedy kopiami.
+        val fingerprint = listOf(
+            m.title, m.artist, m.albumTitle, m.displayTitle, m.subtitle,
+            m.description, m.station, m.genre, m.artworkUri
+        ).joinToString("|")
+        if (fingerprint == lastDump) return
+        lastDump = fingerprint
+
         Log.i(TAG_DUMP, "--- ${station.name} @ ${MetadataFactory.clockText()} ---")
         listOf(
             "title" to m.title,

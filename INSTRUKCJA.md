@@ -78,11 +78,29 @@ Android Auto domyślnie nie uruchomi aplikacji, której nie ma w Google Play.
 
 ```powershell
 .\tools\dhu.bat                  # 1280x720 przy 240 dpi - tak wygląda w Passacie
+.\tools\dhu.bat dpi=213          # ta sama geometria, inna gęstość
+.\tools\dhu.bat margin=80        # 1280x640 - natywna geometria Discover Pro 9,2"
 .\tools\dhu.bat small            # 800x480  - Composition / Discover Media 8"
 .\tools\dhu.bat 720              # 1280x720 przy 160 dpi - profil porównawczy
 .\tools\dhu.bat log              # dodatkowo okno z podglądem metadanych
 .\tools\dhu.bat ontop            # okno projekcji nad innymi
 ```
+
+Argumenty można łączyć: `dhu.bat margin=80 dpi=213 log`.
+
+**Gęstość trzymaj w standardowych kubełkach Androida** — 160, 213, 240, 320.
+Przy 200 dpi projekcja wstała z dźwiękiem, ale **bez obrazu**; wartości spoza
+kubełków potrafią tak zawieść. Dokumentacja DHU nie podaje tu żadnych
+ograniczeń, więc jedynym sposobem jest próba.
+
+**Rozdzielczości są tylko trzy** — 800x480, 1280x720 i 1920x1080; tak stanowi
+[dokumentacja DHU](https://developer.android.com/training/cars/testing/dhu).
+Discover Pro 9,2" ma fizycznie 1280x640 i robi się je marginesem
+(`margin=80`, bo `marginheight` to łączna obcinana wysokość, nie na stronę).
+Skutek uboczny: proporcje zmieniają się z 1,78 na 2,00 i Android Auto przerzuca
+pasek aplikacji na lewą krawędź, choć w aucie jest on na dole. Jeśli chcesz to
+pogodzić, spróbuj przestawić układ w ustawieniach Android Auto **na ekranie
+projekcji** (koło zębate → „Zmień układ"), a nie w aplikacji na telefonie.
 
 Pojawia się **tylko okno projekcji**. Dwa pozostałe zostały wyłączone i nie
 wrócą:
