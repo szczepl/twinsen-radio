@@ -35,6 +35,8 @@
     <string name="info_votes">Głosy w katalogu</string>
     <string name="info_stream">Adres strumienia</string>
     <string name="info_homepage">Strona stacji</string>
+    <string name="info_added_toast">Dodano do Twojej listy</string>
+    <string name="info_removed_toast">Usunięto z Twojej listy</string>
     <string name="discover_nothing">Nic nie znaleziono dla „%1$s”.</string>
     <string name="status_connecting">Łączenie…</string>
     <string name="status_buffering">Buforowanie…</string>

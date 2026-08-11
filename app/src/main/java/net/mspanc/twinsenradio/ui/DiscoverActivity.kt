@@ -2,6 +2,7 @@ package net.mspanc.twinsenradio.ui
 
 import android.os.Bundle
 import android.view.View
+import androidx.activity.addCallback
 import android.widget.ArrayAdapter
 import android.widget.ImageView
 import com.google.android.material.chip.Chip
@@ -40,6 +41,21 @@ class DiscoverActivity : AppCompatActivity() {
     private var searchJob: Job? = null
 
     /**
+     * Powrot ze szczegolow. Gdy stacja zostala dodana albo usunieta, czyscimy
+     * pole wyszukiwania - uzytkownik ma wtedy zobaczyc swoja liste z nowa
+     * pozycja, a nie te same wyniki, w ktorych przed chwila grzebal.
+     */
+    private val details = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val changed = result.data?.getBooleanExtra(StationInfoActivity.RESULT_CHANGED, false)
+        if (changed == true) {
+            b.query.setText("")
+            b.query.clearFocus()
+        }
+    }
+
+    /**
      * Wyniki ostatniego wyszukiwania, zeby po stuknieciu w wiersz miec czym
      * zapelnic ekran szczegolow. [Station] nie niesie kraju ani kodeka.
      */
@@ -53,7 +69,13 @@ class DiscoverActivity : AppCompatActivity() {
         prefs = Prefs(this)
         metadata = MetadataFactory(this, prefs)
 
-        b.toolbar.setNavigationOnClickListener { finish() }
+        b.toolbar.setNavigationOnClickListener { goBack() }
+
+        // Cofniecie z wynikami na ekranie wraca najpierw do stanu wyjsciowego -
+        // paska wyszukiwania, ostatnich zapytan i wlasnej listy - a dopiero
+        // drugie wychodzi do listy stacji. Wyskakiwanie od razu na zewnatrz po
+        // dodaniu stacji odbieralo mozliwosc sprawdzenia, czy faktycznie doszla.
+        onBackPressedDispatcher.addCallback(this) { goBack() }
 
         adapter = StationAdapter(
             subtitleFor = { it.genre },
@@ -88,6 +110,21 @@ class DiscoverActivity : AppCompatActivity() {
         adapter.notifyItemRangeChanged(0, adapter.itemCount)
     }
 
+    private fun goBack() {
+        if (queryText().isNotEmpty()) {
+            b.query.setText("")
+            b.query.clearFocus()
+            hideKeyboard()
+        } else {
+            finish()
+        }
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+        imm?.hideSoftInputFromWindow(b.query.windowToken, 0)
+    }
+
     private fun queryText() = b.query.text?.toString().orEmpty().trim()
 
     /** Podpowiedzi z historii; pokazujemy je, gdy pole jest jeszcze puste. */
@@ -115,7 +152,9 @@ class DiscoverActivity : AppCompatActivity() {
      */
     private fun showAdded() {
         val added = prefs.discovered
-        adapter.submitList(added)
+        // Bez tego lista zostaje przewinieta tam, gdzie stala przy wynikach,
+        // i pierwsze pozycje chowaja sie pod naglowkiem.
+        adapter.submitList(added) { b.list.scrollToPosition(0) }
         renderHistoryChips()
 
         if (added.isEmpty()) {
@@ -165,7 +204,7 @@ class DiscoverActivity : AppCompatActivity() {
             b.hint.setText(R.string.discover_searching)
             val found = RadioBrowser.search(query)
             lastResults = found
-            adapter.submitList(found.map { it.toStation() })
+            adapter.submitList(found.map { it.toStation() }) { b.list.scrollToPosition(0) }
             b.hint.text = if (found.isEmpty()) {
                 getString(R.string.discover_nothing, query.trim())
             } else {
@@ -183,7 +222,7 @@ class DiscoverActivity : AppCompatActivity() {
      */
     private fun openDetails(station: Station) {
         val found = lastResults.firstOrNull { it.toStation().id == station.id }
-        startActivity(
+        details.launch(
             if (found != null) {
                 StationInfoActivity.intent(this, found)
             } else {

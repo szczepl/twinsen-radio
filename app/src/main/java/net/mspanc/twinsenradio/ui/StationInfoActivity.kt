@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
@@ -98,13 +99,19 @@ class StationInfoActivity : AppCompatActivity() {
             }
         }
 
+        // Dodanie konczy sprawe: wracamy tam, skad przyszlismy, zeby stacja od
+        // razu byla widoczna na liscie "Twoje stacje dodane z sieci". Trzymanie
+        // uzytkownika na ekranie szczegolow po dodaniu nie daje mu juz nic.
         b.btnToggle.setOnClickListener {
-            if (prefs.isDiscovered(station.id)) {
-                prefs.removeDiscovered(station.id)
-            } else {
-                prefs.addDiscovered(station)
-            }
-            renderToggle()
+            val added = !prefs.isDiscovered(station.id)
+            if (added) prefs.addDiscovered(station) else prefs.removeDiscovered(station.id)
+            Toast.makeText(
+                this,
+                if (added) R.string.info_added_toast else R.string.info_removed_toast,
+                Toast.LENGTH_SHORT
+            ).show()
+            setResult(RESULT_OK, Intent().putExtra(RESULT_CHANGED, true))
+            finish()
         }
         renderToggle()
     }
@@ -144,6 +151,9 @@ class StationInfoActivity : AppCompatActivity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        /** Ustawiane, gdy uzytkownik dodal albo usunal stacje na tym ekranie. */
+        const val RESULT_CHANGED = "changed"
+
         private const val EXTRA_ID = "id"
         private const val EXTRA_NAME = "name"
         private const val EXTRA_GENRE = "genre"
