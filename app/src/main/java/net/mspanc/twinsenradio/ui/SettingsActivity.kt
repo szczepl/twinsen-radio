@@ -2,10 +2,11 @@ package net.mspanc.twinsenradio.ui
 
 import android.os.Bundle
 import android.widget.ArrayAdapter
-import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.ArtworkMode
@@ -13,8 +14,9 @@ import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ClockColors
 import net.mspanc.twinsenradio.data.ClockFace
 import net.mspanc.twinsenradio.data.ContentStyle
+import net.mspanc.twinsenradio.data.Line
+import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.Prefs
-import net.mspanc.twinsenradio.data.Presentation
 import net.mspanc.twinsenradio.data.StationRepository
 import net.mspanc.twinsenradio.databinding.ActivitySettingsBinding
 import net.mspanc.twinsenradio.playback.DiagnosticFields
@@ -24,68 +26,90 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var b: ActivitySettingsBinding
     private lateinit var prefs: Prefs
 
+    /** Wybrany indeks kazdej listy - MaterialAutoCompleteTextView trzyma tekst, nie pozycje. */
+    private val chosen = HashMap<Int, Int>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         b = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(b.root)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
         prefs = Prefs(this)
 
-        b.swDiag.isChecked = prefs.diagnosticMode
-        b.swDiagApi.isChecked = prefs.diagnosticShowApiName
+        b.toolbar.setNavigationOnClickListener { finish() }
 
-        fill(b.spPresentation, Presentation.LABELS, prefs.presentationMode)
-        b.swClockAlways.isChecked = prefs.clockCoverAlways
-        fill(b.spClockBg, ClockColors.BACKGROUND_LABELS, prefs.clockBackground)
-        fill(b.spClockFg, ClockColors.FOREGROUND_LABELS, prefs.clockForeground)
-        b.swSwap.isChecked = prefs.swapTitleArtist
+        // --- opis na desce ---------------------------------------------------
+        // Etykiety i podpowiedzi biora sie z enuma Line, zeby nie powielac
+        // opisu wierszy w dwoch miejscach.
+        bindLine(b.tilLineTop, b.ddLineTop, Line.TOP, prefs.lineTop)
+        bindLine(b.tilLineMiddle, b.ddLineMiddle, Line.MIDDLE, prefs.lineMiddle)
+        bindLine(b.tilLineBottom, b.ddLineBottom, Line.BOTTOM, prefs.lineBottom)
         b.swEnrich.isChecked = prefs.enrichWithAlbum
 
-        fill(b.spBrowsable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.browsableStyle))
-        fill(b.spPlayable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.playableStyle))
-        fill(b.spBuffer, BufferProfile.ALL.map { it.label }, prefs.bufferProfile)
-        fill(b.spArtwork, ArtworkMode.LABELS, prefs.artworkMode)
+        // --- grafika ---------------------------------------------------------
+        bind(b.ddClockFace, ClockFace.LABELS, prefs.clockFace) { updateClockOptionsEnabled(it) }
+        b.swClockAlways.isChecked = prefs.clockCoverAlways
+        bind(b.ddClockBg, ClockColors.BACKGROUND_LABELS, prefs.clockBackground)
+        bind(b.ddClockFg, ClockColors.FOREGROUND_LABELS, prefs.clockForeground)
+        bind(b.ddArtwork, ArtworkMode.LABELS, prefs.artworkMode)
+        updateClockOptionsEnabled(prefs.clockFace)
 
-        b.etM3u.setText(prefs.userM3uUrls.joinToString("\n"))
+        // --- diagnostyka -----------------------------------------------------
+        b.swDiag.isChecked = prefs.diagnosticMode
+        b.swDiagApi.isChecked = prefs.diagnosticShowApiName
+        b.swDiagApi.setOnCheckedChangeListener { _, _ -> renderLegend() }
         renderLegend()
 
-        b.swDiagApi.setOnCheckedChangeListener { _, _ -> renderLegend() }
+        // --- reszta ----------------------------------------------------------
+        bind(b.ddBrowsable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.browsableStyle))
+        bind(b.ddPlayable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.playableStyle))
+        bind(b.ddBuffer, BufferProfile.ALL.map { it.label }, prefs.bufferProfile)
+        b.etM3u.setText(prefs.userM3uUrls.joinToString("\n"))
+
         b.btnSave.setOnClickListener { save() }
-
-        // Ustawienia zegara-okladki maja sens tylko przy ukladach, ktore go uzywaja
-        b.spPresentation.onItemSelectedListener =
-            object : android.widget.AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(
-                    parent: android.widget.AdapterView<*>?,
-                    view: android.view.View?,
-                    position: Int,
-                    id: Long
-                ) = updateClockOptionsEnabled(position)
-
-                override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
-            }
-        updateClockOptionsEnabled(prefs.presentationMode)
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        finish()
-        return true
-    }
-
-    private fun fill(spinner: Spinner, labels: List<String>, selected: Int) {
-        spinner.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            labels
+    /**
+     * Podpina liste rozwijana. Material trzyma w niej tekst, a nam potrzebny jest
+     * indeks - stad wlasna mapa wybranych pozycji.
+     */
+    private fun bind(
+        dropdown: MaterialAutoCompleteTextView,
+        labels: List<String>,
+        selected: Int,
+        onPick: (Int) -> Unit = {}
+    ) {
+        val index = selected.coerceIn(labels.indices)
+        dropdown.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_list_item_1, labels)
         )
-        spinner.setSelection(selected.coerceIn(labels.indices))
+        dropdown.setText(labels[index], false)
+        chosen[dropdown.id] = index
+        dropdown.setOnItemClickListener { _, _, position, _ ->
+            chosen[dropdown.id] = position
+            onPick(position)
+        }
     }
 
-    private fun updateClockOptionsEnabled(presentationIndex: Int) {
-        val usesClockCover = Presentation.at(presentationIndex).clockFace != ClockFace.NONE
-        listOf(b.swClockAlways, b.spClockBg, b.spClockFg).forEach {
-            it.isEnabled = usesClockCover
-            it.alpha = if (usesClockCover) 1f else 0.4f
+    private fun bindLine(
+        layout: TextInputLayout,
+        dropdown: MaterialAutoCompleteTextView,
+        line: Line,
+        selected: Int
+    ) {
+        layout.hint = line.label
+        layout.helperText = line.hint
+        layout.isHelperTextEnabled = true
+        bind(dropdown, LineContent.LABELS, selected)
+    }
+
+    private fun pick(dropdown: MaterialAutoCompleteTextView): Int = chosen[dropdown.id] ?: 0
+
+    /** Kolory zegara maja sens tylko wtedy, gdy zegar w ogole zastepuje okladke. */
+    private fun updateClockOptionsEnabled(clockFaceIndex: Int) {
+        val usesClock = ClockFace.at(clockFaceIndex) != ClockFace.NONE
+        listOf(b.swClockAlways, b.tilClockBg, b.tilClockFg).forEach {
+            it.isEnabled = usesClock
+            it.alpha = if (usesClock) 1f else 0.4f
         }
     }
 
@@ -94,18 +118,23 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun save() {
+        prefs.lineTop = pick(b.ddLineTop)
+        prefs.lineMiddle = pick(b.ddLineMiddle)
+        prefs.lineBottom = pick(b.ddLineBottom)
+        prefs.enrichWithAlbum = b.swEnrich.isChecked
+
+        prefs.clockFace = pick(b.ddClockFace)
+        prefs.clockCoverAlways = b.swClockAlways.isChecked
+        prefs.clockBackground = pick(b.ddClockBg)
+        prefs.clockForeground = pick(b.ddClockFg)
+        prefs.artworkMode = pick(b.ddArtwork)
+
         prefs.diagnosticMode = b.swDiag.isChecked
         prefs.diagnosticShowApiName = b.swDiagApi.isChecked
-        prefs.presentationMode = b.spPresentation.selectedItemPosition
-        prefs.clockCoverAlways = b.swClockAlways.isChecked
-        prefs.clockBackground = b.spClockBg.selectedItemPosition
-        prefs.clockForeground = b.spClockFg.selectedItemPosition
-        prefs.swapTitleArtist = b.swSwap.isChecked
-        prefs.enrichWithAlbum = b.swEnrich.isChecked
-        prefs.browsableStyle = ContentStyle.indexToValue(b.spBrowsable.selectedItemPosition)
-        prefs.playableStyle = ContentStyle.indexToValue(b.spPlayable.selectedItemPosition)
-        prefs.bufferProfile = b.spBuffer.selectedItemPosition
-        prefs.artworkMode = b.spArtwork.selectedItemPosition
+
+        prefs.browsableStyle = ContentStyle.indexToValue(pick(b.ddBrowsable))
+        prefs.playableStyle = ContentStyle.indexToValue(pick(b.ddPlayable))
+        prefs.bufferProfile = pick(b.ddBuffer)
         prefs.userM3uUrls = b.etM3u.text?.toString().orEmpty().lines()
 
         lifecycleScope.launch {

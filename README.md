@@ -39,9 +39,12 @@ Działa i jest sprawdzone na żywo:
 * Wyszukiwanie stacji spoza listy w katalogu radio-browser.info.
 * Jakość strumienia (kodek, przepływność, próbkowanie) na ekranie odtwarzania.
 
+* **Zmierzone w aucie:** Active Info Display czyta `subtitle`, `description`
+  i `displayTitle` — patrz [BADANIA.md](BADANIA.md). Treść każdego z trzech
+  wierszy wybiera się osobno w Opcjach.
+
 Czeka na potwierdzenie w aucie:
 
-* Które pola `MediaMetadata` trafiają na trzy linie Active Info Display.
 * Zachowanie przy realnym połączeniu z MIB3 (log w `files/polaczenia.log`).
 
 ---

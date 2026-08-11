@@ -71,10 +71,34 @@ Kilka reguł wypracowanych na żywym materiale:
   `długość + STALE_GRACE_MS` na pewno już nie leci. Gdy długości nie znamy —
   `FALLBACK_TRACK_MS`. Zamiast pustki pokazujemy wtedy ostatni znany slogan
   stacji.
-* **Wielkie litery.** Wytwórnie wpisują do katalogów tytuły wersalikami, co na
-  wąskim ekranie zjada dwie linie. `tameCaps` sprowadza je do zapisu z wielkiej
-  litery, ale tylko dla napisów wielowyrazowych i w całości wersalikowych —
-  dzięki temu „ABBA", „U2" i „AC/DC" zostają nietknięte.
+* **Wielkie litery.** Jacaranda FM podaje wszystko WERSALIKAMI, wytwórnie robią
+  to samo w katalogach. Porządkuje to `TextCase` w trzech krokach, w tej
+  kolejności: napis niekrzykliwy zostaje nietknięty → jeśli krzyczy, a katalog
+  zna ten sam napis porządnie zapisany, bierzemy wersję z katalogu (pochodzi od
+  wydawcy) → dopiero gdy katalog też krzyczy, normalizujemy sami. Krótkie wyrazy
+  bez samogłosek zostawiamy w spokoju, bo to prawie zawsze skrótowce — inaczej
+  „DJ Snake" zamieniłby się w „Dj Snake".
+
+### Trzy wiersze opisu i dlaczego nie da się ich rozdzielić
+
+Pomiar w aucie (BADANIA, punkt 1) pokazał, że Active Info Display czyta
+`subtitle`, `description` i `displayTitle` — czyli **te same pola**, z których
+korzysta ekran centralny Android Auto. Ekran centralny pokazuje z nich dwa:
+`displayTitle` jako dużą linię i `subtitle` jako małą.
+
+Stąd konstrukcja opcji: użytkownik wybiera treść **osobno dla każdego z trzech
+wierszy** (tytuł / wykonawca / wykonawca z albumem i rokiem / wykonawca — tytuł /
+nazwa stacji / zegar / puste), a nie z listy gotowych układów. Gotowe presety
+były wygodne, dopóki nie wiedzieliśmy, co jest gdzie; teraz tylko ograniczały.
+
+Konsekwencja, którą trzeba znać: **wiersza 1 i 3 nie da się ukryć przed ekranem
+centralnym**. Zegar wstawiony w linię tekstu pojawi się w obu miejscach. Jedynym
+wierszem widocznym wyłącznie na AID jest środkowy — i dlatego domyślnie stoi
+w nim nazwa stacji, a nie kopia czegoś, co już widać gdzie indziej.
+
+Pola semantyczne (`title`, `artist`, `albumTitle`) wypełniamy niezależnie od
+wierszy, zgodnie z ich znaczeniem. Na żadnym ekranie w aucie się nie pojawiają,
+ale opisują to, co faktycznie leci, i inne systemy potrafią po nie sięgać.
 
 ### Tryb diagnostyczny
 

@@ -1,24 +1,68 @@
 package net.mspanc.twinsenradio.data
 
 /**
- * Co ma stac w kolejnych liniach opisu utworu.
+ * Co ma stac w kolejnych liniach opisu na desce.
  *
- * Active Info Display w Passacie pokazuje trzy linie tekstu i grafike, ekran
- * centralny Android Auto - dwie linie i grafike. Zestaw jest wiec wspolny,
- * a roznica polega tylko na tym, ile z niego glowica zdola pokazac.
+ * Podzial wierszy wynika wprost z pomiaru w Passacie (2026-08-11, patrz
+ * BADANIA.md). Active Info Display czyta trzy pola metadanych:
+ *
+ *   gorna linia   <- subtitle
+ *   srodkowa      <- description
+ *   dolna         <- displayTitle
+ *
+ * Te same pola czyta ekran centralny Android Auto, tyle ze pokazuje z nich
+ * dwa: duza linia to displayTitle, mala to subtitle. Opisu nie pokazuje wcale.
+ *
+ * Wniosek, ktory rzadzi cala ta klasa: **nie da sie sterowac AID niezaleznie od
+ * ekranu centralnego**. Cokolwiek wstawimy w gorny albo dolny wiersz, pojawi sie
+ * w obu miejscach. Zegar w linii tekstu bedzie wiec widoczny takze na ekranie
+ * centralnym i jest to swiadomy kompromis, a nie usterka. Srodkowy wiersz jest
+ * jedynym, ktory AID ma na wylacznosc.
  */
-enum class Slot {
-    /** Godzina w formacie HH:mm, odswiezana na granicy minuty. */
-    CLOCK,
-    ARTIST,
-    TITLE,
-    /** Nazwa rozglosni. */
-    STATION,
-    EMPTY
+enum class LineContent(val label: String) {
+    TITLE("Tytuł utworu"),
+    ARTIST("Wykonawca"),
+    ARTIST_ALBUM("Wykonawca · album [rok]"),
+    TRACK_FULL("Wykonawca — tytuł"),
+    STATION("Nazwa stacji"),
+    CLOCK("Zegar"),
+    EMPTY("Puste");
+
+    companion object {
+        val LABELS get() = entries.map { it.label }
+        fun at(index: Int) = entries.getOrElse(index) { TITLE }
+    }
+}
+
+/**
+ * Ktory wiersz na desce. Kolejnosc jak na AID, od gory.
+ */
+enum class Line(val label: String, val hint: String) {
+    TOP(
+        "Wiersz 1 — górny",
+        "Na AID linia górna. Na ekranie centralnym mała linia pod tytułem."
+    ),
+    MIDDLE(
+        "Wiersz 2 — środkowy",
+        "Widoczny wyłącznie na AID. ReplaIO wstawia tu nazwę stacji, aplikacja RNŚ zostawia pusty."
+    ),
+    BOTTOM(
+        "Wiersz 3 — dolny",
+        "Na AID linia pogrubiona. Na ekranie centralnym duża linia."
+    )
 }
 
 /** Czy okladke zastepuje zegar, a jesli tak - w jakiej postaci. */
-enum class ClockFace { NONE, DIGITAL, ANALOG }
+enum class ClockFace(val label: String) {
+    NONE("Okładka utworu albo logo stacji"),
+    DIGITAL("Zegar cyfrowy"),
+    ANALOG("Zegar analogowy");
+
+    companion object {
+        val LABELS get() = entries.map { it.label }
+        fun at(index: Int) = entries.getOrElse(index) { NONE }
+    }
+}
 
 /** Kolorystyka zegara rysowanego zamiast okladki. */
 object ClockColors {
@@ -59,51 +103,39 @@ object ClockColors {
 }
 
 /**
- * Gotowy uklad do wyboru w Opcjach. Wzorowane na trybach wyswietlania
- * metadanych w ReplaIO, ale z jawnym miejscem na zegar.
+ * Komplet ustawien opisu: co w ktorym wierszu i czy zamiast okladki ma byc zegar.
  */
 data class Presentation(
-    val label: String,
-    val top: Slot,
-    val middle: Slot,
-    val bottom: Slot,
-    val clockFace: ClockFace = ClockFace.NONE
+    val top: LineContent,
+    val middle: LineContent,
+    val bottom: LineContent,
+    val clockFace: ClockFace
 ) {
-    companion object {
-        val ALL = listOf(
-            Presentation(
-                "Domyślny — wykonawca, stacja, tytuł",
-                Slot.ARTIST, Slot.STATION, Slot.TITLE
-            ),
-            Presentation(
-                "Góra — zegar, wykonawca, tytuł",
-                Slot.CLOCK, Slot.ARTIST, Slot.TITLE
-            ),
-            Presentation(
-                "Środek — wykonawca, zegar, tytuł",
-                Slot.ARTIST, Slot.CLOCK, Slot.TITLE
-            ),
-            Presentation(
-                "Dół — tytuł, wykonawca, zegar",
-                Slot.TITLE, Slot.ARTIST, Slot.CLOCK
-            ),
-            Presentation(
-                "Zegar cyfrowy zamiast okładki",
-                Slot.ARTIST, Slot.EMPTY, Slot.TITLE, ClockFace.DIGITAL
-            ),
-            Presentation(
-                "Zegar analogowy zamiast okładki",
-                Slot.ARTIST, Slot.EMPTY, Slot.TITLE, ClockFace.ANALOG
-            )
-        )
-
-        fun at(index: Int) = ALL.getOrElse(index) { ALL[0] }
-
-        val LABELS get() = ALL.map { it.label }
+    fun contentFor(line: Line): LineContent = when (line) {
+        Line.TOP -> top
+        Line.MIDDLE -> middle
+        Line.BOTTOM -> bottom
     }
 
     /** Czy uklad w ogole potrzebuje odswiezania co minute. */
     val needsClock: Boolean
         get() = clockFace != ClockFace.NONE ||
-            top == Slot.CLOCK || middle == Slot.CLOCK || bottom == Slot.CLOCK
+            top == LineContent.CLOCK ||
+            middle == LineContent.CLOCK ||
+            bottom == LineContent.CLOCK
+
+    companion object {
+        /**
+         * Domyslnie: wykonawca z plyta na gorze, nazwa stacji w srodku, tytul
+         * na dole. Srodkowy wiersz dostaje nazwe stacji, bo to jedyne miejsce
+         * widoczne wylacznie na AID - wpisanie tam czegokolwiek, co juz stoi
+         * w pozostalych liniach, byloby marnowaniem jedynej wolnej linii.
+         */
+        val DEFAULT = Presentation(
+            top = LineContent.ARTIST_ALBUM,
+            middle = LineContent.STATION,
+            bottom = LineContent.TITLE,
+            clockFace = ClockFace.NONE
+        )
+    }
 }

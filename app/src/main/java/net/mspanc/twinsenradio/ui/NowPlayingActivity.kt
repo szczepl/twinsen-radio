@@ -20,6 +20,7 @@ import net.mspanc.twinsenradio.databinding.ActivityNowPlayingBinding
 import net.mspanc.twinsenradio.playback.MetadataFactory
 import net.mspanc.twinsenradio.playback.PlaybackStatusBus
 import net.mspanc.twinsenradio.playback.RadioService
+import net.mspanc.twinsenradio.playback.TextCase
 
 /**
  * Pelnoekranowy odtwarzacz na telefonie: duza okladka, metadane, sterowanie
@@ -121,20 +122,16 @@ class NowPlayingActivity : AppCompatActivity() {
         // albo reklama - nigdy powielona nazwa stacji.
         when {
             now?.isRealSong == true -> {
+                val info = PlaybackStatusBus.trackInfo.value
                 // Ta sama linia co w aucie, razem z wydawnictwem i rokiem
-                val artistLine = MetadataFactory.composeArtistLine(
+                b.songArtist.text = MetadataFactory.composeArtistLine(
                     now,
-                    PlaybackStatusBus.trackInfo.value,
+                    info,
                     prefs.enrichWithAlbum
                 )
-                val title = now.songTitle.orEmpty()
-                if (prefs.swapTitleArtist) {
-                    b.songTitle.text = artistLine
-                    b.songArtist.text = title
-                } else {
-                    b.songTitle.text = title
-                    b.songArtist.text = artistLine
-                }
+                // Ten sam porzadek zapisu co w aucie - stacje pokroju Jacaranda FM
+                // podaja wszystko wersalikami.
+                b.songTitle.text = TextCase.tidy(now.songTitle, info?.trackName)
             }
             now?.slogan != null -> {
                 b.songTitle.text = now.slogan

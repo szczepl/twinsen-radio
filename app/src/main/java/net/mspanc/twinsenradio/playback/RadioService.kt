@@ -120,9 +120,9 @@ class RadioService : MediaLibraryService() {
                 }
             }
             Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK,
-            Prefs.KEY_PRESENTATION, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
-            Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM,
-            Prefs.KEY_SWAP -> refreshCurrentMetadata(force = true)
+            Prefs.KEY_LINE_TOP, Prefs.KEY_LINE_MIDDLE, Prefs.KEY_LINE_BOTTOM,
+            Prefs.KEY_CLOCK_FACE, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
+            Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM -> refreshCurrentMetadata(force = true)
             Prefs.KEY_BUFFER -> Log.i(TAG, "Zmieniono bufor - zadziala po restarcie odtwarzania")
         }
     }
@@ -552,8 +552,7 @@ class RadioService : MediaLibraryService() {
         val runnable = Runnable {
             // Zegar odswiezamy tylko wtedy, gdy jest gdzie go pokazac - w trybie
             // diagnostycznym zawsze, poza nim jedynie w ukladach z zegarem.
-            val needed = prefs.diagnosticMode ||
-                net.mspanc.twinsenradio.data.Presentation.at(prefs.presentationMode).needsClock
+            val needed = prefs.diagnosticMode || prefs.presentation.needsClock
             if (needed) refreshCurrentMetadata(force = true)
             scheduleClockTick()
         }

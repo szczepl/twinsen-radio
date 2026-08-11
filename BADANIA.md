@@ -30,30 +30,54 @@ ustawione. Android Auto bierze warianty „display".
 
 `description` lądujący w polu „Album" to najmniej oczywisty wynik z całej serii.
 
-### Active Info Display w Passacie — do potwierdzenia
+### Active Info Display w Passacie — POTWIERDZONE
 
-Z obserwacji ReplaIO i oficjalnej aplikacji RNŚ wiadomo, że AID pokazuje **trzy
-linie tekstu i małą grafikę** — o linię więcej niż ekran centralny:
+Odczytane z trybu diagnostycznego w aucie, 2026-08-11. **Hipoteza była błędna** —
+AID nie bierze `artist` / `albumTitle` / `title`, tylko dokładnie te same pola
+„display", z których korzysta ekran centralny:
 
-```
-        [ kwadrat: logo stacji albo okładka ]
-        wykonawca
-        nazwa stacji
-        tytuł
-```
-
-Hipoteza do potwierdzenia jednym spojrzeniem w trybie diagnostycznym:
-
-| linia na AID | prawdopodobne pole |
+| linia na AID | pole |
 |---|---|
-| górna | `artist` |
-| środkowa | `albumTitle` |
-| dolna | `title` |
+| górna (mała) | `subtitle` |
+| środkowa (mała) | `description` |
+| dolna (pogrubiona) | `displayTitle` |
+| grafika | `artworkUri` |
 
-Byłby to klasyczny układ artysta / album / tytuł, w którym radiowe aplikacje
-wpisują nazwę stacji w `albumTitle`.
+Zdjęcie z auta w trybie diagnostycznym:
 
-**To jest jedyna rzecz, po którą trzeba pojechać.**
+```
+        [ okładka utworu ]
+        PODTYTUL<subtitle> 08:55
+        OPIS<description> 08:55
+        TYT.WYSW<displayTitle>
+        08:55
+```
+
+Zegar w każdym polu odświeżał się na bieżąco — czyli **AID czyta metadane na
+żywo**, nie zamraża ich na wartości z chwili rozpoczęcia utworu.
+
+**Konsekwencja projektowa.** AID i ekran centralny dzielą pola, więc nie da się
+sterować nimi niezależnie: cokolwiek wstawimy w linię AID, pojawi się też na
+ekranie centralnym. Zegar w linii tekstu będzie widoczny w obu miejscach i to
+jest świadomy kompromis, a nie usterka.
+
+Mapowanie w drugą stronę, dla porządku:
+
+| pole | ekran centralny AA | AID |
+|---|---|---|
+| `displayTitle` | duża linia | dolna linia |
+| `subtitle` | mała linia | górna linia |
+| `description` | nie pokazywane | środkowa linia |
+
+Czyli **górna linia AID powiela małą linię ekranu centralnego**. Środkowa linia
+jest jedynym miejscem, które AID ma na wyłączność. Dla porównania: ReplaIO
+wstawia tam zawsze nazwę stacji, a aplikacja RNŚ zostawia ją pustą.
+
+Rozdzielczości, dla porządku:
+
+* Digital Cockpit Pro w Passacie B8 (10,25") — 1280 × 480 na cały wyświetlacz.
+* Ekran centralny: Discover Pro 9,2" — 1280 × 640 fizycznie, ale głowica
+  zachowuje się jak układ 1,78 przy gęstości 240 dpi (patrz INSTRUKCJA).
 
 Rozdzielczości, dla porządku:
 

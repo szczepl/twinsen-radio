@@ -222,9 +222,13 @@ class MainActivity : AppCompatActivity() {
         // Na telefonie metadane maja byc metadanymi - tryb diagnostyczny dotyczy
         // tego, co wysylamy do auta, i sygnalizujemy go tylko na ekranie odtwarzania.
         b.miniSubtitle.text = when {
-            now?.isRealSong == true -> listOfNotNull(now.artist, now.songTitle)
-                .filter { it.isNotBlank() }
-                .joinToString(" — ")
+            now?.isRealSong == true -> {
+                val info = PlaybackStatusBus.trackInfo.value
+                listOf(
+                    net.mspanc.twinsenradio.playback.TextCase.tidy(now.artist, info?.artistName),
+                    net.mspanc.twinsenradio.playback.TextCase.tidy(now.songTitle, info?.trackName)
+                ).filter { it.isNotBlank() }.joinToString(" — ")
+            }
             now?.slogan != null -> now.slogan
             now?.isAd == true -> getString(R.string.ad)
             else -> station?.genre.orEmpty()

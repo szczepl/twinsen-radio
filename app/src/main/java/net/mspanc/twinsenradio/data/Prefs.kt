@@ -17,9 +17,16 @@ class Prefs(context: Context) {
     private val sp: SharedPreferences =
         context.applicationContext.getSharedPreferences("twinsen_radio", Context.MODE_PRIVATE)
 
-    /** Tryb, w ktorym kazde pole metadanych dostaje swoja polska nazwe zamiast wartosci. */
+    /**
+     * Tryb, w ktorym kazde pole metadanych dostaje swoja polska nazwe zamiast
+     * wartosci.
+     *
+     * Domyslnie WYLACZONY. Byl wlaczony dopoki nie wiedzielismy, ktore pola
+     * rysuje deska - pomiar zrobiony 2026-08-11 (BADANIA.md), wiec od tej pory
+     * jest to narzedzie do kolejnych eksperymentow, a nie stan wyjsciowy.
+     */
     var diagnosticMode: Boolean
-        get() = sp.getBoolean(KEY_DIAG, true)
+        get() = sp.getBoolean(KEY_DIAG, false)
         set(v) = sp.edit { putBoolean(KEY_DIAG, v) }
 
     /**
@@ -50,10 +57,37 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_STYLE_PLAYABLE, ContentStyle.LIST)
         set(v) = sp.edit { putInt(KEY_STYLE_PLAYABLE, v) }
 
-    /** Uklad linii opisu utworu, patrz [Presentation.ALL]. */
-    var presentationMode: Int
-        get() = sp.getInt(KEY_PRESENTATION, 0)
-        set(v) = sp.edit { putInt(KEY_PRESENTATION, v) }
+    /**
+     * Tresc kolejnych wierszy opisu. Numeracja jak na AID, od gory - patrz
+     * komentarz w [Presentation], tam jest wyjasnione, ktory wiersz idzie
+     * w ktore pole metadanych i dlaczego nie da sie ich rozdzielic miedzy AID
+     * a ekran centralny.
+     */
+    var lineTop: Int
+        get() = sp.getInt(KEY_LINE_TOP, Presentation.DEFAULT.top.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_TOP, v) }
+
+    var lineMiddle: Int
+        get() = sp.getInt(KEY_LINE_MIDDLE, Presentation.DEFAULT.middle.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_MIDDLE, v) }
+
+    var lineBottom: Int
+        get() = sp.getInt(KEY_LINE_BOTTOM, Presentation.DEFAULT.bottom.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_BOTTOM, v) }
+
+    /** Czy zamiast okladki rysowac zegar, patrz [ClockFace]. */
+    var clockFace: Int
+        get() = sp.getInt(KEY_CLOCK_FACE, Presentation.DEFAULT.clockFace.ordinal)
+        set(v) = sp.edit { putInt(KEY_CLOCK_FACE, v) }
+
+    /** Komplet ustawien opisu, zlozony z powyzszych. */
+    val presentation: Presentation
+        get() = Presentation(
+            top = LineContent.at(lineTop),
+            middle = LineContent.at(lineMiddle),
+            bottom = LineContent.at(lineBottom),
+            clockFace = ClockFace.at(clockFace)
+        )
 
     /**
      * Przy zegarze zamiast okladki: czy ma byc widoczny zawsze (true), czy tylko
@@ -72,14 +106,6 @@ class Prefs(context: Context) {
     var clockForeground: Int
         get() = sp.getInt(KEY_CLOCK_FG, 0)
         set(v) = sp.edit { putInt(KEY_CLOCK_FG, v) }
-
-    /**
-     * Zamiana miejscami tytulu i wykonawcy - niezaleznie od tego, w ktore pola
-     * metadanych akurat trafiaja przy wybranym ukladzie.
-     */
-    var swapTitleArtist: Boolean
-        get() = sp.getBoolean(KEY_SWAP, false)
-        set(v) = sp.edit { putBoolean(KEY_SWAP, v) }
 
     /** Czy uzupelniac linie wykonawcy o wydawnictwo i rok z katalogu iTunes. */
     var enrichWithAlbum: Boolean
@@ -233,7 +259,10 @@ class Prefs(context: Context) {
         const val KEY_DIAG = "diagnostic_mode"
         const val KEY_DIAG_API = "diagnostic_api_names"
         const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"
-        const val KEY_PRESENTATION = "presentation_mode"
+        const val KEY_LINE_TOP = "line_top"
+        const val KEY_LINE_MIDDLE = "line_middle"
+        const val KEY_LINE_BOTTOM = "line_bottom"
+        const val KEY_CLOCK_FACE = "clock_face"
         const val KEY_CLOCK_ALWAYS = "clock_cover_always"
         const val KEY_CLOCK_BG = "clock_background"
         const val KEY_CLOCK_FG = "clock_foreground"

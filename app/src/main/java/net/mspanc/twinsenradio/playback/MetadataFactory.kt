@@ -11,9 +11,8 @@ import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.ClockColors
 import net.mspanc.twinsenradio.data.ClockFace
-import net.mspanc.twinsenradio.data.Presentation
+import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.Prefs
-import net.mspanc.twinsenradio.data.Slot
 import net.mspanc.twinsenradio.data.Station
 import java.io.ByteArrayOutputStream
 import java.time.LocalTime
@@ -99,29 +98,30 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 .setRecordingYear(DiagnosticFields.RECORDING_YEAR)
                 .setReleaseYear(DiagnosticFields.RELEASE_YEAR)
         } else {
-            val p = Presentation.at(prefs.presentationMode)
-            val top = textFor(p.top, station, now, trackInfo)
-            val middle = textFor(p.middle, station, now, trackInfo)
-            val bottom = textFor(p.bottom, station, now, trackInfo)
+            val p = prefs.presentation
 
-            // Srodkowa linia idzie w albumTitle - to najbardziej prawdopodobne
-            // zrodlo srodkowej linii na desce. `station` zostawiamy zawsze na
-            // nazwie rozglosni, bo to pole ma znaczenie semantyczne i inne
-            // aplikacje moga na nim polegac.
-            // Nazwa stacji tylko raz. Gdy stoi juz w srodkowej linii, nie powtarzamy
-            // jej w albumArtist - inaczej glowica potrafi pokazac "RMF FM" dwa razy
-            // pod rzad, co widac zwlaszcza podczas reklam i serwisow.
-            val albumArtist = if (middle == station.name) "" else station.name
+            // Zapis poprawiamy raz, w jednym miejscu - wszystkie wiersze i pola
+            // semantyczne korzystaja potem z tych samych napisow.
+            val title = TextCase.tidy(now?.songTitle, trackInfo?.trackName)
+            val artist = TextCase.tidy(now?.artist, trackInfo?.artistName)
 
-            b.setArtist(top)
-                .setAlbumTitle(middle)
-                .setStation(station.name)
-                .setTitle(bottom)
-                .setAlbumArtist(albumArtist)
-                // Android Auto pokazuje na duzym ekranie wlasnie te dwa pola
+            val top = lineText(p.top, station, now, trackInfo, title, artist)
+            val middle = lineText(p.middle, station, now, trackInfo, title, artist)
+            val bottom = lineText(p.bottom, station, now, trackInfo, title, artist)
+
+            // Pola, ktore glowica naprawde rysuje. Zmierzone w Passacie
+            // (BADANIA.md): AID czyta subtitle / description / displayTitle,
+            // ekran centralny displayTitle jako duza linie i subtitle jako mala.
+            b.setSubtitle(top)
+                .setDescription(middle)
                 .setDisplayTitle(bottom)
-                .setSubtitle(top)
-                .setDescription(describe(station, now))
+                // Pola semantyczne. Na zadnym ekranie w aucie sie nie pojawiaja,
+                // ale opisuja to, co faktycznie leci - inne systemy potrafia po
+                // nie siegac, wiec trzymamy je uczciwie, a nie jako kopie linii.
+                .setTitle(titleLine(now, title))
+                .setArtist(artist)
+                .setAlbumTitle(trackInfo?.album.orEmpty())
+                .setStation(station.name)
                 .setGenre(station.genre)
         }
 
@@ -130,67 +130,61 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * Tresc pojedynczej linii. Celowo zwraca pusty napis zamiast nazwy stacji,
-     * gdy nie ma utworu - powielanie nazwy w kilku liniach to dokladnie ta wada,
-     * ktora widac w ReplaIO i w oficjalnej aplikacji RNS.
+     * Tresc pojedynczego wiersza opisu.
+     *
+     * Wiersze zawierajace wykonawce sa celowo puste, gdy nie leci utwor -
+     * powielanie nazwy stacji w kilku liniach to dokladnie ta wada, ktora widac
+     * w ReplaIO i w oficjalnej aplikacji RNS.
      */
-    private fun textFor(
-        slot: Slot,
+    private fun lineText(
+        content: LineContent,
         station: Station,
         now: NowPlaying?,
-        trackInfo: CoverArtLookup.TrackInfo? = null
-    ): String = when (effectiveSlot(slot)) {
-        Slot.CLOCK -> clockText()
-        Slot.STATION -> station.name
-        Slot.EMPTY -> ""
-        // Etykieta reklamy trafia wylacznie w linie tytulu - powtorzona w dwoch
-        // liniach wygladalaby dokladnie tak, jak zdublowana nazwa stacji.
-        Slot.ARTIST -> if (now?.isRealSong == true) artistLine(now, trackInfo) else ""
-        Slot.TITLE -> when {
-            now?.isRealSong == true -> now.songTitle.orEmpty()
-            now?.isNews == true -> "${now.slogan} — serwis informacyjny"
-            now?.slogan != null -> now.slogan!!
-            now?.isAd == true -> adText(now)
-            else -> ""
-        }
-    }
-
-    /** Zamiana tytulu z wykonawca dziala na poziomie tresci, nie ukladu pol. */
-    private fun effectiveSlot(slot: Slot): Slot {
-        if (!prefs.swapTitleArtist) return slot
-        return when (slot) {
-            Slot.ARTIST -> Slot.TITLE
-            Slot.TITLE -> Slot.ARTIST
-            else -> slot
-        }
+        info: CoverArtLookup.TrackInfo?,
+        title: String,
+        artist: String
+    ): String = when (content) {
+        LineContent.CLOCK -> clockText()
+        LineContent.STATION -> station.name
+        LineContent.EMPTY -> ""
+        LineContent.TITLE -> titleLine(now, title)
+        LineContent.ARTIST -> if (now?.isRealSong == true) artist else ""
+        LineContent.ARTIST_ALBUM ->
+            if (now?.isRealSong == true) {
+                composeArtistLine(now, info, prefs.enrichWithAlbum)
+            } else {
+                ""
+            }
+        LineContent.TRACK_FULL ->
+            if (now?.isRealSong == true) {
+                listOf(artist, title).filter { it.isNotBlank() }.joinToString(" — ")
+            } else {
+                // Poza utworem nie ma czego sklejac - pokaz to samo, co linia tytulu
+                titleLine(now, title)
+            }
     }
 
     /**
-     * Linia wykonawcy, w razie potrzeby uzupelniona o wydawnictwo.
-     *
-     * RMF sam podaje juz gotowe "Wiktoria Kida / Księga" - takiego zapisu nie
-     * ruszamy. Stacje, ktore daja sam nazwisko, uzupelniamy o to, co wie katalog
-     * iTunes: "Kaeyra / singiel [2024]".
+     * Linia tytulu. Poza utworem wstawiamy to, co akurat wiadomo: serwis,
+     * slogan stacji albo etykiete reklamy - byle nie pusty ekran.
      */
-    private fun artistLine(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String =
-        composeArtistLine(now, info, prefs.enrichWithAlbum)
+    private fun titleLine(now: NowPlaying?, title: String): String = when {
+        now?.isRealSong == true -> title
+        now?.isNews == true -> "${now.slogan} — serwis informacyjny"
+        now?.slogan != null -> now.slogan!!
+        now?.isAd == true -> adText(now)
+        else -> ""
+    }
 
     private fun adText(now: NowPlaying): String {
         val seconds = now.adDurationMs / 1000
         return if (seconds > 0) "$AD_LABEL · ${seconds}s" else AD_LABEL
     }
 
-    private fun describe(station: Station, now: NowPlaying?): String = when {
-        now?.isRealSong == true -> now.raw
-        now?.slogan != null -> now.slogan!!
-        now?.isAd == true -> adText(now)
-        else -> station.genre
-    }
-
     private fun applyArtwork(b: MediaMetadata.Builder, station: Station, coverArtUrl: String?) {
         // Zegar zamiast okladki - rysowany w locie, wiec nie ma adresu i musi
         // pojechac jako bajty.
-        val p = Presentation.at(prefs.presentationMode)
+        val p = prefs.presentation
         if (p.clockFace != ClockFace.NONE) {
             val useClock = prefs.clockCoverAlways || coverArtUrl == null
             if (useClock) {
@@ -289,7 +283,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             info: CoverArtLookup.TrackInfo?,
             enrich: Boolean
         ): String {
-            val artist = now.artist.orEmpty()
+            // Zapis poprawiamy tu, a nie u wolajacego - dzieki temu telefon
+            // i auto dostaja tak samo uporzadkowany napis.
+            val artist = TextCase.tidy(now.artist, info?.artistName)
             if (artist.isBlank()) return ""
             if (!enrich || info == null) return artist
 

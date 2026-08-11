@@ -35,8 +35,16 @@
     <string name="diagnostic_banner_line2">Dotyczy tylko Android Auto — tam pola metadanych są zastąpione etykietami. Tutaj widzisz prawdziwe dane.</string>
     <string name="opt_clock_bg">Tło zegara</string>
     <string name="opt_clock_fg">Kolor zegara</string>
-    <string name="opt_swap">Zamień miejscami tytuł i wykonawcę</string>
-    <string name="opt_swap_sub">Działa niezależnie od wybranego układu — zamienia samą treść, nie pola metadanych.</string>
+
+    <!-- Nagłówki sekcji na ekranie Opcji -->
+    <string name="opt_sec_lines">Opis na desce</string>
+    <string name="opt_sec_artwork">Grafika</string>
+    <string name="opt_sec_diag">Tryb diagnostyczny</string>
+    <string name="opt_sec_browse">Listy w Android Auto</string>
+    <string name="opt_sec_stream">Strumień i własne stacje</string>
+    <string name="opt_lines_intro">Zmierzone w Passacie: Active Info Display pokazuje trzy wiersze, ekran centralny — pierwszy i trzeci. Wiersz środkowy widać wyłącznie na AID. Pola są wspólne, więc tego, co wstawisz w wiersz 1 lub 3, nie da się ukryć przed ekranem centralnym.</string>
+    <string name="opt_clock_face">Zamiast okładki</string>
+    <string name="opt_m3u_sub">Jeden adres na linię. Parser czyta #EXTINF razem z tvg-logo i group-title.</string>
     <string name="opt_enrich">Uzupełniaj wykonawcę o album i rok</string>
     <string name="opt_enrich_sub">Gdy stacja podaje samego wykonawcę, dopisujemy wydawnictwo z katalogu iTunes — np. „Kaeyra / singiel [2024]”. Stacje, które już podają album (RMF: „Wiktoria Kida / Księga”), zostawiamy bez zmian.</string>
     <string name="ad">Reklama</string>

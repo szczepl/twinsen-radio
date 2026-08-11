@@ -85,15 +85,18 @@ rozpoznawanie reklam i sloganów, ciche wznawianie po utracie zasięgu,
 wznawianie po podłączeniu do ostatniej stacji, wyszukiwarka stacji w sieci,
 jakość strumienia na telefonie.
 
+**Zmierzone w aucie 2026-08-11:** AID czyta `subtitle` (górna linia),
+`description` (środkowa) i `displayTitle` (dolna) — te same pola co ekran
+centralny. Tryb diagnostyczny zrobił swoje i jest już domyślnie wyłączony.
+
 **Otwarte:**
 
-1. **Jazda do auta** — odczytać z AID, które pola trafiają na trzy linie
-   (hipoteza w BADANIA, punkt 1). Przy okazji `tools/pull-log.ps1` jeszcze
-   podłączonym telefonem, żeby złapać `CarInfoInternal` z prawdziwego MIB3.
-2. **Ekran „Szukaj stacji w sieci"** nie był klikany na urządzeniu — adb nie
+1. **Ekran „Szukaj stacji w sieci"** nie był klikany na urządzeniu — adb nie
    otworzy niewyeksportowanej aktywności. Warstwa sieciowa sprawdzona osobno.
-3. **Blok reklamowy RMF na żywo** — dostroić `MARKER_GRACE_MS` i
+2. **Blok reklamowy RMF na żywo** — dostroić `MARKER_GRACE_MS` i
    `STALE_GRACE_MS` obserwacją przez `tools/meta-log.bat`.
+3. **`tools/pull-log.ps1` przy podłączonym aucie** — złapać `CarInfoInternal`
+   z prawdziwego MIB3.
 4. **Przywrócić wygaszanie ekranu** po zakończeniu prac:
    `adb shell svc power stayon false`.
 5. Opcjonalnie: znaleźć endpoint „co leci teraz" dla RNŚ i Radia 357, żeby po

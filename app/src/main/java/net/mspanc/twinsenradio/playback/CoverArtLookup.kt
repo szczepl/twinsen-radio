@@ -44,13 +44,19 @@ object CoverArtLookup {
         val year: Int?,
         val isSingle: Boolean,
         /** Dlugosc utworu z katalogu; 0 gdy nieznana. */
-        val durationMs: Long = 0
+        val durationMs: Long = 0,
+        /**
+         * Tytul i wykonawca **wedlug katalogu**. Sluza do poprawienia zapisu,
+         * gdy rozglosnia krzyczy wersalikami - patrz [TextCase.tidy].
+         */
+        val trackName: String? = null,
+        val artistName: String? = null
     ) {
         /** np. "Księga [2024]" albo "singiel [2024]". */
         fun albumLabel(): String? {
             val name = when {
                 isSingle -> "singiel"
-                !album.isNullOrBlank() -> tameCaps(album)
+                !album.isNullOrBlank() -> TextCase.tidy(album)
                 else -> return null
             }
             return if (year != null) "$name [$year]" else name
@@ -72,29 +78,6 @@ object CoverArtLookup {
 
         private fun normalize(s: String) = s.lowercase()
             .replace(Regex("[^\\p{L}\\p{N}]"), "")
-
-        /**
-         * Sprowadza tytuly pisane w calosci wersalikami do zapisu z wielkiej
-         * litery. Wytwornie potrafia wpisac do katalogu "NO ME ARREPIENTO DE
-         * SENTIR TANTO", co na waskim ekranie zjada dwie linie i krzyczy.
-         *
-         * Celowo bez odpytywania innego katalogu na krzyz: to kwestia typografii,
-         * a nie danych, i nie warto za nia placic kolejnym zapytaniem sieciowym.
-         *
-         * Warunki sa zachowawcze - zmieniamy tylko napisy wielowyrazowe, w calosci
-         * wersalikowe. Dzieki temu "ABBA", "U2" czy "AC/DC" zostaja nietkniete.
-         */
-        internal fun tameCaps(text: String): String {
-            val letters = text.filter { it.isLetter() }
-            if (letters.length < 5) return text
-            if (!text.contains(' ')) return text
-            if (letters.any { it.isLowerCase() }) return text
-
-            return text.split(' ').joinToString(" ") { word ->
-                if (word.length <= 1) word
-                else word.first() + word.drop(1).lowercase()
-            }
-        }
     }
 
     /** Male, ograniczone cache - w aucie i tak krecimy sie po kilku stacjach. */
@@ -147,7 +130,12 @@ object CoverArtLookup {
 
         val recordings = JSONObject(body).optJSONArray("recordings") ?: return null
         if (recordings.length() == 0) return null
-        val releases = recordings.getJSONObject(0).optJSONArray("releases") ?: return null
+        val recording = recordings.getJSONObject(0)
+        // Zapis wedlug bazy - przydaje sie, gdy rozglosnia krzyczy wersalikami
+        val catalogueTitle = recording.optString("title").ifBlank { null }
+        val catalogueArtist = recording.optJSONArray("artist-credit")
+            ?.optJSONObject(0)?.optString("name")?.ifBlank { null }
+        val releases = recording.optJSONArray("releases") ?: return null
         if (releases.length() == 0) return null
         val release = releases.getJSONObject(0)
 
@@ -163,7 +151,15 @@ object CoverArtLookup {
         }
 
         if (album == null && art == null) return null
-        return TrackInfo(art, album, year, isSingle = false, durationMs = 0)
+        return TrackInfo(
+            artworkUrl = art,
+            album = album,
+            year = year,
+            isSingle = false,
+            durationMs = 0,
+            trackName = catalogueTitle,
+            artistName = catalogueArtist
+        )
     }
 
     private fun httpGet(url: String): String? {
@@ -225,7 +221,15 @@ object CoverArtLookup {
             val year = row.optString("releaseDate").take(4).toIntOrNull()
             val duration = row.optLong("trackTimeMillis", 0L)
 
-            return TrackInfo(art, album, year, isSingle, duration)
+            return TrackInfo(
+                artworkUrl = art,
+                album = album,
+                year = year,
+                isSingle = isSingle,
+                durationMs = duration,
+                trackName = row.optString("trackName").ifBlank { null },
+                artistName = row.optString("artistName").ifBlank { null }
+            )
         } finally {
             conn.disconnect()
         }
