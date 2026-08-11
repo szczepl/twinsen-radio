@@ -35,6 +35,16 @@
     <string name="info_votes">Głosy w katalogu</string>
     <string name="info_stream">Adres strumienia</string>
     <string name="info_homepage">Strona stacji</string>
+    <string name="info_probe">Sprawdź, czy strumień działa</string>
+    <string name="info_probing">Sprawdzam…</string>
+    <string name="info_probe_ok">Działa — %1$s</string>
+    <string name="info_probe_no_host">Serwer nie istnieje. Stacja została wycofana.</string>
+    <string name="info_probe_http">Serwer odrzucił połączenie: %1$s</string>
+    <string name="info_probe_timeout">Serwer nie odpowiada.</string>
+    <string name="info_probe_failed">Nie udało się połączyć: %1$s</string>
+    <string name="info_checked">Katalog potwierdził działanie</string>
+    <string name="info_checked_days">%1$d dni temu</string>
+    <string name="info_checked_stale">%1$d dni temu — to bardzo dawno, sprawdź sam</string>
     <string name="info_added_toast">Dodano do Twojej listy</string>
     <string name="info_removed_toast">Usunięto z Twojej listy</string>
     <string name="discover_nothing">Nic nie znaleziono dla „%1$s”.</string>
@@ -42,6 +52,7 @@
     <string name="status_buffering">Buforowanie…</string>
     <string name="status_waiting_network">Czekam na sieć…</string>
     <string name="status_reconnecting">Ponawiam połączenie…</string>
+    <string name="status_unreachable">Stacja nie odpowiada — ponawiam</string>
     <string name="status_playing">Odtwarzanie</string>
     <string name="status_idle">Zatrzymane</string>
     <string name="nothing_playing">Nic nie gra</string>

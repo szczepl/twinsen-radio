@@ -294,6 +294,7 @@ class MainActivity : AppCompatActivity() {
                 PlaybackStatusBus.Status.PLAYING -> R.string.status_playing
                 PlaybackStatusBus.Status.RECONNECTING -> R.string.status_reconnecting
                 PlaybackStatusBus.Status.WAITING_FOR_NETWORK -> R.string.status_waiting_network
+                PlaybackStatusBus.Status.STATION_UNREACHABLE -> R.string.status_unreachable
                 PlaybackStatusBus.Status.IDLE -> R.string.status_idle
             }
         )

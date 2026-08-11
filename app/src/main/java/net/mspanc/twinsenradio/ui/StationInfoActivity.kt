@@ -14,7 +14,9 @@ import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.RadioBrowser
 import net.mspanc.twinsenradio.data.Station
+import net.mspanc.twinsenradio.data.StreamProbe
 import net.mspanc.twinsenradio.databinding.ActivityStationInfoBinding
+import kotlinx.coroutines.launch
 
 /**
  * Szczegoly stacji znalezionej w katalogu, zanim trafi na liste.
@@ -87,7 +89,22 @@ class StationInfoActivity : AppCompatActivity() {
             R.string.info_votes,
             intent.getIntExtra(EXTRA_VOTES, 0).takeIf { it > 0 }?.toString().orEmpty()
         )
+        // Data ostatniego potwierdzenia z katalogu. Sama flaga "dziala" nic nie
+        // znaczy bez tej daty - patrz RadioBrowser.isCheckStale.
+        val days = intent.getLongExtra(EXTRA_CHECK_DAYS, -1)
+        if (days >= 0) {
+            addDetail(
+                R.string.info_checked,
+                if (days > 30) {
+                    getString(R.string.info_checked_stale, days)
+                } else {
+                    getString(R.string.info_checked_days, days)
+                }
+            )
+        }
         addDetail(R.string.info_stream, station.stream)
+
+        b.btnProbe.setOnClickListener { probe() }
 
         val homepage = intent.getStringExtra(EXTRA_HOMEPAGE)
         if (!homepage.isNullOrBlank()) {
@@ -114,6 +131,36 @@ class StationInfoActivity : AppCompatActivity() {
             finish()
         }
         renderToggle()
+    }
+
+    /**
+     * Sprawdzenie strumienia na zadanie.
+     *
+     * Katalog podaje date ostatniego udanego testu, ale ta bywa sprzed miesiecy -
+     * jedyna pewna odpowiedz daje wlasne polaczenie, tu i teraz.
+     */
+    private fun probe() {
+        b.btnProbe.isEnabled = false
+        b.probeResult.visibility = android.view.View.VISIBLE
+        b.probeResult.setText(R.string.info_probing)
+        lifecycleScope.launch {
+            val report = StreamProbe.check(station.stream)
+            b.probeResult.text = when (report.result) {
+                StreamProbe.Result.OK -> getString(R.string.info_probe_ok, report.detail)
+                StreamProbe.Result.NO_HOST -> getString(R.string.info_probe_no_host)
+                StreamProbe.Result.HTTP_ERROR -> getString(R.string.info_probe_http, report.detail)
+                StreamProbe.Result.TIMEOUT -> getString(R.string.info_probe_timeout)
+                StreamProbe.Result.FAILED -> getString(R.string.info_probe_failed, report.detail)
+            }
+            b.probeResult.setTextColor(
+                if (report.result == StreamProbe.Result.OK) {
+                    0xFF2E7D32.toInt()
+                } else {
+                    0xFFC62828.toInt()
+                }
+            )
+            b.btnProbe.isEnabled = true
+        }
     }
 
     /** Wiersz "etykieta / wartosc"; puste wartosci pomijamy zamiast pokazywac kreske. */
@@ -166,6 +213,7 @@ class StationInfoActivity : AppCompatActivity() {
         private const val EXTRA_BITRATE = "bitrate"
         private const val EXTRA_HOMEPAGE = "homepage"
         private const val EXTRA_VOTES = "votes"
+        private const val EXTRA_CHECK_DAYS = "check_days"
 
         fun intent(context: Context, found: RadioBrowser.Found): Intent {
             val station = found.toStation()
@@ -182,6 +230,7 @@ class StationInfoActivity : AppCompatActivity() {
                 .putExtra(EXTRA_BITRATE, found.bitrate)
                 .putExtra(EXTRA_HOMEPAGE, found.homepage)
                 .putExtra(EXTRA_VOTES, found.votes)
+                .putExtra(EXTRA_CHECK_DAYS, found.daysSinceCheck() ?: -1L)
         }
 
         /** Wariant dla stacji juz dodanej - katalog nie jest wtedy potrzebny. */

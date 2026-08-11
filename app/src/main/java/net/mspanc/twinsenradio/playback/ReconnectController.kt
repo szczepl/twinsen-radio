@@ -34,7 +34,14 @@ class ReconnectController(
     private val onStatusChanged: (Status) -> Unit
 ) : Player.Listener {
 
-    enum class Status { OK, RECONNECTING, WAITING_FOR_NETWORK }
+    /**
+     * [STATION_UNREACHABLE] to nie to samo co [RECONNECTING]. Oznacza: siec masz,
+     * probowalismy juz kilka razy i stacja milczy. Zdarza sie, gdy rozglosnia
+     * wycofa serwer, a katalog wciaz podaje stary adres - tak wlasnie bylo
+     * z Triple M Melbourne. Ponawiamy dalej, ale uczciwie mowimy, ze problem
+     * jest po drugiej stronie, a nie z zasiegiem.
+     */
+    enum class Status { OK, RECONNECTING, WAITING_FOR_NETWORK, STATION_UNREACHABLE }
 
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
@@ -108,7 +115,7 @@ class ReconnectController(
             status = Status.OK
             return
         }
-        status = if (hasUsableNetwork()) Status.RECONNECTING else Status.WAITING_FOR_NETWORK
+        status = currentStatus()
         scheduleRetry()
     }
 
@@ -145,7 +152,7 @@ class ReconnectController(
         cancelPending()
         if (!player.playWhenReady) return
         Log.i(TAG, "Wznawiam odtwarzanie ($reason)")
-        status = if (hasUsableNetwork()) Status.RECONNECTING else Status.WAITING_FOR_NETWORK
+        status = currentStatus()
         runCatching {
             player.prepare()
             player.play()
@@ -164,7 +171,7 @@ class ReconnectController(
         if (!player.playWhenReady) return
         val runnable = Runnable {
             if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@Runnable
-            status = if (hasUsableNetwork()) Status.RECONNECTING else Status.WAITING_FOR_NETWORK
+            status = currentStatus()
             Log.i(TAG, "Buforowanie ciagnie sie ponad ${STUCK_MS}ms - $status")
             scheduleRetry()
         }
@@ -175,6 +182,16 @@ class ReconnectController(
     private fun cancelStuckCheck() {
         stuckCheck?.let { handler.removeCallbacks(it) }
         stuckCheck = null
+    }
+
+    /**
+     * Bez sieci czekamy na siec. Z siecia najpierw ponawiamy, a po
+     * [ATTEMPTS_BEFORE_UNREACHABLE] nieudanych probach nazywamy rzecz po imieniu.
+     */
+    private fun currentStatus(): Status = when {
+        !hasUsableNetwork() -> Status.WAITING_FOR_NETWORK
+        attempt >= ATTEMPTS_BEFORE_UNREACHABLE -> Status.STATION_UNREACHABLE
+        else -> Status.RECONNECTING
     }
 
     private fun hasUsableNetwork(): Boolean {
@@ -192,5 +209,11 @@ class ReconnectController(
          * zapasem wzgledem najwiekszego profilu bufora (start ~4 s).
          */
         const val STUCK_MS = 12_000L
+
+        /**
+         * Po tylu nieudanych probach przy dzialajacej sieci przestajemy udawac,
+         * ze to chwilowe. Cztery proby to okolo 15 s narastajacego backoffu.
+         */
+        const val ATTEMPTS_BEFORE_UNREACHABLE = 4
     }
 }

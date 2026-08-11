@@ -162,6 +162,7 @@ class RadioService : MediaLibraryService() {
                 when (status) {
                     ReconnectController.Status.RECONNECTING -> PlaybackStatusBus.Status.RECONNECTING
                     ReconnectController.Status.WAITING_FOR_NETWORK -> PlaybackStatusBus.Status.WAITING_FOR_NETWORK
+                    ReconnectController.Status.STATION_UNREACHABLE -> PlaybackStatusBus.Status.STATION_UNREACHABLE
                     ReconnectController.Status.OK -> PlaybackStatusBus.Status.PLAYING
                 }
             )

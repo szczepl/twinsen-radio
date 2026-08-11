@@ -49,7 +49,12 @@ object PlaybackStatusBus {
     private val _status = MutableStateFlow(Status.IDLE)
     val status: StateFlow<Status> = _status
 
-    enum class Status { IDLE, CONNECTING, BUFFERING, PLAYING, RECONNECTING, WAITING_FOR_NETWORK }
+    enum class Status {
+        IDLE, CONNECTING, BUFFERING, PLAYING, RECONNECTING, WAITING_FOR_NETWORK,
+
+        /** Siec jest, ale stacja milczy - najczesciej wycofany adres strumienia. */
+        STATION_UNREACHABLE
+    }
 
     fun setStation(id: String?) {
         if (_stationId.value != id) {

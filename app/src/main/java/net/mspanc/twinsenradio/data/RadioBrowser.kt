@@ -52,8 +52,32 @@ object RadioBrowser {
         val countryName: String? = null,
         val language: String? = null,
         val homepage: String? = null,
-        val votes: Int = 0
+        val votes: Int = 0,
+        /**
+         * Kiedy katalog ostatni raz potwierdzil, ze strumien dziala (UTC).
+         * Wazniejsze, niz sie wydaje - patrz [isCheckStale].
+         */
+        val lastCheckOk: String? = null
     ) {
+        /**
+         * Czy potwierdzenie jest stare na tyle, ze nic juz nie znaczy.
+         *
+         * Katalog sprawdza zywe stacje mniej wiecej raz na dobe, wiec data
+         * sprzed miesiecy oznacza, ze sprawdzarka dawno sie poddala, a flaga
+         * "dziala" zostala z ostatniego udanego testu. Tak wlasnie wygladal
+         * Triple M Melbourne: lastcheckok = 1 z data siedem miesiecy wstecz,
+         * przy serwerze bez rekordu DNS.
+         */
+        fun isCheckStale(): Boolean = daysSinceCheck()?.let { it > STALE_AFTER_DAYS } ?: false
+
+        fun daysSinceCheck(): Long? {
+            val raw = lastCheckOk?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            return runCatching {
+                val checked = java.time.LocalDateTime.parse(raw.replace(' ', 'T'))
+                java.time.Duration.between(checked, java.time.LocalDateTime.now(java.time.ZoneOffset.UTC))
+                    .toDays()
+            }.getOrNull()
+        }
         /** Druga linia na liscie wynikow: "PL · MP3 128 kb/s · rock". */
         fun describe(): String = listOfNotNull(
             country?.takeIf { it.isNotBlank() },
@@ -121,7 +145,8 @@ object RadioBrowser {
                 countryName = o.optString("country").ifBlank { null },
                 language = o.optString("language").ifBlank { null },
                 homepage = o.optString("homepage").ifBlank { null },
-                votes = o.optInt("votes", 0)
+                votes = o.optInt("votes", 0),
+                lastCheckOk = o.optString("lastcheckoktime").ifBlank { null }
             )
         }
     }
@@ -142,4 +167,11 @@ object RadioBrowser {
     }
 
     const val DISCOVERED_PREFIX = "rb:"
+
+    /**
+     * Powyzej tylu dni od ostatniego udanego sprawdzenia traktujemy potwierdzenie
+     * katalogu jako bezwartosciowe. Zywe stacje sa sprawdzane mniej wiecej raz
+     * na dobe, wiec miesiac to juz bardzo duzy zapas.
+     */
+    private const val STALE_AFTER_DAYS = 30L
 }

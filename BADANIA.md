@@ -174,7 +174,42 @@ sesji.
 
 ---
 
-## 4. Co sprawdzono na emulatorze (API 33)
+## 4. Ile naprawdę znaczy „hidebroken" w radio-browser
+
+Ustalone na przypadku Triple M Melbourne (2026-08-11), który po dodaniu
+buforował się w nieskończoność.
+
+Katalog twierdził, że stacja działa:
+
+```
+lastcheckok    : 1
+lastchecktime  : 2026-01-15      <- siedem miesięcy wcześniej
+url_resolved   : https://wz3drp.scahw.com.au/live/3mmm_32.stream/playlist.m3u8
+```
+
+A host **nie ma rekordu A** — sprawdzone także przez publiczny resolver Google,
+więc to nie kwestia naszej sieci. SCA wycofało ten serwer.
+
+**Wniosek:** `hidebroken` odsiewa stacje, które przy **ostatnim** sprawdzeniu
+były zepsute. Nie znaczy „sprawdzone niedawno". Żywe stacje katalog testuje mniej
+więcej raz na dobę, więc data sprzed miesięcy oznacza, że sprawdzarka dawno się
+poddała, a flaga została z ostatniego udanego testu.
+
+Stąd trzy zabezpieczenia po naszej stronie:
+
+1. Ekran szczegółów pokazuje, **ile dni temu** katalog potwierdził działanie,
+   i przy wartości powyżej 30 dni mówi wprost, że to bardzo dawno.
+2. Przycisk **„Sprawdź, czy strumień działa"** wykonuje własne połączenie tu
+   i teraz. Rozróżnia brak hosta (stacja wycofana), HTTP 403 (często blokada
+   regionalna), brak odpowiedzi i serwer, który oddaje pustkę.
+3. Przy odtwarzaniu: po czterech nieudanych próbach przy działającej sieci
+   status zmienia się z „Ponawiam połączenie" na **„Stacja nie odpowiada"**.
+   Ponawiamy dalej — w aucie nic nie miga — ale na telefonie widać, że problem
+   jest po stronie rozgłośni, a nie zasięgu.
+
+---
+
+## 5. Co sprawdzono na emulatorze (API 33)
 
 * `dumpsys media_session` pokazuje `state=3` (PLAYING) i
   `description=TYT.WYŚW, PODTYTUŁ, OPIS` — diagnostyczne etykiety faktycznie
