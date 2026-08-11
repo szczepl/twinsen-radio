@@ -578,7 +578,9 @@ class RadioService : MediaLibraryService() {
             return
         }
         PlaybackStatusBus.setQuality(
-            StreamQuality.of(format, icyBitrateKbps).label().ifBlank { null }
+            // Kodek juz widac na przycisku wyboru jakosci - tu tylko kanaly,
+            // zeby nie dublowac tej samej informacji dwa razy na ekranie.
+            StreamQuality.of(format, icyBitrateKbps).channelsLabel().ifBlank { null }
         )
     }
 

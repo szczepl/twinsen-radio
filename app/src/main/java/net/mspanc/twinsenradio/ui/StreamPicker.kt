@@ -22,6 +22,12 @@ fun StreamVariant.shortLabel(): String {
 fun StreamVariant.kbpsLabel(): String = if (kbps > 0) "$kbps kbit" else shortLabel()
 
 /**
+ * Etykieta na liste w dialogu wyboru: sam kodek i przeplywnosc, bez dopiskow
+ * typu "— zapasowy" czy "— wysoka jakosc" - to ocena, nie fakt o strumieniu.
+ */
+fun StreamVariant.plainLabel(): String = label.substringBefore('—').trim()
+
+/**
  * Ten sam dialog wyboru strumienia na ekranie odtwarzania i na pasku
  * mini-playera - lista wariantow z zaznaczeniem, Anuluj/OK. Zmiana leci przez
  * [Prefs], usluga sama przeladuje strumien.
@@ -35,7 +41,7 @@ object StreamPicker {
 
         MaterialAlertDialogBuilder(context)
             .setTitle(R.string.stream_picker_title)
-            .setSingleChoiceItems(variants.map { it.label }.toTypedArray(), picked) { _, which ->
+            .setSingleChoiceItems(variants.map { it.plainLabel() }.toTypedArray(), picked) { _, which ->
                 picked = which
             }
             .setPositiveButton(R.string.action_ok) { _, _ ->
