@@ -72,6 +72,16 @@ class MainActivity : AppCompatActivity() {
         b.search.doAfterTextChanged { text ->
             adapter.submitList(repo.search(text?.toString().orEmpty()))
         }
+        b.search.setOnClickListener { showHistory() }
+        b.search.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) showHistory() }
+        // Zapamietujemy dopiero zatwierdzone zapytanie, a nie kazdy znak po drodze
+        b.search.setOnEditorActionListener { _, _, _ ->
+            prefs.pushLocalSearch(b.search.text?.toString().orEmpty())
+            refreshHistory()
+            hideKeyboard()
+            true
+        }
+        refreshHistory()
 
         b.playPause.setOnClickListener {
             val c = controller ?: return@setOnClickListener
@@ -145,6 +155,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean = when (item.itemId) {
+        R.id.action_search -> {
+            toggleSearch()
+            true
+        }
         R.id.action_settings -> {
             startActivity(Intent(this, SettingsActivity::class.java))
             true
@@ -154,6 +168,46 @@ class MainActivity : AppCompatActivity() {
             true
         }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    /**
+     * Pokazuje albo chowa pole wyszukiwania. Schowanie czysci zapytanie - lista
+     * ma wracac do pelnej, a nie zostawac przefiltrowana przez niewidoczny tekst.
+     */
+    private fun toggleSearch() {
+        val visible = b.searchLayout.visibility == android.view.View.VISIBLE
+        if (visible) {
+            b.search.setText("")
+            b.searchLayout.visibility = android.view.View.GONE
+            hideKeyboard()
+        } else {
+            b.searchLayout.visibility = android.view.View.VISIBLE
+            b.search.requestFocus()
+            val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+            imm?.showSoftInput(b.search, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            showHistory()
+        }
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+        imm?.hideSoftInputFromWindow(b.search.windowToken, 0)
+    }
+
+    private fun refreshHistory() {
+        b.search.setAdapter(
+            android.widget.ArrayAdapter(
+                this,
+                android.R.layout.simple_list_item_1,
+                prefs.localSearchHistory
+            )
+        )
+    }
+
+    private fun showHistory() {
+        if (b.search.text.isNullOrBlank() && prefs.localSearchHistory.isNotEmpty()) {
+            b.search.showDropDown()
+        }
     }
 
     /**

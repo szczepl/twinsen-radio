@@ -47,7 +47,12 @@ object RadioBrowser {
         val country: String?,
         val tags: String?,
         val codec: String?,
-        val bitrate: Int
+        val bitrate: Int,
+        /** Pola tylko na ekran szczegolow - do listy wynikow sie nie mieszcza. */
+        val countryName: String? = null,
+        val language: String? = null,
+        val homepage: String? = null,
+        val votes: Int = 0
     ) {
         /** Druga linia na liscie wynikow: "PL · MP3 128 kb/s · rock". */
         fun describe(): String = listOfNotNull(
@@ -112,7 +117,11 @@ object RadioBrowser {
                 country = o.optString("countrycode").ifBlank { null },
                 tags = o.optString("tags").ifBlank { null },
                 codec = o.optString("codec").ifBlank { null },
-                bitrate = o.optInt("bitrate", 0)
+                bitrate = o.optInt("bitrate", 0),
+                countryName = o.optString("country").ifBlank { null },
+                language = o.optString("language").ifBlank { null },
+                homepage = o.optString("homepage").ifBlank { null },
+                votes = o.optInt("votes", 0)
             )
         }
     }

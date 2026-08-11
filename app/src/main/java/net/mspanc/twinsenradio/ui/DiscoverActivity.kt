@@ -1,6 +1,7 @@
 package net.mspanc.twinsenradio.ui
 
 import android.os.Bundle
+import android.widget.ArrayAdapter
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.doAfterTextChanged
@@ -21,9 +22,9 @@ import net.mspanc.twinsenradio.playback.MetadataFactory
  * Wyszukiwanie stacji, ktorych nie ma na wbudowanej liscie.
  *
  * Katalog i powody jego wyboru opisuje [RadioBrowser]. Tutaj jest tylko warstwa
- * widoku: wpisany tekst, wyniki i przycisk dodawania. Dodana stacja trafia do
- * [Prefs] i od tej chwili zachowuje sie jak kazda inna - da sie ja polubic,
- * wlaczyc i znalezc w aucie.
+ * widoku: wpisany tekst, wyniki, przycisk dodawania i przejscie do szczegolow.
+ * Dodana stacja trafia do [Prefs] i od tej chwili zachowuje sie jak kazda inna -
+ * da sie ja polubic, wlaczyc i znalezc w aucie.
  */
 @UnstableApi
 class DiscoverActivity : AppCompatActivity() {
@@ -35,6 +36,12 @@ class DiscoverActivity : AppCompatActivity() {
 
     /** Ostatnie zapytanie w locie - kasujemy je przy kazdym nowym znaku. */
     private var searchJob: Job? = null
+
+    /**
+     * Wyniki ostatniego wyszukiwania, zeby po stuknieciu w wiersz miec czym
+     * zapelnic ekran szczegolow. [Station] nie niesie kraju ani kodeka.
+     */
+    private var lastResults: List<RadioBrowser.Found> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,21 +56,50 @@ class DiscoverActivity : AppCompatActivity() {
         adapter = StationAdapter(
             subtitleFor = { it.genre },
             actionIconFor = {
-                if (prefs.isDiscovered(it.id)) R.drawable.ic_check
-                else R.drawable.ic_add
+                if (prefs.isDiscovered(it.id)) R.drawable.ic_check else R.drawable.ic_add
             },
             loadLogo = ::showLogo,
-            onClick = { toggle(it) },
-            onAction = { toggle(it) }
+            onClick = ::openDetails,
+            onAction = ::toggle
         )
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
 
         b.query.doAfterTextChanged { text -> scheduleSearch(text?.toString().orEmpty()) }
+        b.query.setOnClickListener { showHistory() }
+        b.query.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) showHistory() }
+        refreshHistory()
 
-        // Na wejsciu pokazujemy to, co juz dodano - inaczej ekran jest pusty
-        // i nie widac, ze cokolwiek sie tu wczesniej dodalo.
-        showAdded()
+        // Dodanie albo usuniecie stacji ma od razu przelozyc sie na ikony przy
+        // wierszach - takze wtedy, gdy zmiana przyszla z ekranu szczegolow.
+        lifecycleScope.launch {
+            Prefs.discoveredFlow.collect {
+                adapter.notifyItemRangeChanged(0, adapter.itemCount)
+                if (queryText().length < 2) showAdded()
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Wracamy ze szczegolow - stan przyciskow mogl sie tam zmienic.
+        adapter.notifyItemRangeChanged(0, adapter.itemCount)
+    }
+
+    private fun queryText() = b.query.text?.toString().orEmpty().trim()
+
+    /** Podpowiedzi z historii; pokazujemy je, gdy pole jest jeszcze puste. */
+    private fun refreshHistory() {
+        val history = prefs.webSearchHistory
+        b.query.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_list_item_1, history)
+        )
+    }
+
+    private fun showHistory() {
+        if (queryText().isEmpty() && prefs.webSearchHistory.isNotEmpty()) {
+            b.query.showDropDown()
+        }
     }
 
     private fun showAdded() {
@@ -81,6 +117,7 @@ class DiscoverActivity : AppCompatActivity() {
     private fun scheduleSearch(query: String) {
         searchJob?.cancel()
         if (query.trim().length < 2) {
+            lastResults = emptyList()
             showAdded()
             return
         }
@@ -88,27 +125,40 @@ class DiscoverActivity : AppCompatActivity() {
             delay(400)
             b.hint.setText(R.string.discover_searching)
             val found = RadioBrowser.search(query)
-            val stations = found.map { it.toStation() }
-            adapter.submitList(stations)
-            b.hint.text = if (stations.isEmpty()) {
+            lastResults = found
+            adapter.submitList(found.map { it.toStation() })
+            b.hint.text = if (found.isEmpty()) {
                 getString(R.string.discover_nothing, query.trim())
             } else {
-                resources.getQuantityString(
-                    R.plurals.discover_results, stations.size, stations.size
-                )
+                prefs.pushWebSearch(query)
+                refreshHistory()
+                resources.getQuantityString(R.plurals.discover_results, found.size, found.size)
             }
         }
     }
 
-    /** Dodaje albo usuwa stacje z listy uzytkownika. */
+    /**
+     * Stukniecie w wiersz otwiera szczegoly. Wczesniej robilo to samo, co przycisk
+     * obok - stacja po cichu ladowala na liste, bez zadnego sladu na ekranie,
+     * przez co pierwsze nacisniecie "+" ja usuwalo i wygladalo na nieskuteczne.
+     */
+    private fun openDetails(station: Station) {
+        val found = lastResults.firstOrNull { it.toStation().id == station.id }
+        startActivity(
+            if (found != null) {
+                StationInfoActivity.intent(this, found)
+            } else {
+                StationInfoActivity.intent(this, station)
+            }
+        )
+    }
+
     private fun toggle(station: Station) {
         if (prefs.isDiscovered(station.id)) {
             prefs.removeDiscovered(station.id)
         } else {
             prefs.addDiscovered(station)
         }
-        // Gdy stoimy na liscie juz dodanych, usuniecie ma ja od razu skrocic.
-        if (b.query.text?.toString().orEmpty().trim().length < 2) showAdded()
     }
 
     private fun showLogo(station: Station, view: ImageView) {

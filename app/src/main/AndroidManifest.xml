@@ -57,6 +57,12 @@
             android:parentActivityName=".ui.MainActivity" />
 
         <activity
+            android:name=".ui.StationInfoActivity"
+            android:exported="false"
+            android:label="@string/info_title"
+            android:parentActivityName=".ui.DiscoverActivity" />
+
+        <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"

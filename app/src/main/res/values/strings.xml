@@ -19,9 +19,19 @@
     <!-- Wyszukiwanie stacji spoza wbudowanej listy (katalog radio-browser.info) -->
     <string name="discover_title">Szukaj stacji w sieci</string>
     <string name="discover_hint">Nazwa stacji…</string>
-    <string name="discover_intro">Wpisz nazwę, żeby przeszukać katalog radio-browser.info — otwartą bazę około 50 tysięcy rozgłośni z całego świata. Stuknięcie dodaje stację do Twojej listy.</string>
-    <string name="discover_added_header">Stacje dodane z sieci. Stuknij, żeby usunąć.</string>
+    <string name="discover_intro">Wpisz nazwę, żeby przeszukać katalog radio-browser.info — otwartą bazę około 50 tysięcy rozgłośni z całego świata. Stuknięcie w nazwę pokaże szczegóły, przycisk obok dodaje stację do Twojej listy.</string>
+    <string name="discover_added_header">Stacje dodane z sieci. Stuknij, żeby zobaczyć szczegóły; przycisk obok usuwa.</string>
     <string name="discover_searching">Szukam…</string>
+
+    <!-- Ekran szczegółów stacji z katalogu -->
+    <string name="info_title">O stacji</string>
+    <string name="info_add">Dodaj do mojej listy</string>
+    <string name="info_remove">Usuń z mojej listy</string>
+    <string name="info_codec">Format strumienia</string>
+    <string name="info_language">Język</string>
+    <string name="info_votes">Głosy w katalogu</string>
+    <string name="info_stream">Adres strumienia</string>
+    <string name="info_homepage">Strona stacji</string>
     <string name="discover_nothing">Nic nie znaleziono dla „%1$s”.</string>
     <string name="status_connecting">Łączenie…</string>
     <string name="status_buffering">Buforowanie…</string>

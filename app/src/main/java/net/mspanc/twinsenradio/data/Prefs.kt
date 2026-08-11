@@ -214,6 +214,36 @@ class Prefs(context: Context) {
         }
     }.getOrElse { emptyList() }
 
+    /**
+     * Historie wyszukiwania - osobne dla listy wlasnej i dla katalogu w sieci,
+     * bo to dwa rozne swiaty: tu szuka sie "rmf", tam "jazz radio paris".
+     * Najnowsze na poczatku, bez powtorzen.
+     */
+    var localSearchHistory: List<String>
+        get() = readHistory(KEY_HISTORY_LOCAL)
+        set(v) = writeHistory(KEY_HISTORY_LOCAL, v)
+
+    var webSearchHistory: List<String>
+        get() = readHistory(KEY_HISTORY_WEB)
+        set(v) = writeHistory(KEY_HISTORY_WEB, v)
+
+    fun pushLocalSearch(query: String) = pushHistory(KEY_HISTORY_LOCAL, query)
+
+    fun pushWebSearch(query: String) = pushHistory(KEY_HISTORY_WEB, query)
+
+    private fun pushHistory(key: String, query: String) {
+        val q = query.trim()
+        if (q.length < 2) return
+        val current = readHistory(key).filterNot { it.equals(q, ignoreCase = true) }
+        writeHistory(key, listOf(q) + current)
+    }
+
+    private fun readHistory(key: String): List<String> =
+        sp.getString(key, "").orEmpty().lines().filter { it.isNotBlank() }
+
+    private fun writeHistory(key: String, values: List<String>) =
+        sp.edit { putString(key, values.take(HISTORY_LIMIT).joinToString("\n")) }
+
     /** Ostatnio sluchane, najnowsze na poczatku. */
     var recent: List<String>
         get() = sp.getString(KEY_RECENT, "").orEmpty().lines().filter { it.isNotBlank() }
@@ -276,6 +306,11 @@ class Prefs(context: Context) {
         const val KEY_FAV = "favourites"
         const val KEY_RECENT = "recent"
         const val KEY_DISCOVERED = "discovered_stations"
+        const val KEY_HISTORY_LOCAL = "search_history_local"
+        const val KEY_HISTORY_WEB = "search_history_web"
+
+        /** Tyle wpisow wystarczy - dluzsza lista i tak nie miesci sie na ekranie. */
+        private const val HISTORY_LIMIT = 10
     }
 }
 

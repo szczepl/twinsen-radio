@@ -6,9 +6,9 @@
         wlasciwa - dlatego nie sklejamy tego recznie w kodzie.
     -->
     <plurals name="discover_results">
-        <item quantity="one">Znaleziono %1$d stację. Stuknij, żeby dodać.</item>
-        <item quantity="few">Znaleziono %1$d stacje. Stuknij, żeby dodać.</item>
-        <item quantity="many">Znaleziono %1$d stacji. Stuknij, żeby dodać.</item>
-        <item quantity="other">Znaleziono %1$d stacji. Stuknij, żeby dodać.</item>
+        <item quantity="one">Znaleziono %1$d stację. Stuknij, żeby zobaczyć szczegóły.</item>
+        <item quantity="few">Znaleziono %1$d stacje. Stuknij, żeby zobaczyć szczegóły.</item>
+        <item quantity="many">Znaleziono %1$d stacji. Stuknij, żeby zobaczyć szczegóły.</item>
+        <item quantity="other">Znaleziono %1$d stacji. Stuknij, żeby zobaczyć szczegóły.</item>
     </plurals>
 </resources>
