@@ -42,8 +42,17 @@ object PlaybackStatusBus {
     private val _quality = MutableStateFlow<String?>(null)
     val quality: StateFlow<String?> = _quality
 
-    fun setQuality(text: String?) {
+    /**
+     * Rzeczywista przeplywnosc z dekodera, w kb/s - dla stacji, ktore nie
+     * deklaruja jej w katalogu (jeden, "goly" adres streamu bez wariantow).
+     * Wtedy przycisk jakosci pokazuje ta liczbe zamiast placeholdera.
+     */
+    private val _qualityKbps = MutableStateFlow<Int?>(null)
+    val qualityKbps: StateFlow<Int?> = _qualityKbps
+
+    fun setQuality(text: String?, kbps: Int? = null) {
         _quality.value = text
+        _qualityKbps.value = kbps
     }
 
     private val _status = MutableStateFlow(Status.IDLE)
@@ -65,6 +74,7 @@ object PlaybackStatusBus {
             // Nowa stacja to nowy strumien - stara jakosc przestaje obowiazywac
             // od razu, a nowa poznamy dopiero po pierwszej ramce z dekodera.
             _quality.value = null
+            _qualityKbps.value = null
         }
     }
 

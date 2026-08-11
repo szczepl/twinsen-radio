@@ -577,8 +577,10 @@ class RadioService : MediaLibraryService() {
             PlaybackStatusBus.setQuality(null)
             return
         }
+        val quality = StreamQuality.of(format, icyBitrateKbps)
         PlaybackStatusBus.setQuality(
-            StreamQuality.of(format, icyBitrateKbps).label().ifBlank { null }
+            quality.label().ifBlank { null },
+            quality.bitrateKbps.takeIf { it > 0 }
         )
     }
 

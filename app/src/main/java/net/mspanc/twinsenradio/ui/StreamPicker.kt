@@ -8,19 +8,16 @@ import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StreamVariant
 
 /**
- * "MP3, 256 kbps" - uzywane tylko jako zapasowa etykieta, gdy przeplywnosc
- * nie jest znana (patrz [kbpsLabel]). Kodek bierzemy z pierwszego slowa
- * etykiety (nasze etykiety zawsze zaczynaja sie od niego, np. "MP3 256 kb/s
- * — zapasowy") - to unika osobnego pola tylko na te dwa znaki.
+ * Sama przeplywnosc, bez kodeka - na przycisk jakosci, zarowno na Now Playing,
+ * jak i przy pasku mini-playera. `null`, gdy nie znamy jej znikad - przycisk
+ * ma sie wtedy schowac, a nie pokazywac placeholder.
+ *
+ * @param liveKbps rzeczywista przeplywnosc z dekodera (patrz
+ *   [net.mspanc.twinsenradio.playback.PlaybackStatusBus.qualityKbps]) - zapasowa,
+ *   gdy stacja to "goly" adres bez zadeklarowanej przeplywnosci w katalogu.
  */
-private fun StreamVariant.shortLabel(): String {
-    val codec = label.substringBefore(' ').takeIf { it.isNotBlank() && it.any(Char::isLetter) }
-        ?: "Strumień"
-    return if (kbps > 0) "$codec, $kbps kbps" else codec
-}
-
-/** Sama przeplywnosc, bez kodeka - na przycisk jakosci, zarowno na Now Playing, jak i przy pasku mini-playera. */
-fun StreamVariant.kbpsLabel(): String = if (kbps > 0) "$kbps kbit" else shortLabel()
+fun StreamVariant.kbpsLabel(liveKbps: Int? = null): String? =
+    (kbps.takeIf { it > 0 } ?: liveKbps?.takeIf { it > 0 })?.let { "$it kbit" }
 
 /**
  * Etykieta na liste w dialogu wyboru: sam kodek i przeplywnosc, bez dopiskow

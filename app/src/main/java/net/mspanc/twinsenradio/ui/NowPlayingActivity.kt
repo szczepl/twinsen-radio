@@ -102,31 +102,24 @@ class NowPlayingActivity : AppCompatActivity() {
      * zmiana zrobiona tutaj widoczna jest tam i odwrotnie. Usluga sama
      * przeladuje strumien, bo obserwuje te preferencje.
      *
-     * Widoczny zawsze, gdy stacja gra - i przy jednym strumieniu tez, po prostu
-     * informacyjnie. Strzalka i mozliwosc kliknieicia pojawiaja sie dopiero,
-     * gdy faktycznie jest w czym wybierac.
+     * Widoczny tylko, gdy naprawde znamy przeplywnosc - z katalogu albo,
+     * dla "golych" adresow bez tej deklaracji, z dekodera na zywo. Bez niej
+     * nie ma czego pokazac, wiec przycisk znika zamiast placeholdera.
      */
     private fun renderBitrate(station: Station?) {
         val variants = station?.variants().orEmpty()
-        if (station == null || variants.isEmpty()) {
+        val chosen = station?.let { prefs.selectedStream(it.id) }
+            ?: variants.maxByOrNull { it.kbps }?.url
+        val current = variants.firstOrNull { it.url == chosen } ?: variants.firstOrNull()
+        val label = current?.kbpsLabel(PlaybackStatusBus.qualityKbps.value)
+        if (station == null || label == null) {
             b.bitrate.visibility = android.view.View.GONE
             return
         }
         b.bitrate.visibility = android.view.View.VISIBLE
-        val chosen = prefs.selectedStream(station.id)
-            ?: variants.maxByOrNull { it.kbps }?.url
-        val current = variants.firstOrNull { it.url == chosen } ?: variants.first()
-        b.bitrate.text = current.kbpsLabel()
-        if (variants.size >= 2) {
-            b.bitrate.icon = androidx.core.content.ContextCompat.getDrawable(this, R.drawable.ic_expand_more)
-            b.bitrate.isClickable = true
-            b.bitrate.setOnClickListener {
-                StreamPicker.show(this, station, prefs) { renderBitrate(station) }
-            }
-        } else {
-            b.bitrate.icon = null
-            b.bitrate.isClickable = false
-            b.bitrate.setOnClickListener(null)
+        b.bitrate.text = label
+        b.bitrate.setOnClickListener {
+            StreamPicker.show(this, station, prefs) { renderBitrate(station) }
         }
     }
 

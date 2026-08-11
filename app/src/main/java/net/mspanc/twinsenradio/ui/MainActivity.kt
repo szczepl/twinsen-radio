@@ -370,13 +370,14 @@ class MainActivity : AppCompatActivity() {
         )
 
         val variants = station?.variants().orEmpty()
-        if (station == null || variants.size < 2) {
+        val chosen = station?.let { prefs.selectedStream(it.id) } ?: variants.maxByOrNull { it.kbps }?.url
+        val current = variants.firstOrNull { it.url == chosen } ?: variants.firstOrNull()
+        val label = current?.kbpsLabel(PlaybackStatusBus.qualityKbps.value)
+        if (station == null || label == null) {
             b.bitrate.visibility = android.view.View.GONE
         } else {
             b.bitrate.visibility = android.view.View.VISIBLE
-            val chosen = prefs.selectedStream(station.id) ?: variants.maxByOrNull { it.kbps }?.url
-            val current = variants.firstOrNull { it.url == chosen } ?: variants.first()
-            b.bitrate.text = current.kbpsLabel()
+            b.bitrate.text = label
             b.bitrate.setOnClickListener {
                 StreamPicker.show(this, station, prefs) { renderMiniPlayer() }
             }
