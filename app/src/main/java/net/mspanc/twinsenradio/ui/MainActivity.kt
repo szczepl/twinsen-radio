@@ -71,11 +71,18 @@ class MainActivity : AppCompatActivity() {
         )
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
-        adapter.submitList(repo.all())
 
-        b.search.doAfterTextChanged { text ->
-            adapter.submitList(repo.search(text?.toString().orEmpty()))
-        }
+        // Dwie zakladki zamiast jednej dlugiej listy - ulubione sa tym, po co
+        // siega sie najczesciej, wiec maja byc na wyciagniecie jednego stuknienia.
+        b.tabs.addTab(b.tabs.newTab().setText(R.string.tab_all))
+        b.tabs.addTab(b.tabs.newTab().setText(R.string.tab_favourites))
+        b.tabs.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) = refreshList()
+            override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab) = Unit
+            override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab) = Unit
+        })
+
+        b.search.doAfterTextChanged { refreshList() }
         b.search.setOnClickListener { showHistory() }
         b.search.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) showHistory() }
         // Zapamietujemy dopiero zatwierdzone zapytanie, a nie kazdy znak po drodze
@@ -279,6 +286,9 @@ class MainActivity : AppCompatActivity() {
         // jest czescia modelu stacji, wiec DiffUtil sam z siebie nic nie odswiezy.
         lifecycleScope.launch {
             Prefs.favouritesFlow.collect {
+                // Na zakladce ulubionych zmiana gwiazdki zmienia sklad listy,
+                // a nie tylko ikone - stad pelna przebudowa.
+                if (b.tabs.selectedTabPosition == 1) refreshList()
                 adapter.notifyItemRangeChanged(0, adapter.itemCount)
             }
         }
@@ -309,7 +319,13 @@ class MainActivity : AppCompatActivity() {
      */
     private fun refreshList() {
         val query = b.search.text?.toString().orEmpty()
-        adapter.submitList(repo.search(query)) { b.list.scrollToPosition(0) }
+        val found = repo.search(query)
+        val list = if (b.tabs.selectedTabPosition == 1) {
+            found.filter { it.id in prefs.favourites }
+        } else {
+            found
+        }
+        adapter.submitList(list) { b.list.scrollToPosition(0) }
     }
 
     private fun renderMiniPlayer() {

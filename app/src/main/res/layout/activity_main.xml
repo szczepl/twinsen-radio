@@ -13,6 +13,15 @@
         app:title="@string/app_name"
         app:titleTextColor="@color/on_brand" />
 
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorPrimary"
+        app:tabIndicatorColor="@color/on_brand"
+        app:tabSelectedTextColor="@color/on_brand"
+        app:tabTextColor="#B0FFFFFF" />
+
     <!--
         Domyslnie schowany. Zajmowal miejsce przez caly czas, a szuka sie raz na
         jakis czas - teraz rozwija go lupka na pasku.

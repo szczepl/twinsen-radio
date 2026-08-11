@@ -23,10 +23,12 @@ data class StreamQuality(
     val channels: Int
 ) {
     /** np. "AAC+ · 48 kb/s · 44,1 kHz · stereo". */
+    /**
+     * Bez czestotliwosci probkowania - ta niewiele mowi, a przeplywnosc
+     * uzytkownik wybiera teraz sam z listy obok. Zostaje kodek i liczba kanalow.
+     */
     fun label(): String = buildList {
         if (codec.isNotBlank()) add(codec)
-        if (bitrateKbps > 0) add("$bitrateKbps kb/s")
-        if (sampleRateHz > 0) add(khz(sampleRateHz))
         when (channels) {
             1 -> add("mono")
             2 -> add("stereo")

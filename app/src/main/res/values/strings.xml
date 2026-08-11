@@ -24,6 +24,10 @@
     <string name="discover_added_hint">Stuknij, żeby zobaczyć szczegóły. Przycisk obok usuwa z listy.</string>
     <string name="discover_recent">Ostatnie wyszukiwania</string>
     <string name="sort_title">Sortowanie</string>
+    <string name="tab_all">Wszystkie</string>
+    <string name="tab_favourites">Ulubione</string>
+    <string name="no_favourites">Nie masz jeszcze ulubionych stacji. Dodaj je gwiazdką na liście.</string>
+    <string name="opt_bitrate">Jakość</string>
     <string name="discover_empty">Nie masz jeszcze żadnych stacji z sieci.</string>
     <string name="discover_searching">Szukam…</string>
 

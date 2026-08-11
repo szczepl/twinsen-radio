@@ -3,6 +3,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_sort"
+        android:icon="@drawable/ic_sort"
         android:title="@string/sort_title"
-        app:showAsAction="never" />
+        app:iconTint="@color/on_brand"
+        app:showAsAction="always" />
 </menu>

@@ -95,6 +95,34 @@ class NowPlayingActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    /**
+     * Lista wariantow jakosci dla granej stacji.
+     *
+     * To ta sama nastawa, co w karcie stacji - zapisujemy ja w [Prefs], wiec
+     * zmiana zrobiona tutaj widoczna jest tam i odwrotnie. Usluga sama
+     * przeladuje strumien, bo obserwuje te preferencje.
+     */
+    private fun renderBitrate(station: Station?) {
+        val variants = station?.variants().orEmpty()
+        if (station == null || variants.size < 2) {
+            b.bitrateBox.visibility = android.view.View.GONE
+            return
+        }
+        b.bitrateBox.visibility = android.view.View.VISIBLE
+        val labels = variants.map { it.label }
+        val chosen = prefs.selectedStream(station.id)
+            ?: variants.maxByOrNull { it.kbps }?.url
+        val index = variants.indexOfFirst { it.url == chosen }.coerceAtLeast(0)
+
+        b.bitrate.setAdapter(
+            android.widget.ArrayAdapter(this, android.R.layout.simple_list_item_1, labels)
+        )
+        b.bitrate.setText(labels[index], false)
+        b.bitrate.setOnItemClickListener { _, _, position, _ ->
+            prefs.setSelectedStream(station.id, variants[position].url)
+        }
+    }
+
     /** Przeskok na sasiednia stacje z tej samej listy, z zawijaniem. */
     private fun step(delta: Int) {
         val all = repo.all()
@@ -184,6 +212,7 @@ class NowPlayingActivity : AppCompatActivity() {
         // dopiero wtedy, gdy naprawde jest co dopisac.
         val quality = PlaybackStatusBus.quality.value
         b.status.text = if (quality.isNullOrBlank()) statusText else "$statusText · $quality"
+        renderBitrate(station)
         b.playPause.setImageResource(
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause
             else android.R.drawable.ic_media_play

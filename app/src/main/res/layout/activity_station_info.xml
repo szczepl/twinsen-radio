@@ -42,14 +42,31 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <ImageView
-                android:id="@+id/logo"
+            <!--
+                Logo jest przyciskiem. Zagiety rog w prawym dolnym rogu mowi, ze
+                grafike da sie podmienic - bez osobnego przycisku pod spodem.
+            -->
+            <FrameLayout
                 android:layout_width="140dp"
                 android:layout_height="140dp"
                 android:layout_gravity="center_horizontal"
-                android:contentDescription="@null"
-                android:scaleType="fitCenter"
-                android:src="@drawable/logo_placeholder" />
+                android:background="?attr/selectableItemBackground">
+
+                <ImageView
+                    android:id="@+id/logo"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@string/info_change_logo"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/logo_placeholder" />
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="bottom|end"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_corner_fold" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/name"
@@ -129,13 +146,6 @@
                         style="@style/SettingNote"
                         android:text="@string/info_custom_stream_note" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnLogo"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/info_change_logo" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

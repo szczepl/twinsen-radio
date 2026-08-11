@@ -104,6 +104,9 @@ class RadioService : MediaLibraryService() {
     /** Odcisk ostatniego zrzutu metadanych - odsiewa powtorki w logu. */
     private var lastDump: String? = null
 
+    /** Adres, spod ktorego gramy - do wykrycia zmiany wariantu jakosci. */
+    private var currentStreamUrl: String? = null
+
     /** Ostatni slogan stacji - pokazujemy go, gdy nie wiemy, co akurat leci. */
     @Volatile
     private var lastSlogan: String? = null
@@ -127,6 +130,9 @@ class RadioService : MediaLibraryService() {
             Prefs.KEY_CLOCK_FACE, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
             Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM -> refreshCurrentMetadata(force = true)
             Prefs.KEY_BUFFER -> Log.i(TAG, "Zmieniono bufor - zadziala po restarcie odtwarzania")
+            // Zmiana jakosci albo wlasnego adresu dotyczy konkretnej stacji.
+            // Klucze maja prefiks z jej identyfikatorem, wiec sprawdzamy poczatek.
+            else -> if (key?.startsWith("stream_") == true) reloadCurrentStation()
         }
     }
 
@@ -542,6 +548,26 @@ class RadioService : MediaLibraryService() {
             if (generation != coverGeneration) return@launch
             applyIfCurrent(info)
         }
+    }
+
+    /**
+     * Przeladowuje biezaca stacje pod nowym adresem.
+     *
+     * Uzywane po zmianie wariantu jakosci. Idziemy wprost do ExoPlayera, z
+     * pominieciem [KeepCurrentStreamPlayer] - on celowo ignoruje ustawienie tej
+     * samej stacji, zeby klikniecie w grajaca pozycje nie zrywalo polaczenia,
+     * a tutaj zerwanie jest wlasnie tym, o co chodzi.
+     */
+    private fun reloadCurrentStation() {
+        val id = PlaybackStatusBus.stationId.value ?: return
+        val station = repo.byId(id) ?: return
+        if (station.stream == currentStreamUrl) return
+        currentStreamUrl = station.stream
+        Log.i(TAG, "zmieniono strumien stacji ${station.name} na ${station.stream}")
+        val wasPlaying = player.playWhenReady
+        player.setMediaItem(playableItem(station))
+        player.prepare()
+        if (wasPlaying) player.play()
     }
 
     /** Sklada opis jakosci z formatu dekodera i z naglowka icy-br. */

@@ -1,0 +1,22 @@
+<!--
+  Zagiety rog nakladany na logo stacji. Znaczy: "to da sie zmienic".
+  Rysowany jako trojkat z jasnym zalamaniem, zeby czytelnie wygladal
+  zarowno na jasnym, jak i ciemnym logotypie.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- cien pod zagieciem -->
+    <path
+        android:fillColor="#99000000"
+        android:pathData="M24,10v14H10z" />
+    <!-- samo zagiecie -->
+    <path
+        android:fillColor="#FFF2A900"
+        android:pathData="M24,12v12H12z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M16.5,20.5l4,-4 1.2,1.2 -4,4z" />
+</vector>

@@ -35,7 +35,7 @@ class StationInfoActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityStationInfoBinding
     private lateinit var prefs: Prefs
-    private lateinit var station: Station
+    private var station: Station = Station("", "", "", "")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +68,12 @@ class StationInfoActivity : AppCompatActivity() {
             logoUrl = intent.getStringExtra(EXTRA_LOGO),
             source = Station.Source.DISCOVERED
         )
+
+        // Wersja z repozytorium zna warianty strumienia; intencja niesie tylko
+        // to, co potrzebne do wyswietlenia pozycji jeszcze niedodanej.
+        StationRepository.get(this).allIncludingHidden()
+            .firstOrNull { it.id == station.id }
+            ?.let { station = it }
 
         b.name.text = station.name
         // Katalog sklada tagi bez spacji ("acid,acid jazz,dance") - rozdzielamy je,
@@ -120,7 +126,7 @@ class StationInfoActivity : AppCompatActivity() {
         b.btnProbe.setOnClickListener { probe() }
         renderStreams()
         b.customStream.setText(prefs.customStream(station.id).orEmpty())
-        b.btnLogo.setOnClickListener { pickLogo.launch("image/*") }
+        b.logo.setOnClickListener { pickLogo.launch("image/*") }
 
         val homepage = intent.getStringExtra(EXTRA_HOMEPAGE)
         if (!homepage.isNullOrBlank()) {
@@ -328,7 +334,7 @@ class StationInfoActivity : AppCompatActivity() {
     }
 
     private fun saveCustomStream() {
-        if (!this::station.isInitialized) return
+        if (station.id.isBlank()) return
         val typed = b.customStream.text?.toString()?.trim()
         if (typed == prefs.customStream(station.id).orEmpty()) return
         prefs.setCustomStream(station.id, typed)

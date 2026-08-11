@@ -79,6 +79,28 @@
         android:gravity="center"
         android:textAppearance="?attr/textAppearanceLabelMedium" />
 
+    <!--
+        Wybor jakosci wprost z ekranu odtwarzania - ta sama nastawa, co w karcie
+        stacji, wiec zmiana w jednym miejscu widac w drugim.
+    -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/bitrateBox"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        android:hint="@string/opt_bitrate"
+        android:visibility="gone">
+
+        <com.google.android.material.textfield.MaterialAutoCompleteTextView
+            android:id="@+id/bitrate"
+            android:layout_width="220dp"
+            android:layout_height="wrap_content"
+            android:editable="false"
+            android:inputType="none" />
+    </com.google.android.material.textfield.TextInputLayout>
+
     <LinearLayout
         android:id="@+id/diagnosticBanner"
         android:layout_width="match_parent"
