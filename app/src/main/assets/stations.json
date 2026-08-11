@@ -1,5 +1,11 @@
 [
-  { "id": "rns",         "name": "Radio Nowy Świat",        "genre": "Muzyka i rozmowa", "logo": "logo_rns",         "stream": "https://stream.rcs.revma.com/5ws0kfn1x1zuv" },
+  { "id": "rns",         "name": "Radio Nowy Świat",        "genre": "Muzyka i rozmowa", "logo": "logo_rns",
+    "streams": [
+      { "url": "https://stream.rcs.revma.com/4md4m0a0fs8uv", "label": "MP3 256 kb/s — wysoka jakość", "kbps": 256 },
+      { "url": "https://stream.nowyswiat.online/mp3",        "label": "MP3 128 kb/s",                 "kbps": 128 },
+      { "url": "https://stream.rcs.revma.com/ypqt40u0x1zuv", "label": "MP3 128 kb/s — zapasowy",      "kbps": 128 },
+      { "url": "https://stream.nowyswiat.online/aac",        "label": "AAC+ 64 kb/s — oszczędny",     "kbps": 64 }
+    ] },
   { "id": "r357",        "name": "Radio 357",               "genre": "Muzyka i rozmowa", "logo": "logo_r357",        "stream": "https://n-11-21.dcs.redcdn.pl/sc/o2/radio357/live/radio357_pr.livx?preroll=0" },
   { "id": "chillizet",   "name": "Chilli ZET",              "genre": "Chillout",         "logo": "logo_chillizet",   "stream": "https://ch.cdn.eurozet.pl/chi-net.mp3" },
   { "id": "zet",         "name": "Radio ZET",               "genre": "Pop",              "logo": "logo_zet",         "stream": "https://zt01.cdn.eurozet.pl/zet-net.mp3" },

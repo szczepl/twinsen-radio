@@ -82,6 +82,63 @@
                     android:padding="16dp" />
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Warianty strumienia; przy jednym adresie sekcja i tak pokazuje ten jeden -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Material3.CardView.Filled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        style="@style/SectionHeader"
+                        android:text="@string/info_streams" />
+
+                    <TextView
+                        style="@style/SectionNote"
+                        android:text="@string/info_streams_note" />
+
+                    <RadioGroup
+                        android:id="@+id/streamGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp" />
+
+                    <View style="@style/SectionDivider" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/info_custom_stream">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/customStream"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri"
+                            android:maxLines="2" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <TextView
+                        style="@style/SettingNote"
+                        android:text="@string/info_custom_stream_note" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLogo"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/info_change_logo" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnProbe"
                 style="@style/Widget.Material3.Button.OutlinedButton"

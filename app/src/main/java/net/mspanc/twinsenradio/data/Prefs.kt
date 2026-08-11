@@ -191,12 +191,19 @@ class Prefs(context: Context) {
     private fun saveDiscovered(list: List<Station>) {
         val arr = JSONArray()
         list.forEach { s ->
+            val variants = JSONArray()
+            s.streams.forEach { v ->
+                variants.put(
+                    JSONObject().put("url", v.url).put("label", v.label).put("kbps", v.kbps)
+                )
+            }
             arr.put(
                 JSONObject()
                     .put("id", s.id)
                     .put("name", s.name)
                     .put("genre", s.genre)
                     .put("stream", s.stream)
+                    .put("streams", variants)
                     .put("logoUrl", s.logoUrl ?: "")
             )
         }
@@ -209,11 +216,22 @@ class Prefs(context: Context) {
         val arr = JSONArray(raw)
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
+            val variants = o.optJSONArray("streams")?.let { list ->
+                (0 until list.length()).map { j ->
+                    val v = list.getJSONObject(j)
+                    StreamVariant(
+                        url = v.getString("url"),
+                        label = v.optString("label").ifBlank { Station.DEFAULT_LABEL },
+                        kbps = v.optInt("kbps", 0)
+                    )
+                }
+            }.orEmpty()
             Station(
                 id = o.getString("id"),
                 name = o.getString("name"),
                 genre = o.optString("genre", "Z sieci"),
                 stream = o.getString("stream"),
+                streams = variants,
                 logoUrl = o.optString("logoUrl").ifBlank { null },
                 source = Station.Source.DISCOVERED
             )
@@ -275,6 +293,64 @@ class Prefs(context: Context) {
         sp.edit { putStringSet(KEY_HIDDEN, value) }
         _hidden.value = value
     }
+
+    /**
+     * Wybrany wariant strumienia dla stacji. Brak wpisu = bierzemy najlepszy,
+     * jaki stacja oferuje. Zapisujemy adres, a nie numer pozycji - lista
+     * wariantow moze sie zmienic przy aktualizacji aplikacji.
+     */
+    fun selectedStream(stationId: String): String? =
+        sp.getString(KEY_STREAM_PREFIX + stationId, null)
+
+    fun setSelectedStream(stationId: String, url: String?) = sp.edit {
+        if (url == null) remove(KEY_STREAM_PREFIX + stationId) else putString(KEY_STREAM_PREFIX + stationId, url)
+    }
+
+    /**
+     * Adres wpisany recznie. Ma pierwszenstwo przed wszystkim - takze dla stacji
+     * wbudowanych, ktorych pliku z lista nie da sie edytowac.
+     */
+    fun customStream(stationId: String): String? =
+        sp.getString(KEY_CUSTOM_STREAM_PREFIX + stationId, null)?.takeIf { it.isNotBlank() }
+
+    fun setCustomStream(stationId: String, url: String?) = sp.edit {
+        if (url.isNullOrBlank()) {
+            remove(KEY_CUSTOM_STREAM_PREFIX + stationId)
+        } else {
+            putString(KEY_CUSTOM_STREAM_PREFIX + stationId, url.trim())
+        }
+    }
+
+    /** Wlasne logo wgrane przez uzytkownika - sciezka do pliku w katalogu aplikacji. */
+    fun customLogo(stationId: String): String? =
+        sp.getString(KEY_CUSTOM_LOGO_PREFIX + stationId, null)?.takeIf { it.isNotBlank() }
+
+    fun setCustomLogo(stationId: String, path: String?) = sp.edit {
+        if (path.isNullOrBlank()) {
+            remove(KEY_CUSTOM_LOGO_PREFIX + stationId)
+        } else {
+            putString(KEY_CUSTOM_LOGO_PREFIX + stationId, path)
+        }
+    }
+
+    /**
+     * Ile razy stacja byla wlaczana. Sluzy do sortowania "najczesciej sluchane" -
+     * po kilku tygodniach jazdy to najlepszy porzadek, jaki mozna zaproponowac.
+     */
+    fun playCount(stationId: String): Int = sp.getInt(KEY_PLAYS_PREFIX + stationId, 0)
+
+    fun bumpPlayCount(stationId: String) =
+        sp.edit { putInt(KEY_PLAYS_PREFIX + stationId, playCount(stationId) + 1) }
+
+    /** Porzadek listy stacji, patrz [StationSort]. */
+    var stationSort: StationSort
+        get() = StationSort.at(sp.getInt(KEY_SORT_STATIONS, 0))
+        set(v) = sp.edit { putInt(KEY_SORT_STATIONS, v.ordinal) }
+
+    /** Porzadek wynikow wyszukiwania w katalogu, patrz [DiscoverSort]. */
+    var discoverSort: DiscoverSort
+        get() = DiscoverSort.at(sp.getInt(KEY_SORT_DISCOVER, 0))
+        set(v) = sp.edit { putInt(KEY_SORT_DISCOVER, v.ordinal) }
 
     /** Ostatnio sluchane, najnowsze na poczatku. */
     var recent: List<String>
@@ -346,6 +422,14 @@ class Prefs(context: Context) {
         const val KEY_RECENT = "recent"
         const val KEY_DISCOVERED = "discovered_stations"
         const val KEY_HIDDEN = "hidden_stations"
+        const val KEY_SORT_STATIONS = "sort_stations"
+        const val KEY_SORT_DISCOVER = "sort_discover"
+
+        // Klucze zalezne od stacji - pelny klucz to prefiks plus jej identyfikator
+        private const val KEY_STREAM_PREFIX = "stream_choice_"
+        private const val KEY_CUSTOM_STREAM_PREFIX = "stream_custom_"
+        private const val KEY_CUSTOM_LOGO_PREFIX = "logo_custom_"
+        private const val KEY_PLAYS_PREFIX = "plays_"
         const val KEY_HISTORY_LOCAL = "search_history_local"
         const val KEY_HISTORY_WEB = "search_history_web"
 

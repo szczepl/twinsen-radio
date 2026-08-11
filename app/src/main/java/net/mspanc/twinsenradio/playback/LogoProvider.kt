@@ -81,6 +81,12 @@ class LogoProvider : ContentProvider() {
      * a nazwa pliku zawiera numer zasobu, wiec po przebudowie powstaje nowy plik.
      */
     private fun renderToCache(context: Context, uri: Uri): File? = runCatching {
+        // Wlasna grafika uzytkownika lezy juz gotowa w katalogu aplikacji -
+        // nie ma czego renderowac, wystarczy ja oddac.
+        if (uri.pathSegments.firstOrNull() == "custom") {
+            val path = uri.getQueryParameter(PARAM_PATH) ?: return@runCatching null
+            return@runCatching File(path).takeIf { it.exists() }
+        }
         val resId = uri.getQueryParameter(PARAM_VERSION)?.toIntOrNull()
             ?: R.drawable.logo_placeholder
         val dir = File(context.cacheDir, "logo").apply { mkdirs() }
@@ -102,6 +108,7 @@ class LogoProvider : ContentProvider() {
     companion object {
         private const val TAG = "LogoProvider"
         private const val PARAM_VERSION = "v"
+        private const val PARAM_PATH = "p"
         private const val SIZE = 512
 
         /** Musi zgadzac sie z android:authorities w manifescie. */
@@ -124,6 +131,20 @@ class LogoProvider : ContentProvider() {
          */
         fun iconUri(context: Context, name: String, resId: Int): Uri =
             build(context, "icon", name, resId)
+
+        /**
+         * Grafika wgrana przez uzytkownika. Czas modyfikacji pliku trafia do
+         * adresu, zeby podmiana logo uniewaznila to, co glowica ma w pamieci.
+         */
+        fun customUriFor(context: Context, station: Station, file: File): Uri =
+            Uri.Builder()
+                .scheme("content")
+                .authority(authority(context))
+                .appendPath("custom")
+                .appendPath(station.id)
+                .appendQueryParameter(PARAM_PATH, file.absolutePath)
+                .appendQueryParameter(PARAM_VERSION, file.lastModified().toString())
+                .build()
 
         private fun build(context: Context, kind: String, name: String, resId: Int): Uri =
             Uri.Builder()

@@ -41,13 +41,29 @@ class StationRepository private constructor(private val appContext: Context) {
         // Ukryte pomijamy tu, w jednym miejscu - dzieki temu znikaja wszedzie
         // naraz: na liscie w telefonie, w wyszukiwaniu i w drzewie w aucie.
         val hidden = prefs.hidden
-        return if (hidden.isEmpty()) full else full.filterNot { it.id in hidden }
+        val visible = if (hidden.isEmpty()) full else full.filterNot { it.id in hidden }
+        return sorted(visible.map(::resolve))
+    }
+
+    /**
+     * Porzadek listy. Domyslnie kolejnosc z pliku - ulozona tematycznie i
+     * przemyslana - a na zyczenie alfabetycznie albo wedlug tego, czego
+     * uzytkownik faktycznie slucha.
+     */
+    private fun sorted(stations: List<Station>): List<Station> = when (prefs.stationSort) {
+        StationSort.MOST_PLAYED ->
+            stations.sortedWith(
+                compareByDescending<Station> { prefs.playCount(it.id) }.thenBy { fold(it.name) }
+            )
+        StationSort.NAME -> stations.sortedBy { fold(it.name) }
+        StationSort.GENRE -> stations.sortedWith(compareBy({ fold(it.genre) }, { fold(it.name) }))
+        StationSort.DEFAULT -> stations
     }
 
     /** Pelna lista razem z ukrytymi - potrzebna tylko do ich przywracania. */
     fun allIncludingHidden(): List<Station> {
         if (cache.isEmpty()) cache = builtIn
-        return cache + prefs.discovered
+        return (cache + prefs.discovered).map(::resolve)
     }
 
     fun byId(id: String): Station? = all().firstOrNull { it.id == id }
@@ -98,17 +114,49 @@ class StationRepository private constructor(private val appContext: Context) {
         val arr = JSONArray(json)
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
+            // Stacja podaje albo pojedynczy "stream", albo liste "streams".
+            // Obie postacie sa poprawne - wiekszosc rozglosni ma jeden adres.
+            val variants = o.optJSONArray("streams")?.let { list ->
+                (0 until list.length()).map { j ->
+                    val v = list.getJSONObject(j)
+                    StreamVariant(
+                        url = v.getString("url"),
+                        label = v.optString("label").ifBlank { Station.DEFAULT_LABEL },
+                        kbps = v.optInt("kbps", 0)
+                    )
+                }
+            }.orEmpty()
+
             Station(
                 id = o.getString("id"),
                 name = o.getString("name"),
                 genre = o.optString("genre", "Inne"),
-                stream = o.getString("stream"),
+                stream = variants.firstOrNull()?.url ?: o.getString("stream"),
+                streams = variants,
                 logo = o.optString("logo").ifBlank { null }
             )
         }
     }.getOrElse {
         Log.e(TAG, "Nie udalo sie wczytac stations.json", it)
         emptyList()
+    }
+
+    /**
+     * Podmienia adres na ten, ktorego uzytkownik naprawde ma sluchac.
+     *
+     * Kolejnosc: wlasny adres wpisany recznie, potem wybrany wariant, a gdy
+     * wyboru nie bylo - wariant o najwyzszej przeplywnosci. Dzieki temu reszta
+     * aplikacji (odtwarzacz, Android Auto) dalej widzi zwykle `station.stream`
+     * i nie musi nic wiedziec o wariantach.
+     */
+    private fun resolve(station: Station): Station {
+        prefs.customStream(station.id)?.let { return station.copy(stream = it) }
+        val variants = station.variants()
+        val chosen = prefs.selectedStream(station.id)
+        val variant = variants.firstOrNull { it.url == chosen }
+            ?: variants.maxByOrNull { it.kbps }
+            ?: return station
+        return station.copy(stream = variant.url)
     }
 
     private fun fetchText(url: String): String {

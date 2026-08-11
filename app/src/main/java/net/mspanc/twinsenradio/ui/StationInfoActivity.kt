@@ -5,8 +5,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.LinearLayout
+import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
@@ -42,6 +44,12 @@ class StationInfoActivity : AppCompatActivity() {
         prefs = Prefs(this)
 
         b.toolbar.setNavigationOnClickListener { finish() }
+        // Wlasny adres zapisujemy przy wyjsciu - osobny przycisk "zapisz" przy
+        // jednym polu bylby tylko dodatkowym klikiem.
+        onBackPressedDispatcher.addCallback(this) {
+            saveCustomStream()
+            finish()
+        }
 
         val name = intent.getStringExtra(EXTRA_NAME).orEmpty()
         val stream = intent.getStringExtra(EXTRA_STREAM).orEmpty()
@@ -73,10 +81,11 @@ class StationInfoActivity : AppCompatActivity() {
             .filter { it.isNotBlank() }
             .joinToString(" · ")
 
+        val metadata = MetadataFactory(this, prefs)
         ArtworkLoader.into(
             lifecycleScope,
-            station.logoUrl?.let { Uri.parse(it) },
-            MetadataFactory(this, prefs).logoResId(station),
+            metadata.logoDisplayUri(station),
+            metadata.logoResId(station),
             b.logo
         )
 
@@ -109,6 +118,9 @@ class StationInfoActivity : AppCompatActivity() {
         addDetail(R.string.info_stream, station.stream)
 
         b.btnProbe.setOnClickListener { probe() }
+        renderStreams()
+        b.customStream.setText(prefs.customStream(station.id).orEmpty())
+        b.btnLogo.setOnClickListener { pickLogo.launch("image/*") }
 
         val homepage = intent.getStringExtra(EXTRA_HOMEPAGE)
         if (!homepage.isNullOrBlank()) {
@@ -126,6 +138,86 @@ class StationInfoActivity : AppCompatActivity() {
             renderFavourite()
         }
         renderToggle()
+    }
+
+    /**
+     * Warianty strumienia jako lista wyboru.
+     *
+     * Zaznaczony jest ten, ktory faktycznie poleci do odtwarzacza - czyli wybor
+     * uzytkownika, a gdy go nie bylo, wariant o najwyzszej przeplywnosci.
+     */
+    private fun renderStreams() {
+        val variants = station.variants()
+        val chosen = prefs.selectedStream(station.id)
+            ?: variants.maxByOrNull { it.kbps }?.url
+        b.streamGroup.removeAllViews()
+        variants.forEachIndexed { index, variant ->
+            val button = RadioButton(this).apply {
+                id = index + 1
+                text = variant.label
+                isChecked = variant.url == chosen
+                setOnClickListener {
+                    prefs.setSelectedStream(station.id, variant.url)
+                    Toast.makeText(context, R.string.info_saved, Toast.LENGTH_SHORT).show()
+                }
+            }
+            b.streamGroup.addView(button)
+        }
+    }
+
+    /**
+     * Wlasne logo z galerii. Kopiujemy plik do katalogu aplikacji, bo adres
+     * wybrany przez systemowy wybierak traci wazoosc po zamknieciu ekranu,
+     * a grafika ma byc dostepna takze dla Android Auto, z innego procesu.
+     */
+    private val pickLogo = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val saved = runCatching {
+            val dir = java.io.File(filesDir, "logo-custom").apply { mkdirs() }
+            val file = java.io.File(dir, "${station.id}.png")
+            contentResolver.openInputStream(uri)?.use { input ->
+                val bitmap = android.graphics.BitmapFactory.decodeStream(input)
+                    ?: return@runCatching null
+                // 1024 px to ten sam rozmiar, co nasze wlasne logotypy - na HDU
+                // widac roznice miedzy ostrym a rozmytym kafelkiem.
+                val side = maxOf(bitmap.width, bitmap.height).coerceAtMost(1024)
+                val square = android.graphics.Bitmap.createBitmap(
+                    side, side, android.graphics.Bitmap.Config.ARGB_8888
+                )
+                android.graphics.Canvas(square).apply {
+                    drawColor(android.graphics.Color.WHITE)
+                    val scale = minOf(side.toFloat() / bitmap.width, side.toFloat() / bitmap.height)
+                    val w = bitmap.width * scale
+                    val h = bitmap.height * scale
+                    drawBitmap(
+                        bitmap,
+                        null,
+                        android.graphics.RectF(
+                            (side - w) / 2, (side - h) / 2, (side + w) / 2, (side + h) / 2
+                        ),
+                        null
+                    )
+                }
+                file.outputStream().use { out ->
+                    square.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                }
+                file.absolutePath
+            }
+        }.getOrNull()
+
+        if (saved != null) {
+            prefs.setCustomLogo(station.id, saved)
+            ArtworkLoader.into(
+                lifecycleScope,
+                Uri.fromFile(java.io.File(saved)),
+                MetadataFactory(this, prefs).logoResId(station),
+                b.logo
+            )
+            Toast.makeText(this, R.string.info_logo_changed, Toast.LENGTH_SHORT).show()
+            setResult(RESULT_OK, Intent().putExtra(RESULT_CHANGED, true))
+        }
     }
 
     /**
@@ -228,6 +320,18 @@ class StationInfoActivity : AppCompatActivity() {
         )
         b.favourite.contentDescription =
             getString(if (fav) R.string.fav_remove else R.string.fav_add)
+    }
+
+    override fun onPause() {
+        saveCustomStream()
+        super.onPause()
+    }
+
+    private fun saveCustomStream() {
+        if (!this::station.isInitialized) return
+        val typed = b.customStream.text?.toString()?.trim()
+        if (typed == prefs.customStream(station.id).orEmpty()) return
+        prefs.setCustomStream(station.id, typed)
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()

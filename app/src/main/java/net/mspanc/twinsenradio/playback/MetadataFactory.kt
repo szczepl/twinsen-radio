@@ -252,9 +252,22 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
      * miedzy wersjami, a Android Auto cache'uje grafike po adresie.
      */
     fun logoUri(station: Station): Uri {
+        // Wlasna grafika uzytkownika bije wszystko inne
+        customLogoFile(station)?.let { return LogoProvider.customUriFor(context, station, it) }
         station.logoUrl?.let { return Uri.parse(it) }
         return LogoProvider.uriFor(context, station, logoResId(station))
     }
+
+    /**
+     * Adres logo do pokazania na telefonie. Inaczej niz [logoUri] moze zwrocic
+     * `file://` - lokalne ekrany czytaja plik wprost, bez posrednika.
+     */
+    fun logoDisplayUri(station: Station): Uri? =
+        customLogoFile(station)?.let { Uri.fromFile(it) }
+            ?: station.logoUrl?.let { Uri.parse(it) }
+
+    private fun customLogoFile(station: Station): java.io.File? =
+        prefs.customLogo(station.id)?.let { java.io.File(it) }?.takeIf { it.exists() }
 
     fun logoResId(station: Station): Int {
         val name = station.logo ?: return R.drawable.logo_placeholder

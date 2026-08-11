@@ -23,6 +23,7 @@
     <string name="discover_added_header">Twoje stacje dodane z sieci (%1$d)</string>
     <string name="discover_added_hint">Stuknij, żeby zobaczyć szczegóły. Przycisk obok usuwa z listy.</string>
     <string name="discover_recent">Ostatnie wyszukiwania</string>
+    <string name="sort_title">Sortowanie</string>
     <string name="discover_empty">Nie masz jeszcze żadnych stacji z sieci.</string>
     <string name="discover_searching">Szukam…</string>
 
@@ -35,6 +36,13 @@
     <string name="info_votes">Głosy w katalogu</string>
     <string name="info_stream">Adres strumienia</string>
     <string name="info_homepage">Strona stacji</string>
+    <string name="info_streams">Strumień</string>
+    <string name="info_streams_note">Domyślnie gra wariant o najwyższej jakości. Wybór jest zapamiętywany dla tej stacji.</string>
+    <string name="info_custom_stream">Własny adres strumienia</string>
+    <string name="info_custom_stream_note">Wpisany tutaj adres ma pierwszeństwo przed powyższymi — działa też dla stacji wbudowanych. Puste pole przywraca wybór z listy.</string>
+    <string name="info_change_logo">Zmień logo stacji…</string>
+    <string name="info_logo_changed">Logo zmienione</string>
+    <string name="info_saved">Zapisano</string>
     <string name="info_probe">Sprawdź, czy strumień działa</string>
     <string name="info_probing">Sprawdzam…</string>
     <string name="info_probe_ok">Działa — %1$s</string>

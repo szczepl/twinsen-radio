@@ -23,6 +23,7 @@ import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StationRepository
+import net.mspanc.twinsenradio.data.StationSort
 import net.mspanc.twinsenradio.databinding.ActivityMainBinding
 import net.mspanc.twinsenradio.playback.MetadataFactory
 import net.mspanc.twinsenradio.playback.PlaybackStatusBus
@@ -166,11 +167,30 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
             true
         }
+        R.id.action_sort -> {
+            showSortDialog()
+            true
+        }
         R.id.action_discover -> {
             startActivity(Intent(this, DiscoverActivity::class.java))
             true
         }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    /**
+     * Wybor porzadku listy. Zapamietywany, wiec wystarczy ustawic raz.
+     */
+    private fun showSortDialog() {
+        val options = StationSort.LABELS.toTypedArray()
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.sort_title)
+            .setSingleChoiceItems(options, prefs.stationSort.ordinal) { dialog, which ->
+                prefs.stationSort = StationSort.at(which)
+                refreshList()
+                dialog.dismiss()
+            }
+            .show()
     }
 
     /**
@@ -220,7 +240,7 @@ class MainActivity : AppCompatActivity() {
     private fun showLogo(station: Station, view: android.widget.ImageView) {
         ArtworkLoader.into(
             lifecycleScope,
-            station.logoUrl?.let { android.net.Uri.parse(it) },
+            metadata.logoDisplayUri(station),
             metadata.logoResId(station),
             view
         )

@@ -88,15 +88,31 @@ object RadioBrowser {
             tags?.split(',')?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
         ).joinToString(" · ")
 
-        fun toStation(): Station = Station(
-            id = "$DISCOVERED_PREFIX$uuid",
-            name = name,
-            genre = tags?.split(',')?.firstOrNull()?.trim()?.replaceFirstChar { it.uppercase() }
-                ?.takeIf { it.isNotBlank() } ?: "Z sieci",
-            stream = stream,
-            logoUrl = faviconUrl,
-            source = Station.Source.DISCOVERED
-        )
+        /**
+         * Pozostale adresy tej samej stacji, znalezione w katalogu pod ta sama
+         * nazwa. Uzupelniane przy scalaniu wynikow - patrz [merge].
+         */
+        var alternates: List<StreamVariant> = emptyList()
+
+        fun toStation(): Station {
+            val own = StreamVariant(stream, variantLabel(), bitrate)
+            return Station(
+                id = "$DISCOVERED_PREFIX$uuid",
+                name = name,
+                genre = tags?.split(',')?.firstOrNull()?.trim()?.replaceFirstChar { it.uppercase() }
+                    ?.takeIf { it.isNotBlank() } ?: "Z sieci",
+                stream = stream,
+                streams = (listOf(own) + alternates).sortedByDescending { it.kbps },
+                logoUrl = faviconUrl,
+                source = Station.Source.DISCOVERED
+            )
+        }
+
+        /** np. "MP3 128 kb/s". Katalog nie daje etykiet, wiec skladamy je sami. */
+        fun variantLabel(): String = listOfNotNull(
+            codec?.takeIf { it.isNotBlank() && !it.equals("UNKNOWN", true) }?.uppercase(),
+            bitrate.takeIf { it > 0 }?.let { "$it kb/s" }
+        ).joinToString(" ").ifBlank { Station.DEFAULT_LABEL }
     }
 
     /**
@@ -122,16 +138,38 @@ object RadioBrowser {
         emptyList()
     }
 
+    /**
+     * Scala pozycje, ktore sa ta sama stacja nadajaca pod kilkoma adresami.
+     *
+     * Katalog trzyma kazdy strumien jako osobny wpis, wiec "Jazz Radio" potrafi
+     * wystapic cztery razy - raz w MP3 128, raz w AAC 64 i tak dalej. Zamiast
+     * zasypywac uzytkownika powtorkami, zostawiamy jedna pozycje (ta o najlepszej
+     * przeplywnosci) i doklejamy reszte jako warianty do wyboru.
+     */
+    private fun merge(found: List<Found>): List<Found> {
+        val groups = LinkedHashMap<String, MutableList<Found>>()
+        found.forEach { f ->
+            val key = f.name.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "") + "|" + f.country
+            groups.getOrPut(key) { mutableListOf() }.add(f)
+        }
+        return groups.values.map { group ->
+            val best = group.maxByOrNull { it.bitrate } ?: group.first()
+            best.alternates = group.filter { it !== best }
+                .map { StreamVariant(it.stream, it.variantLabel(), it.bitrate) }
+            best
+        }
+    }
+
     private fun parse(body: String): List<Found> {
         val arr = JSONArray(body)
         val seen = HashSet<String>()
-        return (0 until arr.length()).mapNotNull { i ->
+        val found = (0 until arr.length()).mapNotNull { i ->
             val o = arr.getJSONObject(i)
             val stream = o.optString("url_resolved").ifBlank { o.optString("url") }
             val name = o.optString("name").trim()
             if (stream.isBlank() || name.isBlank()) return@mapNotNull null
-            // Ten sam strumien bywa w katalogu pod kilkoma nazwami - pokazywanie
-            // czterech wariantow tej samej stacji tylko utrudnia wybor.
+            // Ten sam ADRES nie ma po co wystepowac dwa razy; rozne adresy tej
+            // samej stacji scala dopiero merge() ponizej.
             if (!seen.add(stream)) return@mapNotNull null
             Found(
                 uuid = o.optString("stationuuid").ifBlank { stream.hashCode().toString() },
@@ -149,6 +187,7 @@ object RadioBrowser {
                 lastCheckOk = o.optString("lastcheckoktime").ifBlank { null }
             )
         }
+        return merge(found)
     }
 
     private fun get(url: String): String {

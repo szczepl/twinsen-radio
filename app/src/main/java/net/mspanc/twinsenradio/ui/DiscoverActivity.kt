@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.R
+import net.mspanc.twinsenradio.data.DiscoverSort
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.RadioBrowser
 import net.mspanc.twinsenradio.data.Station
@@ -70,6 +71,15 @@ class DiscoverActivity : AppCompatActivity() {
         metadata = MetadataFactory(this, prefs)
 
         b.toolbar.setNavigationOnClickListener { goBack() }
+        b.toolbar.inflateMenu(R.menu.discover)
+        b.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_sort) {
+                showSortDialog()
+                true
+            } else {
+                false
+            }
+        }
 
         // Cofniecie z wynikami na ekranie wraca najpierw do stanu wyjsciowego -
         // paska wyszukiwania, ostatnich zapytan i wlasnej listy - a dopiero
@@ -108,6 +118,39 @@ class DiscoverActivity : AppCompatActivity() {
         super.onResume()
         // Wracamy ze szczegolow - stan przyciskow mogl sie tam zmienic.
         adapter.notifyItemRangeChanged(0, adapter.itemCount)
+    }
+
+    /**
+     * Porzadek wynikow. Katalog oddaje je wedlug liczby glosow i to zostaje
+     * domyslne - najlepiej odsiewa pozycje martwe i przypadkowe.
+     */
+    private fun sortResults(found: List<RadioBrowser.Found>): List<RadioBrowser.Found> =
+        when (prefs.discoverSort) {
+            DiscoverSort.POPULARITY -> found
+            DiscoverSort.NAME -> found.sortedBy { it.name.lowercase() }
+            DiscoverSort.BITRATE -> found.sortedByDescending { it.bitrate }
+            DiscoverSort.COUNTRY ->
+                found.sortedWith(compareBy({ it.country.orEmpty() }, { it.name.lowercase() }))
+        }
+
+    private fun showSortDialog() {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.sort_title)
+            .setSingleChoiceItems(
+                DiscoverSort.LABELS.toTypedArray(),
+                prefs.discoverSort.ordinal
+            ) { dialog, which ->
+                prefs.discoverSort = DiscoverSort.at(which)
+                dialog.dismiss()
+                // Sortujemy to, co juz mamy - bez ponownego pytania katalogu
+                if (lastResults.isNotEmpty()) {
+                    lastResults = sortResults(lastResults)
+                    adapter.submitList(lastResults.map { it.toStation() }) {
+                        b.list.scrollToPosition(0)
+                    }
+                }
+            }
+            .show()
     }
 
     private fun goBack() {
@@ -202,7 +245,7 @@ class DiscoverActivity : AppCompatActivity() {
         searchJob = lifecycleScope.launch {
             delay(400)
             b.hint.setText(R.string.discover_searching)
-            val found = RadioBrowser.search(query)
+            val found = sortResults(RadioBrowser.search(query))
             lastResults = found
             adapter.submitList(found.map { it.toStation() }) { b.list.scrollToPosition(0) }
             b.hint.text = if (found.isEmpty()) {

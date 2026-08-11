@@ -34,6 +34,18 @@ object ArtworkLoader {
         fallbackRes: Int,
         target: ImageView
     ) {
+        // Wlasne logo uzytkownika lezy w katalogu aplikacji - czytamy je wprost,
+        // bez pobierania i bez cache po adresie.
+        if (uri?.scheme == "file") {
+            val bitmap = runCatching { BitmapFactory.decodeFile(uri.path) }.getOrNull()
+            if (bitmap != null) {
+                target.setImageBitmap(bitmap)
+            } else {
+                target.setImageResource(fallbackRes)
+            }
+            return
+        }
+
         val url = uri?.takeIf { it.scheme == "http" || it.scheme == "https" }?.toString()
         if (url == null) {
             target.setImageResource(fallbackRes)

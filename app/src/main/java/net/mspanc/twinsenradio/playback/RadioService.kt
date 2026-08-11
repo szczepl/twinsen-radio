@@ -276,7 +276,13 @@ class RadioService : MediaLibraryService() {
             PlaybackStatusBus.setQuality(null)
             val id = mediaItem?.mediaId?.let { Station.idFromMediaId(it) }
             PlaybackStatusBus.setStation(id)
-            id?.let { prefs.pushRecent(it) }
+            id?.let {
+                prefs.pushRecent(it)
+                // Licznik wlaczen - jedyne sensowne zrodlo dla porzadku
+                // "najczesciej sluchane", ktory po kilku tygodniach jazdy
+                // uklada liste lepiej niz cokolwiek, co wymyslimy z gory.
+                prefs.bumpPlayCount(it)
+            }
 
             // Gwiazdka dotyczy konkretnej stacji, wiec przy zmianie trzeba zbudowac
             // uklad przyciskow na nowo. Bez tego po wejsciu w stacje pokazywala stan

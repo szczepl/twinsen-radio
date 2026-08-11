@@ -8,6 +8,10 @@
         app:iconTint="@color/on_brand"
         app:showAsAction="always" />
     <item
+        android:id="@+id/action_sort"
+        android:title="@string/sort_title"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_discover"
         android:title="@string/discover_title"
         app:showAsAction="never" />
