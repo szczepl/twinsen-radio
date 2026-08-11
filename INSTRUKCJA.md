@@ -77,11 +77,24 @@ Android Auto domyślnie nie uruchomi aplikacji, której nie ma w Google Play.
 ## 5. Desktop Head Unit
 
 ```powershell
-.\tools\dhu.bat                  # 1280x640 - natywna geometria Discover Pro 9,2"
+.\tools\dhu.bat                  # 1280x720 przy 240 dpi - tak wygląda w Passacie
 .\tools\dhu.bat small            # 800x480  - Composition / Discover Media 8"
-.\tools\dhu.bat 720              # 1280x720, dpi 160
-.\tools\dhu.bat cluster          # + wirtualny Instrument Cluster
+.\tools\dhu.bat 720              # 1280x720 przy 160 dpi - profil porównawczy
+.\tools\dhu.bat log              # dodatkowo okno z podglądem metadanych
+.\tools\dhu.bat ontop            # okno projekcji nad innymi
 ```
+
+Pojawia się **tylko okno projekcji**. Dwa pozostałe zostały wyłączone i nie
+wrócą:
+
+* **Instrument Cluster** — kanał clustera w protokole Android Auto przenosi
+  wyłącznie nawigację (w binarce DHU są tylko komunikaty
+  `INSTRUMENT_CLUSTER_NAVIGATION_*`). To okno **nigdy** nie pokaże tego, co
+  Passat rysuje na AID podczas odtwarzania muzyki — AID renderuje samo auto
+  z pól `MediaMetadata`. Emulatora AID w publicznym SDK nie ma.
+* **Media Playback Status** — było przydatne przy ustalaniu, które pole gdzie
+  trafia. Pomiar w aucie jest zrobiony, a okno dodatkowo czyta UTF-8 jak
+  Latin-1 i psuje polskie znaki. Do podglądu metadanych służy `dhu.bat log`.
 
 ### Cztery rzeczy, bez których to nie ruszy
 
@@ -154,13 +167,6 @@ aplikacji na telefonie:
 
 Pełny ekran aplikacji przerzuca pasek z powrotem na bok. Nasza aplikacja nie ma
 na to wpływu — `CONTENT_STYLE_*` steruje wyłącznie wyglądem list.
-
-### Czego DHU nie pokaże
-
-Kanał Instrument Cluster obsługuje **wyłącznie nawigację** (w binarce DHU są
-tylko komunikaty `INSTRUMENT_CLUSTER_NAVIGATION_*`). Kafelka muzyki na zegarach
-nie da się podejrzeć na biurku — rysuje go auto. To jedyna rzecz, po którą
-trzeba pojechać.
 
 ---
 
