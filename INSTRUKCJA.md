@@ -6,25 +6,35 @@ telefonu są oznaczone **pacnij**.
 
 ---
 
-## 1. Środowisko na tym Windowsie
+## 1. Wymagane środowisko
 
-| Składnik | Ścieżka | Wersja |
+Narzędzia w `tools/` (`install.ps1`, `dhu.bat` itd.) to skrypty PowerShell,
+pisane pod Windows. Sam projekt to zwykła aplikacja Gradle/Kotlin — na
+Linuksie/macOS zbudujesz ją przez `./gradlew assembleDebug` i wgrasz `adb
+install`, bez skryptów pomocniczych.
+
+| Składnik | Wymagana wersja | Przykładowa ścieżka (Windows) |
 |---|---|---|
-| JDK (Temurin) | `C:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot` | 17.0.20 |
-| Android SDK | `C:\Android\Sdk` | platform 35 i 36 |
-| build-tools | `C:\Android\Sdk\build-tools\36.1.0` | 36.1.0 (tu jest `aapt2.exe`) |
-| platform-tools (`adb`) | `C:\Android\Sdk\platform-tools` | 37.0.1 |
-| Desktop Head Unit | `C:\Android\Sdk\extras\google\auto` | **2.1** (2022-12-15) |
-| Gradle | pobierany przez wrapper | 8.14.3 |
+| JDK | **17** (Temurin/Adoptium poleca się jako sprawdzony) | `C:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot` |
+| Android SDK | platform **35 i 36** | `C:\Android\Sdk` |
+| build-tools | **36.1.0** (tu jest `aapt2.exe`) | `C:\Android\Sdk\build-tools\36.1.0` |
+| platform-tools (`adb`) | dowolna aktualna | `C:\Android\Sdk\platform-tools` |
+| Desktop Head Unit *(opcjonalnie — do testów bez auta)* | **2.1** (2022-12-15) | `C:\Android\Sdk\extras\google\auto` |
+| Gradle | pobierany przez wrapper, nic nie instalujesz | 8.14.3 |
 
-Kotlin (2.2.21) i AGP (8.13.2) ściąga Gradle. DHU 2.1 nie ma w domyślnym
-listingu `sdkmanager` — siedzi w kanale preview:
+Ścieżki w prawej kolumnie to tylko przykład z maszyny autora — zainstaluj SDK
+gdziekolwiek Ci wygodnie i podmień je w swoich poleceniach. Kotlin (2.2.21) i
+Android Gradle Plugin (8.13.2) doinstaluje sam Gradle przy pierwszym
+budowaniu. DHU 2.1 nie ma w domyślnym listingu `sdkmanager` — siedzi w kanale
+preview:
 
 ```powershell
 sdkmanager --sdk_root=C:\Android\Sdk --channel=3 "extras;google;auto"
 ```
 
-Telefon testowy: **Galaxy S20+ (SM-G986B)**, Android 13.
+**Telefon:** dowolny z Androidem 8.0+ (`minSdk 26`) i zainstalowaną aplikacją
+Android Auto. Testowane realnie na Galaxy S20+ (SM-G986B), Android 13 — nic w
+kodzie nie zakłada tego konkretnego modelu.
 
 ---
 

@@ -15,7 +15,9 @@ iteracji: **rozpoznać, które pola `MediaMetadata` trafiają na trzy linie AID*
 stąd tryb diagnostyczny, w którym każde pole zawiera swoją nazwę zamiast
 wartości.
 
-Repozytorium jest prywatne: `github.com/szczepl/twinsen-radio`, gałąź `main`.
+Repozytorium jest publiczne (open source, GPLv3): `github.com/szczepl/twinsen-radio`,
+gałąź `main`. Nie ma automatycznych publikacji do Google Play — to build-it-yourself,
+patrz [README.md](README.md).
 
 ---
 

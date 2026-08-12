@@ -7,3 +7,8 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Klucze podpisywania - nigdy nie trafiaja do repo, nawet wlasne testowe
+*.jks
+*.keystore
+keystore.properties
