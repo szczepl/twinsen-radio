@@ -16,6 +16,20 @@ to the license.
 
 ---
 
+## In the car
+
+Real photos of the Active Info Display in a VW Passat B8, not mockups.
+
+<table>
+<tr>
+<td><img src="docs/screenshots/aid-rmf-cover-art.png" width="260" alt="AID showing RMF FM with track cover art, artist and title"></td>
+<td><img src="docs/screenshots/aid-clock-face.png" width="260" alt="AID showing an analog clock in place of cover art, with the station's own slogan"></td>
+<td><img src="docs/screenshots/aid-artist-title.png" width="260" alt="AID showing station name and an artist — title line, no cover art"></td>
+</tr>
+</table>
+
+---
+
 ## Why this project exists
 
 Because the developers of existing radio apps either just ignored me or decided
