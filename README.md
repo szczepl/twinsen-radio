@@ -36,6 +36,11 @@ Because the developers of existing radio apps either just ignored me or decided
 that mapping their data to Android Auto's metadata fields wasn't worth their
 time — even though their apps are paid. This one isn't.
 
+There's a second reason: starting with the 2020 model year, VW decided the
+Passat's Active Info Display would no longer show a clock — a decision the
+owner community was not quiet about. This app puts one back, digital or
+analog, in place of the cover art whenever you want it.
+
 ---
 
 ## How this was actually built
