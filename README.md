@@ -24,6 +24,20 @@ time — even though their apps are paid. This one isn't.
 
 ---
 
+## How this was actually built
+
+The entire codebase was written by [Claude Code](https://claude.com/claude-code)
+— I don't know Kotlin, Java, or Android development. I drove this by describing
+what I wanted, testing it in a real car, and reporting back what was wrong.
+
+That has a consequence for you as a user or a fork-er: if you hit a bug, I
+can't necessarily explain the code to you. If you can fix it yourself, please
+do — pull requests welcome. If you can't, open a GitHub issue and I'll take a
+look, but debugging turnaround depends on me finding time to sit in the car
+again.
+
+---
+
 ## Documentation
 
 | File | What it covers |
