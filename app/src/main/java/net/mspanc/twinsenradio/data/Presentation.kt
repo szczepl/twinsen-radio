@@ -68,7 +68,7 @@ enum class Line(val label: String, val hint: String) {
 
 /** Whether a clock replaces the artwork, and if so, in what form. */
 enum class ClockFace(val label: String) {
-    NONE("Okładka utworu albo logo stacji"),
+    NONE("Okładka płyty / logo stacji"),
     DIGITAL("Zegar cyfrowy"),
     ANALOG("Zegar analogowy");
 

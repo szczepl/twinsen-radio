@@ -715,9 +715,23 @@ class RadioService : MediaLibraryService() {
         else -> emptyList()
     }
 
-    /** Buttons in the Android Auto player template. */
+    /**
+     * Buttons in the Android Auto player template - the same set also shows up
+     * in the phone's playback notification, since both read the session's
+     * custom layout.
+     *
+     * The diagnostic toggle only appears once diagnostic mode is actually on -
+     * it's a developer convenience for turning it back off without leaving the
+     * car screen or the notification, not the way to turn it on in the first
+     * place (that's the switch in Options). Showing it all the time, for
+     * everyone, made no sense for a mode that's off by default.
+     */
     private fun customLayout(): ImmutableList<CommandButton> =
-        ImmutableList.of(favouriteButton(), diagnosticButton())
+        if (prefs.diagnosticMode) {
+            ImmutableList.of(favouriteButton(), diagnosticButton())
+        } else {
+            ImmutableList.of(favouriteButton())
+        }
 
     /**
      * The favourites star. Without it, a station playing in the car couldn't
