@@ -28,9 +28,9 @@ time — even though their apps are paid. This one isn't.
 
 | File | What it covers |
 |---|---|
-| [INSTRUKCJA.md](INSTRUKCJA.md) | How to build it, install it, and run it. Procedures, gotchas, troubleshooting. |
-| [KONCEPCJA.md](KONCEPCJA.md) | How it's built and **why**. Architecture and the reasoning behind decisions. |
-| [BADANIA.md](BADANIA.md) | What we determined experimentally: which field ends up where, how stations behave, icon mapping in DHU. |
+| [BUILD.md](BUILD.md) | How to build it, install it, and run it. Procedures, gotchas, troubleshooting. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How it's built and **why**. Architecture and the reasoning behind decisions. |
+| [FINDINGS.md](FINDINGS.md) | What we determined experimentally: which field ends up where, how stations behave, icon mapping in DHU. |
 | [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | Full list of libraries and network services the app uses. |
 | [CLAUDE.md](CLAUDE.md) | Briefing for a new Claude Code session. Start there if you're returning to the project after a break. |
 
@@ -57,7 +57,7 @@ time — even though their apps are paid. This one isn't.
 * Resuming after reconnect goes back to the **last station played**.
 * Stream quality (codec, bitrate) shown and selectable on the playback screen.
 * **Measured in the car:** the Active Info Display reads the `subtitle`,
-  `description`, and `displayTitle` fields — see [BADANIA.md](BADANIA.md). What
+  `description`, and `displayTitle` fields — see [FINDINGS.md](FINDINGS.md). What
   content goes into each of the three AID lines is chosen separately in
   Options.
 
@@ -72,7 +72,7 @@ time — even though their apps are paid. This one isn't.
 
 The scripts in `tools/` are written for Windows + PowerShell (that's how the
 author works). On Linux/macOS you'll build and install the same thing manually
-via `./gradlew assembleDebug` and `adb install` — see [INSTRUKCJA.md](INSTRUKCJA.md)
+via `./gradlew assembleDebug` and `adb install` — see [BUILD.md](BUILD.md)
 for exact steps, required JDK/SDK versions, and what needs to be toggled on the
 phone (Android Auto developer mode, USB debugging consent).
 
@@ -140,7 +140,7 @@ app/src/main/java/net/mspanc/twinsenradio/
     └── ArtworkLoader.kt          fetches artwork/logos into an ImageView
 ```
 
-Workshop tooling lives in [tools/](tools/) — documented in [INSTRUKCJA.md](INSTRUKCJA.md).
+Workshop tooling lives in [tools/](tools/) — documented in [BUILD.md](BUILD.md).
 
 ---
 

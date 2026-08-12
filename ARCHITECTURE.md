@@ -1,4 +1,4 @@
-# Concept
+# Architecture
 
 How the app is built and **why, specifically, it's built that way**. Decisions
 that cost us failed attempts along the way have their rationale recorded here —

@@ -1,9 +1,9 @@
 # Briefing for a new session
 
 Read this first. Then, depending on the task:
-[KONCEPCJA.md](KONCEPCJA.md) (why it's built this way),
-[INSTRUKCJA.md](INSTRUKCJA.md) (workshop procedures),
-[BADANIA.md](BADANIA.md) (what's been established experimentally).
+[ARCHITECTURE.md](ARCHITECTURE.md) (why it's built this way),
+[BUILD.md](BUILD.md) (workshop procedures),
+[FINDINGS.md](FINDINGS.md) (what's been established experimentally).
 
 ---
 

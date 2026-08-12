@@ -243,7 +243,7 @@ Android Auto process — you'd also kill the head unit server, which can't be
 restarted from adb.
 
 This won't happen in the car, because the app isn't swapped out there during
-a session. Investigation details: [BADANIA.md](BADANIA.md).
+a session. Investigation details: [FINDINGS.md](FINDINGS.md).
 
 ### DHU: "Waiting for phone…"
 
