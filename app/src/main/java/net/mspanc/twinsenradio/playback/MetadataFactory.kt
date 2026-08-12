@@ -125,7 +125,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             }
 
             // The fields the head unit actually renders. Measured in the Passat
-            // (BADANIA.md): the AID reads subtitle / description / displayTitle,
+            // (FINDINGS.md): the AID reads subtitle / description / displayTitle,
             // the central screen reads displayTitle as the large line and subtitle as the small one.
             b.setSubtitle(top)
                 .setDescription(middle)
@@ -166,9 +166,15 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         LineContent.ARTIST -> if (now?.isRealSong == true) artist else ""
         LineContent.ARTIST_ALBUM ->
             if (now?.isRealSong == true) {
-                composeArtistLine(now, info, prefs.enrichWithAlbum)
+                composeArtistLine(now, info, prefs.enrichWithYear)
             } else {
                 ""
+            }
+        LineContent.TITLE_ALBUM ->
+            if (now?.isRealSong == true) {
+                composeTitleLine(now, info, prefs.enrichWithYear)
+            } else {
+                titleLine(now, title)
             }
         LineContent.TRACK_FULL ->
             if (now?.isRealSong == true) {
@@ -351,18 +357,36 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             }
         }
 
+        /**
+         * @param includeYear whether the album gets its year appended, when the
+         *   catalog knows it - see [Prefs.enrichWithYear]. The album itself
+         *   always shows when we have one; this only controls the year suffix.
+         */
         fun composeArtistLine(
             now: NowPlaying,
             info: CoverArtLookup.TrackInfo?,
-            enrich: Boolean
+            includeYear: Boolean
         ): String {
             val artistsOnly = composeArtistOnly(now, info)
-            if (artistsOnly.isBlank() || !enrich || info == null) return artistsOnly
+            if (artistsOnly.isBlank() || info == null) return artistsOnly
 
-            val album = info.albumLabel() ?: return artistsOnly
+            val album = info.albumLabel(includeYear) ?: return artistsOnly
             // We separate the release with a middle dot, not a slash - with several
             // artists separated by slashes there'd be no way to tell them apart from the album.
             return "$artistsOnly · $album"
+        }
+
+        /** Same idea as [composeArtistLine], but for the title instead of the artist. */
+        fun composeTitleLine(
+            now: NowPlaying,
+            info: CoverArtLookup.TrackInfo?,
+            includeYear: Boolean
+        ): String {
+            val titleOnly = displayTitle(now, info)
+            if (titleOnly.isBlank() || info == null) return titleOnly
+
+            val album = info.albumLabel(includeYear) ?: return titleOnly
+            return "$titleOnly · $album"
         }
 
         /** Always a two-digit hour and minute, e.g. "09:07". */

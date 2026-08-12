@@ -4,7 +4,7 @@ package net.mspanc.twinsenradio.data
  * What should appear in each line of the description on the dashboard.
  *
  * The line breakdown comes directly from measurements taken in the Passat
- * (2026-08-11, see BADANIA.md). The Active Info Display reads three metadata
+ * (2026-08-11, see FINDINGS.md). The Active Info Display reads three metadata
  * fields:
  *
  *   top line      <- subtitle
@@ -24,14 +24,26 @@ package net.mspanc.twinsenradio.data
 enum class LineContent(val label: String) {
     TITLE("Tytuł utworu"),
     ARTIST("Wykonawca"),
-    ARTIST_ALBUM("Wykonawca · album [rok]"),
+    ARTIST_ALBUM("Wykonawca · płyta"),
+    TITLE_ALBUM("Tytuł · płyta"),
     TRACK_FULL("Wykonawca — tytuł"),
     STATION("Nazwa stacji"),
     CLOCK("Zegar"),
     EMPTY("Puste");
 
     companion object {
-        val LABELS get() = entries.map { it.label }
+        /**
+         * Labels for the picker. [ARTIST_ALBUM] and [TITLE_ALBUM] append the year
+         * whenever the catalog knows it and the "add year" setting is on - the
+         * suffix here just reflects that current setting, so the list doesn't
+         * silently promise a year it won't show.
+         */
+        fun labels(includeYear: Boolean): List<String> = entries.map {
+            when (it) {
+                ARTIST_ALBUM, TITLE_ALBUM -> it.label + if (includeYear) " (z rokiem)" else " (bez roku)"
+                else -> it.label
+            }
+        }
         fun at(index: Int) = entries.getOrElse(index) { TITLE }
     }
 }

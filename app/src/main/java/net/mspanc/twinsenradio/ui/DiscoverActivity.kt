@@ -285,6 +285,7 @@ class DiscoverActivity : AppCompatActivity() {
     private fun showLogo(station: Station, view: ImageView) {
         ArtworkLoader.into(
             lifecycleScope,
+            null,
             station.logoUrl?.let { android.net.Uri.parse(it) },
             metadata.logoResId(station),
             view

@@ -423,12 +423,24 @@ class RadioService : MediaLibraryService() {
     private fun apply(now: NowPlaying?) {
         now?.slogan?.let { lastSlogan = it }
 
-        // Catalog data belongs to the PREVIOUS track, so we clear it before drawing
-        // anything. Otherwise the new artist briefly shows up glued to the old
-        // record - "Taylor Swift - Black Gold: The Best of Soul Asylum [1992]".
-        // The cover art is cleared by updateCoverArt, also immediately.
-        trackInfo = null
-        PlaybackStatusBus.setTrackInfo(null)
+        // Some stations re-announce the very same song's ICY metadata mid-track
+        // (a periodic StreamTitle repeat, not an actual track change) - the raw
+        // block differs just enough to dodge the fingerprint check in
+        // handleIcyTitle, so we still land here. Comparing against the track the
+        // cover art already belongs to catches that case and skips the
+        // clear-and-relookup cycle, which is what showed up as the station logo
+        // flashing back on for an instant in the middle of a song.
+        val key = if (now?.isRealSong == true) "${now.artist}|${now.songTitle}" else null
+        val sameTrack = key != null && key == coverTrackKey
+
+        if (!sameTrack) {
+            // Catalog data belongs to the PREVIOUS track, so we clear it before drawing
+            // anything. Otherwise the new artist briefly shows up glued to the old
+            // record - "Taylor Swift - Black Gold: The Best of Soul Asylum [1992]".
+            // The cover art is cleared by updateCoverArt, also immediately.
+            trackInfo = null
+            PlaybackStatusBus.setTrackInfo(null)
+        }
 
         PlaybackStatusBus.setNowPlaying(now)
 
@@ -436,7 +448,7 @@ class RadioService : MediaLibraryService() {
         // metadata. The other way around, the car would get a new description
         // with the old artwork - after the song, the studio would come on and
         // "Pion i poziom!" would still show the previous track's cover.
-        updateCoverArt(now)
+        updateCoverArt(now, key, sameTrack)
         refreshCurrentMetadata(force = true, now = now)
         scheduleStaleCheck(now)
     }
@@ -513,7 +525,11 @@ class RadioService : MediaLibraryService() {
      * sends metadata right at connection time, the lookup usually takes
      * ~200 ms and the logo barely has time to appear.
      */
-    private fun updateCoverArt(now: NowPlaying?) {
+    private fun updateCoverArt(now: NowPlaying?, key: String?, sameTrack: Boolean) {
+        // Same track re-announced - we already have its art (or a lookup for it
+        // already in flight), nothing to clear or re-fetch.
+        if (sameTrack) return
+
         val generation = ++coverGeneration
         coverRevertJob?.cancel()
 
@@ -530,15 +546,12 @@ class RadioService : MediaLibraryService() {
             scheduleStaleCheck(PlaybackStatusBus.nowPlaying.value)
         }
 
-        val key = if (now?.isRealSong == true) "${now.artist}|${now.songTitle}" else null
-        if (key != coverTrackKey) {
-            coverTrackKey = key
-            if (coverArtUrl != null) {
-                coverArtUrl = null
-                trackInfo = null
-                PlaybackStatusBus.setCoverArt(null)
-                PlaybackStatusBus.setTrackInfo(null)
-            }
+        coverTrackKey = key
+        if (coverArtUrl != null) {
+            coverArtUrl = null
+            trackInfo = null
+            PlaybackStatusBus.setCoverArt(null)
+            PlaybackStatusBus.setTrackInfo(null)
         }
 
         // An ad or the station's own slogan - nothing to look up in the catalog.

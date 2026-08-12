@@ -41,10 +41,17 @@ class SettingsActivity : AppCompatActivity() {
         // --- dashboard display -------------------------------------------------
         // Labels and hints come from the Line enum, so the row descriptions
         // aren't duplicated in two places.
+        b.swEnrich.isChecked = prefs.enrichWithYear
         bindLine(b.tilLineTop, b.ddLineTop, Line.TOP, prefs.lineTop)
         bindLine(b.tilLineMiddle, b.ddLineMiddle, Line.MIDDLE, prefs.lineMiddle)
         bindLine(b.tilLineBottom, b.ddLineBottom, Line.BOTTOM, prefs.lineBottom)
-        b.swEnrich.isChecked = prefs.enrichWithAlbum
+        // The "· album" options' labels spell out whether they'll carry a year -
+        // keep that in sync with the switch without losing what's already picked.
+        b.swEnrich.setOnCheckedChangeListener { _, checked ->
+            listOf(b.ddLineTop, b.ddLineMiddle, b.ddLineBottom).forEach {
+                bind(it, LineContent.labels(checked), pick(it))
+            }
+        }
 
         // --- artwork -------------------------------------------------------
         bind(b.ddClockFace, ClockFace.LABELS, prefs.clockFace) { updateClockOptionsEnabled(it) }
@@ -104,7 +111,7 @@ class SettingsActivity : AppCompatActivity() {
         layout.hint = line.label
         layout.helperText = line.hint
         layout.isHelperTextEnabled = true
-        bind(dropdown, LineContent.LABELS, selected)
+        bind(dropdown, LineContent.labels(b.swEnrich.isChecked), selected)
     }
 
     private fun pick(dropdown: MaterialAutoCompleteTextView): Int = chosen[dropdown.id] ?: 0
@@ -161,7 +168,7 @@ class SettingsActivity : AppCompatActivity() {
         prefs.lineTop = pick(b.ddLineTop)
         prefs.lineMiddle = pick(b.ddLineMiddle)
         prefs.lineBottom = pick(b.ddLineBottom)
-        prefs.enrichWithAlbum = b.swEnrich.isChecked
+        prefs.enrichWithYear = b.swEnrich.isChecked
 
         prefs.clockFace = pick(b.ddClockFace)
         prefs.clockCoverAlways = b.swClockAlways.isChecked

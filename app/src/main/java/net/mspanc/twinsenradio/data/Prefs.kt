@@ -22,7 +22,7 @@ class Prefs(context: Context) {
      * instead of its value.
      *
      * OFF by default. It was on until we knew which fields the head unit
-     * actually renders - measured on 2026-08-11 (BADANIA.md), so from now on
+     * actually renders - measured on 2026-08-11 (FINDINGS.md), so from now on
      * it's a tool for further experiments, not the default state.
      */
     var diagnosticMode: Boolean
@@ -108,8 +108,12 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_CLOCK_FG, 0)
         set(v) = sp.edit { putInt(KEY_CLOCK_FG, v) }
 
-    /** Whether to enrich the artist line with the release and year from the iTunes catalog. */
-    var enrichWithAlbum: Boolean
+    /**
+     * Whether to append the year to the album in the "artist/title · album"
+     * lines, when the catalog knows it. The album itself always shows when
+     * available - this only controls the year suffix.
+     */
+    var enrichWithYear: Boolean
         get() = sp.getBoolean(KEY_ENRICH_ALBUM, true)
         set(v) = sp.edit { putBoolean(KEY_ENRICH_ALBUM, v) }
 

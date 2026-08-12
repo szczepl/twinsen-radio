@@ -91,6 +91,7 @@ class StationInfoActivity : AppCompatActivity() {
         val metadata = MetadataFactory(this, prefs)
         ArtworkLoader.into(
             lifecycleScope,
+            null,
             metadata.logoDisplayUri(station),
             metadata.logoResId(station),
             b.logo
@@ -219,6 +220,7 @@ class StationInfoActivity : AppCompatActivity() {
             prefs.setCustomLogo(station.id, saved)
             ArtworkLoader.into(
                 lifecycleScope,
+                null,
                 Uri.fromFile(java.io.File(saved)),
                 MetadataFactory(this, prefs).logoResId(station),
                 b.logo

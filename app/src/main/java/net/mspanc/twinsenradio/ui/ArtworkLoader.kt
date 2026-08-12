@@ -14,56 +14,57 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Loads cover art into an ImageView. Deliberately without an external library -
- * there's only one need: fetch a single image over HTTP and show it, with a simple cache.
- *
- * URIs other than http(s) - e.g. android.resource:// from a station's logo - are
- * handled by ImageView itself, so we set them directly as a resource.
+ * Loads cover art (or, failing that, a station logo) into an ImageView.
+ * Deliberately without an external library - there's only one need: fetch a
+ * single image over HTTP and show it, with a simple cache.
  */
 object ArtworkLoader {
 
     private val cache = LruCache<String, Bitmap>(8)
 
     /**
-     * @param uri cover art from session metadata; null or non-HTTP means we
-     *   show [fallbackRes]
+     * @param coverUri track cover art from session metadata; null or non-http(s)
+     *   means we fall through to [logoUri] instead.
+     * @param logoUri the station's own logo - a custom one (file://) is decoded
+     *   immediately and shown as the resting image; a remote one (http(s)) is
+     *   fetched the same way cover art is. This is what's shown whenever there's
+     *   no cover art - previously callers only passed a static resource here,
+     *   so a station with a custom or remote logo but no cover art showed the
+     *   bare placeholder instead of its own logo.
+     * @param fallbackRes shown when there's neither cover art nor any logo.
      */
     fun into(
         scope: LifecycleCoroutineScope,
-        uri: Uri?,
+        coverUri: Uri?,
+        logoUri: Uri?,
         fallbackRes: Int,
         target: ImageView
     ) {
-        // The user's own logo lives in the app's directory - we read it directly,
-        // without downloading and without caching by URL.
-        if (uri?.scheme == "file") {
-            val bitmap = runCatching { BitmapFactory.decodeFile(uri.path) }.getOrNull()
-            if (bitmap != null) {
-                target.setImageBitmap(bitmap)
-            } else {
-                target.setImageResource(fallbackRes)
-            }
-            return
+        // The custom logo lives in the app's directory - decode it right away as
+        // the resting image, without downloading and without caching by URL.
+        val localLogo = logoUri?.takeIf { it.scheme == "file" }
+            ?.let { runCatching { BitmapFactory.decodeFile(it.path) }.getOrNull() }
+        if (localLogo != null) {
+            target.setImageBitmap(localLogo)
+        } else {
+            target.setImageResource(fallbackRes)
         }
 
-        val url = uri?.takeIf { it.scheme == "http" || it.scheme == "https" }?.toString()
-        if (url == null) {
-            target.setImageResource(fallbackRes)
-            return
-        }
+        // Cover art wins when we have one; a remote station logo is the next best
+        // thing to fetch and show instead of the bare placeholder.
+        val url = coverUri?.takeIf { it.scheme == "http" || it.scheme == "https" }?.toString()
+            ?: logoUri?.takeIf { it.scheme == "http" || it.scheme == "https" }?.toString()
+        if (url == null) return
 
         cache.get(url)?.let {
             target.setImageBitmap(it)
             return
         }
 
-        // show the logo until the cover art has downloaded
-        target.setImageResource(fallbackRes)
         target.setTag(TAG_KEY, url)
-
         scope.launch {
             val bitmap = withContext(Dispatchers.IO) { fetch(url) }
-            // the track may have changed in the meantime
+            // the track (or station) may have changed in the meantime
             if (bitmap != null && target.getTag(TAG_KEY) == url) {
                 cache.put(url, bitmap)
                 target.setImageBitmap(bitmap)

@@ -92,8 +92,8 @@
     <string name="opt_hidden_label">Usunięte z listy: %1$s</string>
     <string name="opt_restore_hidden">Przywróć wszystkie</string>
     <string name="opt_restored_toast">Przywrócono ukryte stacje</string>
-    <string name="opt_enrich">Uzupełniaj wykonawcę o album i rok</string>
-    <string name="opt_enrich_sub">Gdy stacja podaje samego wykonawcę, dopisujemy wydawnictwo z katalogu iTunes — np. „Kaeyra / singiel [2024]”. Stacje, które już podają album (RMF: „Wiktoria Kida / Księga”), zostawiamy bez zmian.</string>
+    <string name="opt_enrich">Dodawaj rok do płyty</string>
+    <string name="opt_enrich_sub">Płyta z katalogu iTunes (np. „Księga”) pokazuje się zawsze, gdy jest znana. Ten przełącznik decyduje tylko, czy dopisać do niej rok — np. „Księga [2024]” zamiast „Księga”.</string>
     <string name="ad">Reklama</string>
     <string name="ad_with_length">Reklama · %1$d s</string>
     <string name="opt_presentation">Układ opisu utworu</string>

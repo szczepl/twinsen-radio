@@ -247,6 +247,7 @@ class MainActivity : AppCompatActivity() {
     private fun showLogo(station: Station, view: android.widget.ImageView) {
         ArtworkLoader.into(
             lifecycleScope,
+            null,
             metadata.logoDisplayUri(station),
             metadata.logoResId(station),
             view
@@ -361,6 +362,7 @@ class MainActivity : AppCompatActivity() {
         ArtworkLoader.into(
             lifecycleScope,
             PlaybackStatusBus.coverArtUrl.value?.let { android.net.Uri.parse(it) },
+            station?.let { metadata.logoDisplayUri(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.miniLogo
         )

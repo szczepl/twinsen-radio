@@ -54,14 +54,17 @@ object CoverArtLookup {
         val trackName: String? = null,
         val artistName: String? = null
     ) {
-        /** e.g. "Księga [2024]" or "singiel [2024]" (the literal produced below). */
-        fun albumLabel(): String? {
+        /**
+         * e.g. "Księga [2024]" or "singiel [2024]" (the literal produced below) -
+         * or just "Księga" when [includeYear] is off.
+         */
+        fun albumLabel(includeYear: Boolean = true): String? {
             val name = when {
                 isSingle -> "singiel"
                 !album.isNullOrBlank() -> TextCase.tidy(album)
                 else -> return null
             }
-            return if (year != null) "$name [$year]" else name
+            return if (includeYear && year != null) "$name [$year]" else name
         }
 
         /**

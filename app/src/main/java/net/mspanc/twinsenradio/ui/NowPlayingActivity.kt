@@ -153,7 +153,7 @@ class NowPlayingActivity : AppCompatActivity() {
                 val info = PlaybackStatusBus.trackInfo.value
                 // Artist only - the album goes separately, on its own line below
                 b.songArtist.text = MetadataFactory.composeArtistOnly(now, info)
-                val album = (if (prefs.enrichWithAlbum) info?.albumLabel() else null).orEmpty()
+                val album = info?.albumLabel(prefs.enrichWithYear).orEmpty()
                 b.songAlbum.text = album
                 b.songAlbum.visibility = if (album.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
                 // Same processing as in the car: corrected order and spelling.
@@ -196,6 +196,7 @@ class NowPlayingActivity : AppCompatActivity() {
         ArtworkLoader.into(
             lifecycleScope,
             PlaybackStatusBus.coverArtUrl.value?.let { android.net.Uri.parse(it) },
+            station?.let { metadata.logoDisplayUri(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.art
         )
