@@ -133,7 +133,11 @@ class StationRepository private constructor(private val appContext: Context) {
                 genre = o.optString("genre", "Inne"),
                 stream = variants.firstOrNull()?.url ?: o.getString("stream"),
                 streams = variants,
-                logo = o.optString("logo").ifBlank { null }
+                // "logo" to wbudowany zasob (dla logo_placeholder itp.), "logoUrl"
+                // to zdalna grafika nadawcy - wlasnych logotypow stacji nie
+                // rozdystrybuowujemy w repo, tylko linkujemy do ich serwerow.
+                logo = o.optString("logo").ifBlank { null },
+                logoUrl = o.optString("logoUrl").ifBlank { null }
             )
         }
     }.getOrElse {
