@@ -82,6 +82,13 @@ Australia, Jacaranda FM (RPA).
 Własne stacje dokłada się na dwa sposoby: listą M3U w Opcjach albo wyszukiwarką
 w sieci (menu ⋮ → *Szukaj stacji w sieci*, katalog radio-browser.info).
 
+Domyślne logo każdej wbudowanej stacji to link do grafiki hostowanej przez
+samą stację (patrz [Zastrzeżenia prawne](#zastrzeżenia-prawne)) — czasem więc
+wygląda inaczej, niż byś chciał (inne tło, gorsza jakość, czasem żadne).
+Jeśli wolisz swoją wersję, stuknij w logo na ekranie szczegółów stacji i
+wgraj własny obrazek z telefonu — nadpisuje domyślne, tylko lokalnie u
+Ciebie.
+
 ---
 
 ## Struktura projektu
@@ -134,7 +141,9 @@ Narzędzia warsztatowe są w [tools/](tools/) — opisane w [INSTRUKCJA.md](INST
   grafiki hostowane przez same stacje albo publiczny katalog
   radio-browser.info, analogicznie do tego, jak przeglądarka pokazuje favikonę
   strony. Nazwy i znaki graficzne stacji są własnością ich nadawców; ten
-  projekt nie jest z żadną z nich powiązany ani przez nią sponsorowany.
+  projekt nie jest z żadną z nich powiązany ani przez nią sponsorowany. Chcesz
+  inny wygląd logo dla konkretnej stacji (np. inne tło, wyższa rozdzielczość) —
+  wgraj własny obrazek na ekranie szczegółów stacji, patrz [Stacje](#stacje).
 * **Strumienie audio.** Aplikacja jest cienkim klientem ICY/HLS — łączy się
   wyłącznie z publicznymi adresami strumieni udostępnianymi przez same stacje,
   niczego nie nagrywa ani nie retransmituje. Dostępność, legalność i prawa do

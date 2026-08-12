@@ -165,6 +165,29 @@ adres opisuje **stację**, a nie zasób, więc jest stabilny między wersjami.
 Numer zasobu doklejamy jako parametr tylko po to, żeby przy podmianie samej
 grafiki cache unieważnił się dokładnie raz.
 
+### Logo wbudowanych stacji: linki, nie pliki w repo
+
+Do publicznego wydania stacje wbudowane przestały mieć logo jako plik w
+`res/drawable-nodpi` — to były znaki towarowe nadawców, redystrybucja ich w
+publicznym repo/APK to inne ryzyko niż samo linkowanie do strumienia. Zamiast
+tego `stations.json` niesie `logoUrl` wskazujący na grafikę hostowaną przez
+samą stację (favicon/apple-touch-icon jej własnej domeny), a `logoUri()` w
+`MetadataFactory` zwraca ten adres wprost — bez pośrednictwa `LogoProvider`,
+bo to już nie jest zasób pakietu, tylko zwykły `http(s)://`.
+
+`LogoProvider` nadal obsługuje: własne logo wgrane przez użytkownika (patrz
+niżej), `logo_placeholder` i ikony przycisków w Android Auto — tam numer
+zasobu wciąż jest jedynym kanałem dla starszych głowic (§6).
+
+Konsekwencja: wygląd logo zależy teraz od tego, co akurat wystawia strona
+nadawcy — bywa inne tło albo gorsza jakość niż wcześniej bundlowany plik
+(np. Radio Nowy Świat: było przycięte i przekomponowane na czarnym tle
+ręcznie, teraz to bezpośredni link do ich oryginalnego, nieprzyciętego JPG-a
+na białym tle). Kto chce inny wygląd dla konkretnej stacji, wgrywa własny
+obrazek na ekranie jej szczegółów (`StationInfoActivity`, stuknięcie w logo) —
+to nadpisanie trzymane lokalnie w `Prefs`, nie w repo, więc nie ma tego
+problemu prawnego.
+
 ---
 
 ## 6. Ikony przycisków w Android Auto
