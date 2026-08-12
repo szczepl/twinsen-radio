@@ -1,18 +1,19 @@
 package net.mspanc.twinsenradio.playback
 
 /**
- * Mapa "pole metadanych -> polska etykieta". W trybie diagnostycznym kazde pole
- * dostaje wlasnie taka wartosc, dzieki czemu po spojrzeniu na ekran AID / HU
- * widac od razu, ktore pole gdzie ladzi.
+ * Map of "metadata field -> Polish label". In diagnostic mode each field
+ * gets exactly this value, so a glance at the AID / HU screen immediately
+ * shows which field ends up where.
  *
- * Etykiety sa celowo krotkie - na wyswietlaczu miedzy zegarami w Passacie jest
- * malo miejsca i dluzsze napisy zostana przyciete wielokropkiem.
+ * The labels are deliberately short - the display between the gauges in the
+ * Passat has little room, and longer strings get truncated with an ellipsis.
  *
- * Sa tez celowo bez polskich znakow. Sama projekcja Android Auto renderuje
- * diakrytyki poprawnie, ale okno "Media Playback Status" w DHU czyta UTF-8 jak
- * Latin-1 i zamiast "TYT.WYSW" pokazuje "TYT.WYAW". Skoro etykieta ma sluzyc do
- * rozpoznania pola, a nie do typografii, ASCII jest czytelne wszedzie - lacznie
- * z ekranem w desce, o ktorego mozliwosciach nic pewnego nie wiemy.
+ * They are also deliberately free of Polish diacritics. The Android Auto
+ * projection itself renders diacritics correctly, but the "Media Playback
+ * Status" window in DHU reads UTF-8 as if it were Latin-1, so instead of
+ * "TYT.WYSW" it shows "TYT.WYAW". Since the label's job is to identify the
+ * field, not to look pretty, ASCII is readable everywhere - including on the
+ * dashboard screen, whose capabilities we know nothing for certain about.
  */
 object DiagnosticFields {
 
@@ -34,7 +35,7 @@ object DiagnosticFields {
         Field("compilation", "SKLADANKA")
     )
 
-    /** Pola liczbowe dostaja rozpoznawalne, nieprzypadkowe wartosci. */
+    /** Numeric fields get recognizable, non-arbitrary values. */
     const val TRACK_NUMBER = 11
     const val TOTAL_TRACKS = 22
     const val DISC_NUMBER = 3

@@ -27,7 +27,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var b: ActivitySettingsBinding
     private lateinit var prefs: Prefs
 
-    /** Wybrany indeks kazdej listy - MaterialAutoCompleteTextView trzyma tekst, nie pozycje. */
+    /** The selected index of each list - MaterialAutoCompleteTextView holds text, not a position. */
     private val chosen = HashMap<Int, Int>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,15 +38,15 @@ class SettingsActivity : AppCompatActivity() {
 
         b.toolbar.setNavigationOnClickListener { finish() }
 
-        // --- opis na desce ---------------------------------------------------
-        // Etykiety i podpowiedzi biora sie z enuma Line, zeby nie powielac
-        // opisu wierszy w dwoch miejscach.
+        // --- dashboard display -------------------------------------------------
+        // Labels and hints come from the Line enum, so the row descriptions
+        // aren't duplicated in two places.
         bindLine(b.tilLineTop, b.ddLineTop, Line.TOP, prefs.lineTop)
         bindLine(b.tilLineMiddle, b.ddLineMiddle, Line.MIDDLE, prefs.lineMiddle)
         bindLine(b.tilLineBottom, b.ddLineBottom, Line.BOTTOM, prefs.lineBottom)
         b.swEnrich.isChecked = prefs.enrichWithAlbum
 
-        // --- grafika ---------------------------------------------------------
+        // --- artwork -------------------------------------------------------
         bind(b.ddClockFace, ClockFace.LABELS, prefs.clockFace) { updateClockOptionsEnabled(it) }
         b.swClockAlways.isChecked = prefs.clockCoverAlways
         b.swClockAlways.setOnCheckedChangeListener { _, _ ->
@@ -57,13 +57,13 @@ class SettingsActivity : AppCompatActivity() {
         bind(b.ddArtwork, ArtworkMode.LABELS, prefs.artworkMode)
         updateClockOptionsEnabled(prefs.clockFace)
 
-        // --- diagnostyka -----------------------------------------------------
+        // --- diagnostics -----------------------------------------------------
         b.swDiag.isChecked = prefs.diagnosticMode
         b.swDiagApi.isChecked = prefs.diagnosticShowApiName
         b.swDiagApi.setOnCheckedChangeListener { _, _ -> renderLegend() }
         renderLegend()
 
-        // --- reszta ----------------------------------------------------------
+        // --- the rest ----------------------------------------------------------
         bind(b.ddBrowsable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.browsableStyle))
         bind(b.ddPlayable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.playableStyle))
         bind(b.ddBuffer, BufferProfile.ALL.map { it.label }, prefs.bufferProfile)
@@ -74,8 +74,8 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Podpina liste rozwijana. Material trzyma w niej tekst, a nam potrzebny jest
-     * indeks - stad wlasna mapa wybranych pozycji.
+     * Binds a dropdown list. Material holds text in it, but we need the
+     * index - hence our own map of selected positions.
      */
     private fun bind(
         dropdown: MaterialAutoCompleteTextView,
@@ -109,7 +109,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun pick(dropdown: MaterialAutoCompleteTextView): Int = chosen[dropdown.id] ?: 0
 
-    /** Kolory zegara maja sens tylko wtedy, gdy zegar w ogole zastepuje okladke. */
+    /** Clock colors only make sense when the clock actually replaces the cover art. */
     private fun updateClockOptionsEnabled(clockFaceIndex: Int) {
         val usesClock = ClockFace.at(clockFaceIndex) != ClockFace.NONE
         listOf(b.swClockAlways, b.tilClockBg, b.tilClockFg).forEach {
@@ -117,9 +117,9 @@ class SettingsActivity : AppCompatActivity() {
             it.alpha = if (usesClock) 1f else 0.4f
         }
 
-        // Gdy zegar ustepuje miejsca okladce, godzina przenosi sie w srodkowy
-        // wiersz - wybor tresci dla tego wiersza przestaje wtedy cokolwiek
-        // znaczyc, wiec nie udajemy, ze dziala.
+        // When the clock gives way to the cover art, the time moves into the
+        // middle row - the content choice for that row stops meaning anything
+        // then, so we don't pretend it works.
         val middleTakenByClock = usesClock && !b.swClockAlways.isChecked
         b.tilLineMiddle.isEnabled = !middleTakenByClock
         b.tilLineMiddle.alpha = if (middleTakenByClock) 0.4f else 1f
@@ -131,8 +131,8 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Stacje zdjete z listy. Wbudowanych nie da sie skasowac, wiec sa tylko
-     * ukryte - i to jest jedyne miejsce, z ktorego mozna je odzyskac.
+     * Stations removed from the list. Built-in ones can't be deleted, so they're
+     * only hidden - and this is the only place they can be recovered from.
      */
     private fun renderHidden() {
         val repo = StationRepository.get(this)

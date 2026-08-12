@@ -8,21 +8,23 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 /**
- * Trwaly dziennik podlaczen do sesji medialnej.
+ * Persistent log of connections to the media session.
  *
- * Po co: logcat to bufor pierscieniowy - po godzinie jazdy najciekawsze wpisy
- * dawno z niego wypadna. Tutaj zapisujemy na dysk wszystko, co Android Auto
- * powiedzialo nam przy podlaczeniu, zeby dalo sie to odczytac po powrocie.
+ * Why: logcat is a ring buffer - after an hour of driving, the most
+ * interesting entries have long since fallen out of it. Here we write to
+ * disk everything Android Auto told us at connection time, so it can be
+ * read after the fact.
  *
- * Czego tu NIE ma i nie bedzie: tresci handshake'u miedzy Android Auto a
- * odbiornikiem w aucie. Ta rozmowa toczy sie poza nami i zadna aplikacja
- * trzecia jej nie widzi. To, co mamy, to podpowiedzi (root hints), ktore
- * Android Auto przekazuje aplikacjom - a one odbijaja ograniczenia glowicy,
- * na przyklad zadany rozmiar okladki albo limit akcji przy pozycjach listy.
+ * What this deliberately does NOT contain and never will: the content of
+ * the handshake between Android Auto and the receiver in the car. That
+ * conversation happens outside of us and no third-party app can see it.
+ * What we do have are the root hints that Android Auto passes to apps -
+ * and those reflect the head unit's limitations, for example the requested
+ * artwork size or the action limit on list items.
  *
- * Odczyt:
+ * Reading it:
  *   adb shell run-as net.mspanc.twinsenradio cat files/polaczenia.log
- * albo tools\pull-log.ps1
+ * or tools\pull-log.ps1
  */
 object ConnectionLog {
 
@@ -46,8 +48,8 @@ object ConnectionLog {
     }
 
     /**
-     * Podpowiedzi przekazane przy pytaniu o korzen. Tu ladują ograniczenia
-     * glowicy - rozmiar grafiki, limit pozycji, limit akcji.
+     * Hints passed along when the library root is requested. This is where
+     * the head unit's limitations land - artwork size, item limit, action limit.
      */
     fun libraryRoot(context: Context, packageName: String, rootHints: Bundle?) {
         write(context, buildString {
@@ -71,7 +73,7 @@ object ConnectionLog {
     private fun write(context: Context, text: String) {
         runCatching {
             val file = File(context.filesDir, FILE_NAME)
-            // Prosty limit, zeby dziennik nie rosl w nieskonczonosc przez miesiace
+            // A simple cap so the log doesn't grow forever over the months
             if (file.length() > MAX_BYTES) file.writeText("")
             file.appendText("[${LocalDateTime.now().format(STAMP)}] $text")
         }.onFailure { Log.w("ConnectionLog", "nie udalo sie zapisac: ${it.message}") }

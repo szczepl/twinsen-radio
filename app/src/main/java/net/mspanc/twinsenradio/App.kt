@@ -11,8 +11,9 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Listy M3U uzytkownika dociagamy w tle, zeby pierwsze wejscie w Android Auto
-        // nie czekalo na siec - wbudowana lista jest dostepna od razu.
+        // The user's M3U lists are fetched in the background, so the first
+        // entry into Android Auto doesn't wait on the network - the built-in
+        // list is available immediately.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             StationRepository.get(this@App).refreshUserLists()
         }

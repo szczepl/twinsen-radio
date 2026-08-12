@@ -4,16 +4,18 @@ import androidx.media3.common.Format
 import androidx.media3.common.util.UnstableApi
 
 /**
- * Krotki opis tego, co faktycznie plynie ze strumienia - kodek, przeplywnosc,
- * czestotliwosc probkowania i liczba kanalow.
+ * A short description of what's actually coming through the stream - codec,
+ * bitrate, sample rate, and channel count.
  *
- * Dane bierzemy z formatu ustalonego przez dekoder, a nie z opisu stacji: to,
- * co rozglosnia deklaruje w naglowku icy-br, bywa nieaktualne, a przy AAC+
- * potrafi opisywac tylko warstwe bazowa. Przeplywnosc z naglowka sluzy wylacznie
- * jako zapas, gdy dekoder jej nie poda (typowe dla AAC w kontenerze ADTS).
+ * The data is taken from the format the decoder settled on, not from the
+ * station's description: what the station declares in the icy-br header can
+ * be stale, and for AAC+ it may describe only the base layer. The bitrate
+ * from the header is used purely as a fallback, when the decoder doesn't
+ * report one (typical for AAC in an ADTS container).
  *
- * Pokazujemy to tylko na telefonie - w Android Auto nie mamy wlasnego pola,
- * w ktorym daloby sie to napisac, a doklejanie do tytulu psuloby metadane.
+ * We only show this on the phone - in Android Auto we have no field of our
+ * own to write it into, and appending it to the title would corrupt the
+ * metadata.
  */
 @UnstableApi
 data class StreamQuality(
@@ -22,10 +24,11 @@ data class StreamQuality(
     val sampleRateHz: Int,
     val channels: Int
 ) {
-    /** np. "AAC+ · 48 kb/s · 44,1 kHz · stereo". */
+    /** e.g. "AAC+ · 48 kb/s · 44.1 kHz · stereo". */
     /**
-     * Bez czestotliwosci probkowania - ta niewiele mowi, a przeplywnosc
-     * uzytkownik wybiera teraz sam z listy obok. Zostaje kodek i liczba kanalow.
+     * Without the sample rate - it doesn't say much, and the user now picks
+     * the bitrate themselves from the list alongside. What's left is the
+     * codec and channel count.
      */
     fun label(): String = buildList {
         if (codec.isNotBlank()) add(codec)
@@ -43,8 +46,8 @@ data class StreamQuality(
 
     companion object {
         /**
-         * @param icyBitrateKbps przeplywnosc z naglowka icy-br; uzywana tylko
-         *   wtedy, gdy sam format jej nie niesie.
+         * @param icyBitrateKbps bitrate from the icy-br header; used only
+         *   when the format itself doesn't carry one.
          */
         fun of(format: Format, icyBitrateKbps: Int): StreamQuality {
             val bitrate = when {
@@ -57,28 +60,29 @@ data class StreamQuality(
             return StreamQuality(
                 codec = if (sbr) "AAC+" else codecName(format),
                 bitrateKbps = bitrate,
-                // Przy SBR dekoder oddaje dwa razy wiecej, niz deklaruje naglowek
+                // With SBR the decoder reports twice what the header declares
                 sampleRateHz = if (sbr) rate * 2 else rate,
                 channels = format.channelCount.takeIf { it > 0 } ?: 0
             )
         }
 
         /**
-         * Czy to HE-AAC sygnalizowany niejawnie.
+         * Whether this is HE-AAC signaled implicitly.
          *
-         * Przy niejawnej sygnalizacji SBR naglowek ADTS klamie dwa razy: podaje
-         * profil AAC-LC i **polowe** docelowej czestotliwosci, bo gorne pasmo
-         * dokleja dopiero dekoder. Radio Nowy Swiat wyglada wtedy tak:
+         * With implicit SBR signaling, the ADTS header lies twice over: it
+         * reports the AAC-LC profile and **half** the target sample rate,
+         * because the decoder only adds the upper band afterward. Radio Nowy
+         * Swiat looks like this then:
          *
          *     audio/mp4a-latm codecs=mp4a.40.2 sr=22050 ch=2
          *
-         * i bez tej poprawki pokazywalibysmy "AAC 22,1 kHz", czyli wartosc
-         * brzmiaca na duzo gorsza jakosc, niz slychac naprawde.
+         * and without this correction we'd show "AAC 22.1 kHz", a value that
+         * sounds like much worse quality than what's actually being heard.
          *
-         * Rozpoznajemy to po zestawie: profil LC, stereo i czestotliwosc rzedu
-         * 24 kHz lub mniej. Prawdziwy AAC-LC 22 kHz stereo w muzycznym strumieniu
-         * internetowym praktycznie nie wystepuje - taka przeplywnosc idzie dzis
-         * zawsze przez HE-AAC.
+         * We recognize it by the combination: LC profile, stereo, and a
+         * sample rate of around 24 kHz or less. Genuine AAC-LC 22 kHz stereo
+         * practically never occurs in a music internet stream - a bitrate
+         * like that goes through HE-AAC exclusively nowadays.
          */
         private fun looksLikeSbr(format: Format): Boolean {
             val isAac = format.sampleMimeType in setOf("audio/mp4a-latm", "audio/aac", "audio/aacp")
@@ -89,9 +93,10 @@ data class StreamQuality(
         }
 
         /**
-         * Nazwa kodeka w postaci, ktora cos znaczy dla czlowieka. Sam typ MIME
-         * nie wystarcza: AAC-LC, HE-AAC i HE-AACv2 maja ten sam typ i roznia sie
-         * dopiero profilem zapisanym w polu codecs (mp4a.40.<profil>).
+         * The codec name in a form that means something to a human. The MIME
+         * type alone isn't enough: AAC-LC, HE-AAC and HE-AACv2 share the same
+         * type and differ only in the profile recorded in the codecs field
+         * (mp4a.40.<profile>).
          */
         private fun codecName(format: Format): String {
             val profile = format.codecs?.substringAfterLast('.')?.toIntOrNull()

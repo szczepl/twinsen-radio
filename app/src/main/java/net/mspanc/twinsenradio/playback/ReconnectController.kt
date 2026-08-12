@@ -13,19 +13,20 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 
 /**
- * Utrzymuje odtwarzanie przy zyciu, gdy LTE znika w tunelu albo na wsi.
+ * Keeps playback alive when LTE drops in a tunnel or out in the countryside.
  *
- * Zasada: uzytkownik nie ma zobaczyc bledu. Jesli chcial sluchac, to gramy -
- * a jak sie nie da, to czekamy i probujemy dalej. Dwa niezalezne wyzwalacze:
+ * Rule: the user should never see an error. If they wanted to listen, we
+ * play - and if we can't, we wait and keep trying. Two independent triggers:
  *
- *  1. `ConnectivityManager` - gdy telefon odzyska sensowna siec, wznawiamy
- *     natychmiast, bez czekania na kolejny krok backoffu;
- *  2. backoff czasowy - na wypadek gdy siec formalnie jest, ale nadajnik lub
- *     CDN nie odpowiada.
+ *  1. `ConnectivityManager` - when the phone regains a usable network, we
+ *     resume immediately, without waiting for the next backoff step;
+ *  2. a time-based backoff - in case the network is formally up, but the
+ *     transmitter or CDN isn't responding.
  *
- * Wiekszosc przerw obsluguje jeszcze nizej [InfiniteLoadErrorHandlingPolicy] -
- * tam ExoPlayer ponawia pobranie bez zglaszania bledu w ogole. Ten kontroler
- * lapie dopiero to, co sie przez tamto przebilo.
+ * Most interruptions are already handled further down by
+ * [InfiniteLoadErrorHandlingPolicy] - there, ExoPlayer retries the fetch
+ * without ever reporting an error. This controller only catches what slips
+ * through that layer.
  */
 @UnstableApi
 class ReconnectController(
@@ -35,11 +36,12 @@ class ReconnectController(
 ) : Player.Listener {
 
     /**
-     * [STATION_UNREACHABLE] to nie to samo co [RECONNECTING]. Oznacza: siec masz,
-     * probowalismy juz kilka razy i stacja milczy. Zdarza sie, gdy rozglosnia
-     * wycofa serwer, a katalog wciaz podaje stary adres - tak wlasnie bylo
-     * z Triple M Melbourne. Ponawiamy dalej, ale uczciwie mowimy, ze problem
-     * jest po drugiej stronie, a nie z zasiegiem.
+     * [STATION_UNREACHABLE] is not the same as [RECONNECTING]. It means: you have
+     * a network, we've already tried several times, and the station stays
+     * silent. This happens when a broadcaster decommissions a server but the
+     * directory still lists the old address - which is exactly what happened
+     * with Triple M Melbourne. We keep retrying, but we honestly report that
+     * the problem is on the other end, not with signal coverage.
      */
     enum class Status { OK, RECONNECTING, WAITING_FOR_NETWORK, STATION_UNREACHABLE }
 
@@ -73,14 +75,16 @@ class ReconnectController(
     }
 
     /**
-     * Czy jest co ratowac. Celowo NIE pytamy o `status`, tylko o stan odtwarzacza.
+     * Whether there's anything to rescue. We deliberately do NOT check `status`,
+     * only the player's actual state.
      *
-     * Powod: nasza polityka ponawiania jest cicha - ExoPlayer probuje pobrac
-     * strumien w nieskonczonosc i nie zglasza bledu wyzej, wiec `onPlayerError`
-     * moze sie nigdy nie odpalic. Odtwarzacz wisi wtedy w BUFFERING ze statusem
-     * OK, a warunek "status != OK" nie przepuszczal powrotu sieci. Dokladnie tak
-     * zachowuja sie ReplaIO i TuneIn, ktore potrafia wisiec godzine po wyjezdzie
-     * z garazu i dopiero potem zorientowac sie, ze siec wrocila.
+     * Reason: our retry policy is silent - ExoPlayer keeps trying to fetch the
+     * stream indefinitely and never reports an error upward, so `onPlayerError`
+     * may never fire at all. The player then sits stuck in BUFFERING with
+     * status still OK, and the condition "status != OK" never let a returning
+     * network trigger a resume. This is exactly how ReplaIO and TuneIn behave -
+     * they can hang for an hour after you drive out of the garage before they
+     * finally notice the network is back.
      */
     private fun needsRevive(): Boolean =
         player.playWhenReady && player.playbackState != Player.STATE_READY
@@ -111,7 +115,7 @@ class ReconnectController(
     override fun onPlayerError(error: PlaybackException) {
         Log.w(TAG, "Blad odtwarzania: ${error.errorCodeName}", error)
         if (!player.playWhenReady) {
-            // Uzytkownik i tak nie chcial grac - nie ma czego ratowac.
+            // The user didn't want to play anyway - there's nothing to rescue.
             status = Status.OK
             return
         }
@@ -127,16 +131,16 @@ class ReconnectController(
                 cancelStuckCheck()
                 status = Status.OK
             }
-            // Buforowanie samo w sobie jest normalne. Buforowanie, ktore nie
-            // konczy sie przez [STUCK_MS], oznacza, ze cichy ponawiacz nizej
-            // krazy w kolko - wtedy nazywamy rzecz po imieniu i zaczynamy
-            // probowac sami.
+            // Buffering by itself is normal. Buffering that doesn't end
+            // within [STUCK_MS] means the silent retrier below is spinning
+            // in circles - at that point we call it what it is and start
+            // retrying ourselves.
             Player.STATE_BUFFERING -> scheduleStuckCheck()
             else -> cancelStuckCheck()
         }
     }
 
-    // --- wewnetrzne ----------------------------------------------------------
+    // --- internal --------------------------------------------------------------
 
     private fun scheduleRetry() {
         cancelPending()
@@ -157,7 +161,7 @@ class ReconnectController(
             player.prepare()
             player.play()
         }.onFailure { Log.w(TAG, "prepare() nie wyszlo", it) }
-        // Jesli sie nie uda, onPlayerError zaplanuje kolejna probe.
+        // If this fails, onPlayerError will schedule the next attempt.
         scheduleRetry()
     }
 
@@ -185,8 +189,8 @@ class ReconnectController(
     }
 
     /**
-     * Bez sieci czekamy na siec. Z siecia najpierw ponawiamy, a po
-     * [ATTEMPTS_BEFORE_UNREACHABLE] nieudanych probach nazywamy rzecz po imieniu.
+     * Without a network we wait for one. With a network we retry first, and
+     * after [ATTEMPTS_BEFORE_UNREACHABLE] failed attempts we call it what it is.
      */
     private fun currentStatus(): Status = when {
         !hasUsableNetwork() -> Status.WAITING_FOR_NETWORK
@@ -204,15 +208,16 @@ class ReconnectController(
         val BACKOFF_MS = longArrayOf(1_000, 2_000, 4_000, 8_000, 15_000, 30_000)
 
         /**
-         * Po tylu milisekundach nieprzerwanego buforowania uznajemy, ze to nie
-         * jest zwykle napelnianie bufora, tylko brak polaczenia. Wartosc z
-         * zapasem wzgledem najwiekszego profilu bufora (start ~4 s).
+         * After this many milliseconds of uninterrupted buffering we conclude it's
+         * not ordinary buffer filling but a lost connection. The value has margin
+         * above the largest buffer profile's startup time (~4 s).
          */
         const val STUCK_MS = 12_000L
 
         /**
-         * Po tylu nieudanych probach przy dzialajacej sieci przestajemy udawac,
-         * ze to chwilowe. Cztery proby to okolo 15 s narastajacego backoffu.
+         * After this many failed attempts with a working network, we stop
+         * pretending it's temporary. Four attempts amount to about 15 s of
+         * increasing backoff.
          */
         const val ATTEMPTS_BEFORE_UNREACHABLE = 4
     }

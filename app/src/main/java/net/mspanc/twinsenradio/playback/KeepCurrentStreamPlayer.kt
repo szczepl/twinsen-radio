@@ -7,16 +7,16 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 
 /**
- * Nakladka, ktora ignoruje prosbe o wlaczenie stacji, ktora wlasnie gra.
+ * A wrapper that ignores a request to start a station that's already playing.
  *
- * Bez tego wybranie tej samej pozycji z listy - czy to w aplikacji, czy w Android
- * Auto - powodowalo `setMediaItems` + `prepare`, czyli rozlaczenie i ponowne
- * podlaczenie do strumienia. Slychac to jako sekundowa przerwe, a przy radiu na
- * zywo nie ma to zadnego sensu: to ten sam, nieprzerwany strumien.
+ * Without this, selecting the same item from the list - whether in the app or in
+ * Android Auto - triggered `setMediaItems` + `prepare`, i.e. disconnecting and
+ * reconnecting to the stream. That's audible as a second-long gap, and for live
+ * radio it makes no sense at all: it's the same, uninterrupted stream.
  *
- * Nakladka siedzi w warstwie odtwarzacza celowo - dzieki temu obowiazuje tak samo
- * dla telefonu, dla glowicy i dla sterowania glosem, bez powtarzania warunku
- * w kazdym z tych miejsc.
+ * The wrapper lives in the player layer on purpose - that way the guard applies
+ * equally to the phone, the head unit, and voice control, without repeating the
+ * condition in each of those places.
  */
 @UnstableApi
 class KeepCurrentStreamPlayer(player: Player) : ForwardingPlayer(player) {
@@ -56,8 +56,9 @@ class KeepCurrentStreamPlayer(player: Player) : ForwardingPlayer(player) {
     }
 
     /**
-     * Pojedyncza pozycja o tym samym mediaId co grajaca, przy zywym odtwarzaniu.
-     * Stan IDLE albo ENDED oznacza, ze strumien i tak trzeba podniesc od nowa.
+     * A single item with the same mediaId as the one currently playing, with live
+     * playback. State IDLE or ENDED means the stream has to be brought up again
+     * anyway.
      */
     private fun isAlreadyPlaying(mediaItems: List<MediaItem>): Boolean {
         if (mediaItems.size != 1) return false

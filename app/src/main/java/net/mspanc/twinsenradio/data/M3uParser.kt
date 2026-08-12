@@ -1,8 +1,8 @@
 package net.mspanc.twinsenradio.data
 
 /**
- * Minimalny parser rozszerzonego M3U (#EXTM3U / #EXTINF). Wyciaga nazwe, URL,
- * oraz atrybuty tvg-logo i group-title, ktore w praktyce niosa logo i gatunek.
+ * A minimal parser for extended M3U (#EXTM3U / #EXTINF). Extracts the name, URL,
+ * and the tvg-logo and group-title attributes, which in practice carry the logo and genre.
  */
 object M3uParser {
 

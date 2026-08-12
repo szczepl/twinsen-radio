@@ -1,11 +1,12 @@
 package net.mspanc.twinsenradio.data
 
 /**
- * Porzadek listy stacji.
+ * Ordering of the station list.
  *
- * [DEFAULT] to kolejnosc z pliku - ulozona tematycznie, wiec podobne stacje
- * stoja obok siebie. [MOST_PLAYED] liczy realne wlaczenia i po kilku tygodniach
- * jazdy jest zwykle najwygodniejszy: to, czego sluchasz, ladu na gorze samo.
+ * [DEFAULT] is the order from the file - arranged thematically, so similar
+ * stations sit next to each other. [MOST_PLAYED] counts actual plays and,
+ * after a few weeks of driving, is usually the most convenient: what you
+ * listen to naturally ends up at the top.
  */
 enum class StationSort(val label: String) {
     DEFAULT("Kolejność wbudowana"),
@@ -20,10 +21,10 @@ enum class StationSort(val label: String) {
 }
 
 /**
- * Porzadek wynikow z katalogu.
+ * Ordering of results from the catalog.
  *
- * [POPULARITY] to kolejnosc, w ktorej katalog je oddaje - wedlug liczby glosow,
- * co niezle odsiewa pozycje martwe i przypadkowe.
+ * [POPULARITY] is the order in which the catalog returns them - by number of
+ * votes, which does a decent job of filtering out dead and random entries.
  */
 enum class DiscoverSort(val label: String) {
     POPULARITY("Popularność"),

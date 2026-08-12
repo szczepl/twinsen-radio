@@ -47,11 +47,11 @@ import net.mspanc.twinsenradio.data.StationRepository
 import net.mspanc.twinsenradio.ui.MainActivity
 
 /**
- * Usluga odtwarzania i jednoczesnie zrodlo drzewa przegladania dla Android Auto.
+ * Playback service that is also the browse tree source for Android Auto.
  *
- * MediaLibraryService z Media3 wystawia rownoczesnie nowe API sesji i stary
- * MediaBrowserService, ktorego Android Auto nadal uzywa - dlatego w manifescie
- * sa dwa filtry intencji.
+ * Media3's MediaLibraryService exposes both the new session API and the old
+ * MediaBrowserService, which Android Auto still uses - that's why the manifest
+ * has two intent filters.
  */
 @UnstableApi
 class RadioService : MediaLibraryService() {
@@ -70,44 +70,44 @@ class RadioService : MediaLibraryService() {
     private var clockTick: Runnable? = null
     private var lastIcyAtMs = 0L
 
-    /** Okladka doszukana dla biezacego utworu; null = pokazujemy logo stacji. */
+    /** Cover art found for the current track; null = we show the station logo. */
     @Volatile
     private var coverArtUrl: String? = null
 
-    /** Co katalog wie o biezacym utworze - wydawnictwo, rok, okladka. */
+    /** What the catalog knows about the current track - release, year, cover art. */
     @Volatile
     private var trackInfo: CoverArtLookup.TrackInfo? = null
 
-    /** Rosnie przy kazdej zmianie utworu - odsiewa spoznione wyniki wyszukiwania. */
+    /** Increments on every track change - filters out stale search results. */
     private var coverGeneration = 0
     private var coverRevertJob: Job? = null
 
     /**
-     * Utwor, do ktorego nalezy okladka trzymana w [coverArtUrl]. Sluzy do
-     * wykrycia momentu, w ktorym okladka przestaje pasowac do tego, co gra.
+     * The track that the cover art held in [coverArtUrl] belongs to. Used to
+     * detect the moment when the cover art stops matching what's playing.
      */
     private var coverTrackKey: String? = null
 
-    /** Format z dekodera i przeplywnosc z naglowka ICY - razem daja opis jakosci. */
+    /** Format from the decoder and bitrate from the ICY header - together they give the quality description. */
     @Volatile
     private var audioFormat: androidx.media3.common.Format? = null
 
     @Volatile
     private var icyBitrateKbps = 0
 
-    /** Czeka po znaczniku sterujacym na to, co rozglosnia wstawi dalej. */
+    /** Waits after a control marker for whatever the station inserts next. */
     private var pendingMarkerJob: Job? = null
 
-    /** Pilnuje, czy opis utworu nie zwietrzal, gdy stacja nic nie oglosila. */
+    /** Watches whether the track description has gone stale because the station announced nothing. */
     private var staleJob: Job? = null
 
-    /** Odcisk ostatniego zrzutu metadanych - odsiewa powtorki w logu. */
+    /** Fingerprint of the last metadata dump - filters out repeats in the log. */
     private var lastDump: String? = null
 
-    /** Adres, spod ktorego gramy - do wykrycia zmiany wariantu jakosci. */
+    /** Address we're playing from - used to detect a quality variant change. */
     private var currentStreamUrl: String? = null
 
-    /** Ostatni slogan stacji - pokazujemy go, gdy nie wiemy, co akurat leci. */
+    /** Last station slogan - shown when we don't know what's currently playing. */
     @Volatile
     private var lastSlogan: String? = null
 
@@ -119,8 +119,8 @@ class RadioService : MediaLibraryService() {
             }
             Prefs.KEY_DIAG -> {
                 refreshCurrentMetadata(force = true)
-                // Odciecie ICY dzieje sie przy tworzeniu zrodla danych, wiec zeby
-                // przelacznik zadzialal od razu, trzeba przygotowac strumien na nowo.
+                // Stripping ICY happens when the data source is created, so for
+                // the toggle to take effect immediately the stream must be re-prepared.
                 if (player.playWhenReady && player.currentMediaItem != null) {
                     player.prepare()
                 }
@@ -130,8 +130,8 @@ class RadioService : MediaLibraryService() {
             Prefs.KEY_CLOCK_FACE, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
             Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM -> refreshCurrentMetadata(force = true)
             Prefs.KEY_BUFFER -> Log.i(TAG, "Zmieniono bufor - zadziala po restarcie odtwarzania")
-            // Zmiana jakosci albo wlasnego adresu dotyczy konkretnej stacji.
-            // Klucze maja prefiks z jej identyfikatorem, wiec sprawdzamy poczatek.
+            // A quality change or a custom address change concerns a specific station.
+            // The keys are prefixed with its identifier, so we check the beginning.
             else -> if (key?.startsWith("stream_") == true) reloadCurrentStation()
         }
     }
@@ -172,9 +172,9 @@ class RadioService : MediaLibraryService() {
                     ReconnectController.Status.OK -> PlaybackStatusBus.Status.PLAYING
                 }
             )
-            // Brak sieci trafia w srodkowy wiersz na desce, wiec metadane musza
-            // pojsc na nowo - inaczej komunikat pojawilby sie dopiero przy
-            // nastepnym utworze, czyli w praktyce nigdy.
+            // No network hits the middle line on the dashboard, so the metadata
+            // must be pushed again - otherwise the message would only appear at
+            // the next track, which in practice means never.
             refreshCurrentMetadata(force = true)
         }
         reconnect.start()
@@ -183,8 +183,8 @@ class RadioService : MediaLibraryService() {
 
         scope.launch { repo.refreshUserLists() }
 
-        // Zmiana ulubionych - skadkolwiek przyszla - musi od razu przelozyc sie na
-        // gwiazdke przy odtwarzaczu i na listy, ktore ja pokazuja.
+        // A favourites change - wherever it came from - must immediately translate
+        // into the star next to the player and into the lists that show it.
         scope.launch {
             Prefs.favouritesFlow.collect { favourites ->
                 if (!this@RadioService::session.isInitialized) return@collect
@@ -194,8 +194,8 @@ class RadioService : MediaLibraryService() {
             }
         }
 
-        // Stacja dodana z katalogu ma pojawic sie w aucie bez restartu aplikacji.
-        // Dochodzi tez nowy gatunek, wiec odswiezamy takze ich liste.
+        // A station added from the catalog should appear in the car without restarting the app.
+        // A new genre may also show up, so we refresh their list as well.
         scope.launch {
             Prefs.discoveredFlow.collect { stations ->
                 if (!this@RadioService::session.isInitialized) return@collect
@@ -217,7 +217,7 @@ class RadioService : MediaLibraryService() {
         super.onDestroy()
     }
 
-    // --- budowa odtwarzacza ---------------------------------------------------
+    // --- player construction ----------------------------------------------------
 
     private fun buildPlayer(): ExoPlayer {
         val profile = BufferProfile.at(prefs.bufferProfile)
@@ -228,7 +228,7 @@ class RadioService : MediaLibraryService() {
                 profile.forPlaybackMs,
                 profile.afterRebufferMs
             )
-            // Dla strumienia na zywo interesuje nas czas, nie rozmiar bufora.
+            // For a live stream we care about time, not buffer size.
             .setPrioritizeTimeOverSizeThresholds(true)
             .setTargetBufferBytes(C.LENGTH_UNSET)
             .build()
@@ -265,17 +265,17 @@ class RadioService : MediaLibraryService() {
             }
     }
 
-    // --- reakcje na zdarzenia odtwarzacza -------------------------------------
+    // --- reactions to player events --------------------------------------------
 
     private inner class PlayerEvents : Player.Listener {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             lastRawIcyTitle = null
             lastSlogan = null
-            // Zmiana stacji zaczyna wszystko od zera. Bez tego okladka utworu z
-            // poprzedniej stacji zostawala w polu `coverArtUrl` i wracala na ekran
-            // przy najblizszym odswiezeniu metadanych - po przejsciu z RMF na RNS
-            // przez chwile widac bylo okladke z RMF zamiast logo Nowego Swiata.
+            // A station change starts everything from scratch. Without this, the cover art
+            // from the previous station would stay in the `coverArtUrl` field and come back
+            // on screen at the next metadata refresh - after switching from RMF to RNS
+            // the RMF cover art would briefly show instead of the Nowy Swiat logo.
             resetCoverArt()
             audioFormat = null
             icyBitrateKbps = 0
@@ -284,15 +284,15 @@ class RadioService : MediaLibraryService() {
             PlaybackStatusBus.setStation(id)
             id?.let {
                 prefs.pushRecent(it)
-                // Licznik wlaczen - jedyne sensowne zrodlo dla porzadku
-                // "najczesciej sluchane", ktory po kilku tygodniach jazdy
-                // uklada liste lepiej niz cokolwiek, co wymyslimy z gory.
+                // Play count - the only sensible source for a "most listened"
+                // ordering, which after a few weeks of driving arranges the list
+                // better than anything we could come up with upfront.
                 prefs.bumpPlayCount(it)
             }
 
-            // Gwiazdka dotyczy konkretnej stacji, wiec przy zmianie trzeba zbudowac
-            // uklad przyciskow na nowo. Bez tego po wejsciu w stacje pokazywala stan
-            // poprzedniej i pierwsze klikniecie wygladalo, jakby nic nie robilo.
+            // The star belongs to a specific station, so on change the button
+            // layout needs to be rebuilt. Without this, entering a station showed
+            // the previous one's state and the first tap looked like it did nothing.
             if (this@RadioService::session.isInitialized) {
                 session.setCustomLayout(customLayout())
             }
@@ -327,10 +327,10 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Nowy tytul z Icecasta. Aktualizujemy metadane pozycji, a nie sam strumien -
-     * `replaceMediaItem` z ta sama konfiguracja zrodla nie przerywa odtwarzania.
+     * New title from Icecast. We update the item's metadata, not the stream itself -
+     * `replaceMediaItem` with the same source configuration doesn't interrupt playback.
      */
-    /** Naglowki icy-* z odpowiedzi HTTP - stale dla calego strumienia. */
+    /** icy-* headers from the HTTP response - constant for the whole stream. */
     private fun logIcyHeaders(h: IcyHeaders) {
         Log.i(TAG_ICY, "== naglowki ICY strumienia ==")
         h.name?.let { Log.i(TAG_ICY, "icy-name = $it") }
@@ -338,8 +338,8 @@ class RadioService : MediaLibraryService() {
         h.url?.let { Log.i(TAG_ICY, "icy-url = $it") }
         if (h.bitrate > 0) {
             Log.i(TAG_ICY, "icy-br = ${h.bitrate}")
-            // Zapas na wypadek, gdyby dekoder nie podal przeplywnosci - przy AAC
-            // w ADTS jest to regula, bo w samym strumieniu nie ma jej wcale.
+            // Fallback in case the decoder doesn't report a bitrate - with AAC
+            // in ADTS this is the rule, since the stream itself carries none at all.
             icyBitrateKbps = h.bitrate
             publishQuality()
         }
@@ -348,10 +348,10 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Blok metadanych wstrzykiwany w strumien. ExoPlayer parsuje z niego tylko
-     * StreamTitle i StreamUrl, ale rozglosnie wpychaja tam wiecej par klucz=wartosc
-     * (RMF np. oznacza reklamy przez adw_ad i durationMilliseconds). Dlatego obok
-     * pol rozpoznanych logujemy tez cala surowa zawartosc.
+     * The metadata block injected into the stream. ExoPlayer only parses
+     * StreamTitle and StreamUrl out of it, but stations push in more key=value
+     * pairs (RMF, for instance, marks ads via adw_ad and durationMilliseconds). So
+     * alongside the recognized fields we also log the whole raw content.
      */
     private fun logIcyInfo(info: IcyInfo): String {
         val raw = runCatching { String(info.rawMetadata, Charsets.UTF_8).trim(Char(0), ' ') }
@@ -359,7 +359,7 @@ class RadioService : MediaLibraryService() {
         Log.i(TAG_ICY, "surowy blok: $raw")
         info.url?.let { Log.i(TAG_ICY, "StreamUrl = $it") }
 
-        // rozbij wszystkie pary klucz='wartosc', zeby bylo widac pola nietypowe
+        // split all key='value' pairs so unusual fields are visible
         Regex("""(\w+)='([^']*)'""").findAll(raw).forEach { m ->
             Log.i(TAG_ICY, "  ${m.groupValues[1]} = ${m.groupValues[2]}")
         }
@@ -368,15 +368,15 @@ class RadioService : MediaLibraryService() {
 
     private fun handleIcyTitle(rawTitle: String?, rawBlock: String? = null) {
         val title = rawTitle?.trim().orEmpty()
-        // Sam tytul nie wystarczy do rozpoznania powtorki: reklamy maja pusty
-        // tytul, a rozne wstawki roznia sie dopiero polami adId.
+        // The title alone isn't enough to detect a repeat: ads have an empty
+        // title, and different insertions only differ in their adId fields.
         val fingerprint = title + "|" + rawBlock.orEmpty()
         if (fingerprint == lastRawIcyTitle) return
         lastRawIcyTitle = fingerprint
 
-        // Odstep miedzy blokami ICY jest tym, czego nie wiemy o rozglosniach:
-        // czy metadane leca raz na utwor, czy okresowo. Logujemy, zeby dalo sie
-        // to policzyc z zewnatrz.
+        // The gap between ICY blocks is something we don't know about stations:
+        // whether metadata arrives once per track or periodically. We log it so
+        // it can be measured from the outside.
         val nowMs = System.currentTimeMillis()
         val sinceLast = if (lastIcyAtMs == 0L) -1 else (nowMs - lastIcyAtMs) / 1000
         lastIcyAtMs = nowMs
@@ -394,15 +394,15 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Decyduje, czy zdarzenie z ICY ma od razu zmienic to, co widac na ekranie.
+     * Decides whether an event from ICY should immediately change what's shown on screen.
      *
-     * Znacznik sterujacy (np. STOP_AD_BREAK) sam z siebie nie znaczy, ze wraca
-     * muzyka - RMF potrafi zaraz po nim wstawic kolejna reklame. Gdybysmy od razu
-     * wracali do widoku stacji, ekran mrugalby miedzy "Reklama" a nazwa stacji
-     * przy kazdej wstawce. Dlatego znacznik jedynie uzbraja timer: jesli w ciagu
-     * [MARKER_GRACE_MS] przyjdzie cokolwiek konkretnego - utwor albo nastepna
-     * reklama - to ono wygrywa, a jesli nie przyjdzie nic, dopiero wtedy
-     * zostawiamy sama stacje.
+     * A control marker (e.g. STOP_AD_BREAK) by itself doesn't mean the music is
+     * back - RMF can insert another ad right after it. If we switched back to the
+     * station view immediately, the screen would flicker between "Ad" and the
+     * station name on every insertion. So the marker only arms a timer: if
+     * something concrete arrives within [MARKER_GRACE_MS] - a track or another
+     * ad - it wins, and if nothing arrives, only then do we fall back to just
+     * the station.
      */
     private fun publish(now: NowPlaying?) {
         pendingMarkerJob?.cancel()
@@ -423,32 +423,33 @@ class RadioService : MediaLibraryService() {
     private fun apply(now: NowPlaying?) {
         now?.slogan?.let { lastSlogan = it }
 
-        // Dane katalogowe dotycza POPRZEDNIEGO utworu, wiec zerujemy je, zanim
-        // cokolwiek narysujemy. Inaczej przez chwile widac nowego wykonawce
-        // sklejonego ze stara plyta - "Taylor Swift - Black Gold: The Best of
-        // Soul Asylum [1992]". Okladke zdejmuje updateCoverArt, tez natychmiast.
+        // Catalog data belongs to the PREVIOUS track, so we clear it before drawing
+        // anything. Otherwise the new artist briefly shows up glued to the old
+        // record - "Taylor Swift - Black Gold: The Best of Soul Asylum [1992]".
+        // The cover art is cleared by updateCoverArt, also immediately.
         trackInfo = null
         PlaybackStatusBus.setTrackInfo(null)
 
         PlaybackStatusBus.setNowPlaying(now)
 
-        // Kolejnosc ma znaczenie: najpierw zdejmujemy okladke, dopiero potem
-        // wysylamy metadane. Odwrotnie do auta trafial nowy opis ze stara
-        // grafika - po piosence wchodzilo studio i przy "Pion i poziom!"
-        // wisiala okladka plyty sprzed chwili.
+        // Order matters: we clear the cover art first, only then send the
+        // metadata. The other way around, the car would get a new description
+        // with the old artwork - after the song, the studio would come on and
+        // "Pion i poziom!" would still show the previous track's cover.
         updateCoverArt(now)
         refreshCurrentMetadata(force = true, now = now)
         scheduleStaleCheck(now)
     }
 
     /**
-     * Sprzataniecie po utworze, ktorego koniec nie zostal ogloszony.
+     * Cleans up after a track whose end was never announced.
      *
-     * RMF potrafi wejsc w blok reklamowy bez zadnego zdarzenia ICY - wtedy na
-     * ekranie zostawal tytul sprzed kilku minut, bo nie mielismy sygnalu, ze
-     * cokolwiek sie zmienilo. Zamiast zgadywac stalym limitem, korzystamy z
-     * dlugosci utworu z katalogu: skoro piosenka trwa 3:20, to po 4:20 na pewno
-     * juz nie leci. Gdy dlugosci nie znamy, przyjmujemy [FALLBACK_TRACK_MS].
+     * RMF can enter an ad block without any ICY event - the screen would then
+     * keep a title from several minutes ago, because we had no signal that
+     * anything had changed. Instead of guessing with a fixed limit, we use the
+     * track length from the catalog: if a song is 3:20 long, by 4:20 it's
+     * certainly no longer playing. When we don't know the length, we assume
+     * [FALLBACK_TRACK_MS].
      */
     private fun scheduleStaleCheck(now: NowPlaying?) {
         staleJob?.cancel()
@@ -464,8 +465,8 @@ class RadioService : MediaLibraryService() {
                 "utwor '${now.raw}' powinien byc juz po ${timeout / 1000}s - " +
                     "stacja nic nie przyslala, czyszcze opis"
             )
-            // Jesli stacja kiedykolwiek podala swoj slogan, lepiej pokazac jego
-            // niz pusta linie - RNS ma "Pion i poziom!", RMF "FAKTY" przy serwisie.
+            // If the station has ever given its slogan, it's better to show it
+            // than an empty line - RNS has "Pion i poziom!", RMF "FAKTY" during the news.
             val slogan = lastSlogan
             if (slogan != null) {
                 apply(
@@ -483,8 +484,8 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Zdejmuje wszystko, co wiedzielismy o poprzednim utworze. Wolane przy
-     * zmianie stacji, gdzie zaden slad po poprzedniej nie ma prawa zostac.
+     * Clears everything we knew about the previous track. Called on a station
+     * change, where no trace of the previous one is allowed to remain.
      */
     private fun resetCoverArt() {
         coverGeneration++
@@ -498,19 +499,19 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Podmienia okladke przy zmianie utworu.
+     * Swaps the cover art on a track change.
      *
-     * Zasada jest jedna: **okladka nigdy nie przezywa utworu, do ktorego nalezy**.
-     * Wczesniej bylo odwrotnie - stara grafika zostawala az do znalezienia nowej,
-     * zeby miedzy utworami nie mrugalo logo stacji. W praktyce dawalo to gorszy
-     * efekt niz mrugniecie: przez ulamek sekundy (a po wygasnieciu opisu nawet
-     * przez [COVER_GRACE_MS]) obok nazwiska nowego wykonawcy wisiala plyta
-     * poprzedniego, co wyglada po prostu na blad.
+     * There's one rule: **the cover art never outlives the track it belongs to**.
+     * Previously it was the opposite - the old artwork stayed until a new one was
+     * found, so the station logo wouldn't flicker between tracks. In practice that
+     * gave a worse result than a flicker: for a fraction of a second (and after
+     * the description expired, even for [COVER_GRACE_MS]) the previous record's
+     * cover hung next to the new artist's name, which simply looks like a bug.
      *
-     * Dlatego przy kazdej zmianie utworu wracamy natychmiast do logo stacji, a
-     * okladke pokazujemy dopiero wtedy, gdy katalog naprawde ja znajdzie. Gdy
-     * stacja przysyla metadane od razu przy podlaczeniu, wyszukiwanie trwa zwykle
-     * ~200 ms i logo praktycznie nie zdazy sie pojawic.
+     * So on every track change we immediately fall back to the station logo, and
+     * only show the cover art once the catalog actually finds it. When a station
+     * sends metadata right at connection time, the lookup usually takes
+     * ~200 ms and the logo barely has time to appear.
      */
     private fun updateCoverArt(now: NowPlaying?) {
         val generation = ++coverGeneration
@@ -525,7 +526,7 @@ class RadioService : MediaLibraryService() {
             PlaybackStatusBus.setCoverArt(url)
             PlaybackStatusBus.setTrackInfo(info)
             refreshCurrentMetadata(force = true, now = PlaybackStatusBus.nowPlaying.value)
-            // Znamy juz dlugosc utworu - przelicz moment, w ktorym opis zwietrzeje
+            // We now know the track length - recompute the moment the description goes stale
             scheduleStaleCheck(PlaybackStatusBus.nowPlaying.value)
         }
 
@@ -540,7 +541,7 @@ class RadioService : MediaLibraryService() {
             }
         }
 
-        // Reklama albo wlasny slogan stacji - nie ma czego szukac w katalogu.
+        // An ad or the station's own slogan - nothing to look up in the catalog.
         if (key == null) return
 
         scope.launch {
@@ -551,12 +552,12 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Przeladowuje biezaca stacje pod nowym adresem.
+     * Reloads the current station at a new address.
      *
-     * Uzywane po zmianie wariantu jakosci. Idziemy wprost do ExoPlayera, z
-     * pominieciem [KeepCurrentStreamPlayer] - on celowo ignoruje ustawienie tej
-     * samej stacji, zeby klikniecie w grajaca pozycje nie zrywalo polaczenia,
-     * a tutaj zerwanie jest wlasnie tym, o co chodzi.
+     * Used after a quality variant change. We go straight to ExoPlayer, bypassing
+     * [KeepCurrentStreamPlayer] - it deliberately ignores setting the same
+     * station so that tapping the currently playing item doesn't drop the
+     * connection, but here dropping it is exactly the point.
      */
     private fun reloadCurrentStation() {
         val id = PlaybackStatusBus.stationId.value ?: return
@@ -570,7 +571,7 @@ class RadioService : MediaLibraryService() {
         if (wasPlaying) player.play()
     }
 
-    /** Sklada opis jakosci z formatu dekodera i z naglowka icy-br. */
+    /** Builds the quality description from the decoder format and the icy-br header. */
     private fun publishQuality() {
         val format = audioFormat
         if (format == null) {
@@ -585,15 +586,15 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Odswieza metadane rowno na granicy minuty, a nie co 60 s od startu - inaczej
-     * zegar w podtytule dryfowalby wzgledem zegara w aucie.
+     * Refreshes metadata exactly on the minute boundary, not every 60s from
+     * start - otherwise the clock in the subtitle would drift against the car's clock.
      */
     private fun scheduleClockTick() {
         clockTick?.let { clockHandler.removeCallbacks(it) }
         val delayToNextMinute = 60_000L - (System.currentTimeMillis() % 60_000L)
         val runnable = Runnable {
-            // Zegar odswiezamy tylko wtedy, gdy jest gdzie go pokazac - w trybie
-            // diagnostycznym zawsze, poza nim jedynie w ukladach z zegarem.
+            // We only refresh the clock when there's somewhere to show it - always
+            // in diagnostic mode, otherwise only in layouts that have a clock.
             val needed = prefs.diagnosticMode || prefs.presentation.needsClock
             if (needed) refreshCurrentMetadata(force = true)
             scheduleClockTick()
@@ -613,13 +614,13 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Wypisuje komplet pol wyslanych do sesji. Sluzy okienku podgladu na Windows
-     * (tools/meta-watch.ps1), ktore czyta to przez `adb logcat -s MetaDump`.
+     * Prints out the full set of fields sent to the session. Used by the Windows
+     * preview window (tools/meta-watch.ps1), which reads it via `adb logcat -s MetaDump`.
      */
     private fun dumpMetadata(station: Station, m: MediaMetadata) {
-        // Zrzut identyczny z poprzednim nie niesie zadnej informacji, a potrafi
-        // sie powtarzac co minute (tykniecie zegara) albo przy kazdym
-        // odswiezeniu przyciskow. Okno podgladu zalewalo sie wtedy kopiami.
+        // A dump identical to the previous one carries no information, and it
+        // can repeat every minute (the clock tick) or on every button refresh.
+        // The preview window would otherwise flood with duplicates.
         val fingerprint = listOf(
             m.title, m.artist, m.albumTitle, m.displayTitle, m.subtitle,
             m.description, m.station, m.genre, m.artworkUri
@@ -651,35 +652,35 @@ class RadioService : MediaLibraryService() {
         m.artworkData?.let { Log.i(TAG_DUMP, "artworkData = ${it.size} B (grafika w metadanych)") }
     }
 
-    // --- drzewo przegladania dla Android Auto ---------------------------------
+    // --- browse tree for Android Auto -------------------------------------------
 
     /**
-     * Przycisk w szablonie odtwarzacza Android Auto. To jedyny sposob, zeby dac
-     * uzytkownikowi jakiekolwiek wlasne sterowanie - AA nie pozwala rysowac
-     * wlasnego UI, ale custom actions renderuje w swoim layoucie (to samo robi
-     * ReplaIO ze swoja gwiazdka i serduszkiem).
+     * A button in the Android Auto player template. It's the only way to give
+     * the user any custom control at all - AA doesn't allow drawing your own UI,
+     * but it renders custom actions in its own layout (ReplaIO does the same
+     * with its star and heart).
      *
-     * Po co akurat ten: pozwala przelaczyc tryb diagnostyczny wprost z ekranu
-     * auta, bez siegania po telefon w trakcie jazdy.
+     * Why this one specifically: it lets you toggle diagnostic mode right from
+     * the car screen, without reaching for the phone while driving.
      */
     /**
-     * Ogloszenie zmiany zawartosci wezlow przegladania.
+     * Announces a change in browse node contents.
      *
-     * Wersja bez wskazania odbiorcy trafia tylko do kontrolerow zapisanych jako
-     * subskrybenci po stronie Media3. Android Auto laczy sie starym API i jego
-     * subskrypcje sa prowadzone gdzie indziej, przez co przy otwartej liscie
-     * ulubionych nie dostawalo nic i lista zostawala nieodswiezona. Dlatego
-     * powiadamiamy adresowo kazdy podlaczony kontroler.
+     * The version without a specified recipient only reaches controllers
+     * registered as subscribers on the Media3 side. Android Auto connects via
+     * the old API and its subscriptions are tracked elsewhere, so with the
+     * favourites list open it received nothing and the list stayed stale. So we
+     * notify each connected controller by address instead.
      */
     private fun notifyBrowseNodesChanged(vararg nodes: String) {
         val controllers = session.connectedControllers
-        // Media3 dopasowuje powiadomienia do parametrow, z jakimi kontroler sie
-        // zapisal. Wyslanie z null trafialo w prozne - Android Auto subskrybuje
-        // z parametrami stylu tresci, wiec podajemy te same.
+        // Media3 matches notifications to the parameters the controller
+        // registered with. Sending with null missed the target - Android Auto
+        // subscribes with content style parameters, so we pass the same ones.
         val params = contentStyleParams()
         for (node in nodes) {
-            // Prawdziwa liczba pozycji, nie Int.MAX_VALUE - HDU dostaje wtedy
-            // sensowna informacje o tym, jak bardzo zmienila sie lista.
+            // The actual item count, not Int.MAX_VALUE - this way the HDU gets
+            // a meaningful sense of how much the list changed.
             val count = childrenOf(node).size
             session.notifyChildrenChanged(node, count, params)
             session.notifyChildrenChanged(node, count, null)
@@ -691,7 +692,7 @@ class RadioService : MediaLibraryService() {
         Log.i(TAG, "powiadomiono ${controllers.size} kontroler(ow) o ${nodes.joinToString()}")
     }
 
-    /** Zawartosc wezla przegladania - wspolna dla odpowiedzi i dla powiadomien. */
+    /** Browse node content - shared between responses and notifications. */
     private fun childrenOf(parentId: String): List<Station> = when {
         parentId == NODE_FAVOURITES -> repo.favourites()
         parentId == NODE_ALL -> repo.all()
@@ -701,37 +702,40 @@ class RadioService : MediaLibraryService() {
         else -> emptyList()
     }
 
-    /** Przyciski w szablonie odtwarzacza Android Auto. */
+    /** Buttons in the Android Auto player template. */
     private fun customLayout(): ImmutableList<CommandButton> =
         ImmutableList.of(favouriteButton(), diagnosticButton())
 
     /**
-     * Gwiazdka ulubionych. Bez niej stacji granej w aucie nie dalo sie dodac do
-     * ulubionych w ogole - a to wlasnie w aucie czlowiek stwierdza, ze chce ja
-     * miec pod reka.
+     * The favourites star. Without it, a station playing in the car couldn't
+     * be added to favourites at all - and it's exactly in the car that a person
+     * decides they want it within reach.
      */
     private fun favouriteButton(): CommandButton {
         val id = PlaybackStatusBus.stationId.value
         val isFav = id != null && id in prefs.favourites
         Log.i(TAG, "buduje gwiazdke dla stacji '$id': ulubiona=$isFav")
-        // Ikona idzie DWOMA kanalami naraz i to nie jest nadmiarowosc.
+        // The icon goes through TWO channels at once, and that's not redundancy.
         //
-        // Kanal wlasciwy to extras: dokumentacja Androida dla samochodow mowi
-        // wprost, ze jesli ikona odpowiada ktorejs ze stalych CommandButton.ICON_,
-        // nalezy wpisac jej wartosc pod kluczem EXTRAS_KEY_COMMAND_BUTTON_ICON_COMPAT,
-        // bo to "nadpisuje zasob ikony przekazany do CustomAction.Builder i pozwala
-        // systemowi narysowac akcje spojnie z pozostalymi". Innymi slowy glowica
-        // rysuje wtedy WLASNA gwiazdke i nie oglada sie na nasze zasoby.
+        // The proper channel is extras: Android's documentation for cars says
+        // explicitly that if an icon matches one of the CommandButton.ICON_
+        // constants, its value should be put under the
+        // EXTRAS_KEY_COMMAND_BUTTON_ICON_COMPAT key, because that "overrides the
+        // icon resource passed to CustomAction.Builder and lets the system draw
+        // the action consistently with the others". In other words, the head
+        // unit then draws its OWN star and doesn't look at our resources at all.
         //
-        // Kanal zapasowy to numer zasobu - dla systemow, ktore tego klucza nie
-        // znaja. I tylko tam ma znaczenie, ze wektor jest bez android:tint:
-        // odwolanie do @color/... glowica musialaby rozwiazac w naszym pakiecie
-        // przy inflacji we wlasnym procesie, i wlasnie na tym sie wykladalo.
+        // The fallback channel is the resource id - for systems that don't know
+        // that key. And only there does it matter that the vector has no
+        // android:tint: a reference to @color/... would have to be resolved by
+        // the head unit in our package while inflating in its own process, and
+        // that's exactly where it used to fail.
         //
-        // Czego NIE robic: podawac stalej semantycznej w konstruktorze
-        // CommandButton.Builder(ICON_STAR_FILLED) i liczyc, ze wystarczy. Media3
-        // zamienia ja wtedy dla starego API na numer wlasnego zasobu z AAR-a, a
-        // Desktop Head Unit narysowal z tego nutke i napis "1.8X".
+        // What NOT to do: pass the semantic constant to the
+        // CommandButton.Builder(ICON_STAR_FILLED) constructor and assume that's
+        // enough. Media3 then translates it for the old API into the resource id
+        // of its own bundled resource, and the Desktop Head Unit rendered from
+        // that a music note and the text "1.8X".
         val icon = if (isFav) {
             CommandButton.ICON_STAR_FILLED
         } else {
@@ -758,7 +762,7 @@ class RadioService : MediaLibraryService() {
             .build()
     }
 
-    /** Tak samo jak gwiazdka - wlasny wektor, numer zasobu przybity na stale. */
+    /** Same as the star - our own vector, resource id hardcoded. */
     private fun diagnosticButton(): CommandButton =
         @Suppress("DEPRECATION")
         CommandButton.Builder()
@@ -790,7 +794,7 @@ class RadioService : MediaLibraryService() {
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
-                // Swiezo podlaczony kontroler musi dostac aktualny stan gwiazdki
+                // A freshly connected controller must get the current star state
                 .setCustomLayout(customLayout())
                 .build()
         }
@@ -805,11 +809,11 @@ class RadioService : MediaLibraryService() {
                 CMD_TOGGLE_DIAG.customAction -> {
                     prefs.diagnosticMode = !prefs.diagnosticMode
                     Log.i(TAG, "przelaczono tryb diagnostyczny na ${prefs.diagnosticMode}")
-                    // prefsListener zajmie sie odswiezeniem metadanych
+                    // prefsListener will take care of refreshing the metadata
                     session.setCustomLayout(customLayout())
                     return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                 }
-                // Akcja z menu przy pozycji listy - glowica dokleja id pozycji
+                // An action from the list item's menu - the head unit attaches the item id
                 ACTION_FAVOURITE, ACTION_UNFAVOURITE -> {
                     val mediaId = args.getString(KEY_ACTION_MEDIA_ITEM_ID)
                     val station = mediaId?.let { repo.byMediaId(it) }
@@ -817,7 +821,7 @@ class RadioService : MediaLibraryService() {
                     if (station != null) {
                         val added = prefs.toggleFavourite(station.id)
                         Log.i(TAG, "z listy: ${station.name} ${if (added) "dodana do" else "usunieta z"} ulubionych")
-                        // Kaz glowicy odswiezyc te pozycje, zeby ikona sie przelaczyla
+                        // Tell the head unit to refresh this item so the icon switches
                         result.putString(KEY_ACTION_RESULT_REFRESH_ITEM, mediaId)
                         result.putString(
                             KEY_ACTION_RESULT_MESSAGE,
@@ -840,8 +844,8 @@ class RadioService : MediaLibraryService() {
                         val added = prefs.toggleFavourite(id)
                         Log.i(TAG, "stacja $id ${if (added) "dodana do" else "usunieta z"} ulubionych")
                         session.setCustomLayout(customLayout())
-                        // notifyChildrenChanged jest tylko na MediaLibrarySession,
-                        // a tutaj `session` ma szerszy typ MediaSession
+                        // notifyChildrenChanged only exists on MediaLibrarySession,
+                        // and here `session` has the wider MediaSession type
                         this@RadioService.session
                             .notifyChildrenChanged(NODE_FAVOURITES, Int.MAX_VALUE, null)
                     }
@@ -863,8 +867,8 @@ class RadioService : MediaLibraryService() {
                     "isRecent=${params?.isRecent}, isSuggested=${params?.isSuggested}, " +
                     "ostatnio sluchane=${repo.recent().size}"
             )
-            // System (i glowica) pyta osobno o korzen "do wznowienia" - wtedy
-            // oczekuje krotkiej listy ostatnio sluchanych, a nie calego drzewa.
+            // The system (and the head unit) asks separately for the "resume"
+            // root - in that case it expects a short recently-played list, not the whole tree.
             if (params?.isRecent == true) {
                 if (repo.recent().isEmpty()) {
                     return Futures.immediateFuture(
@@ -936,17 +940,18 @@ class RadioService : MediaLibraryService() {
         }
 
         /**
-         * Wznawianie odtwarzania po podlaczeniu do auta albo z panelu systemowego.
+         * Resuming playback after connecting to the car or from the system panel.
          *
-         * Zasada: **ma zagrac dokladnie ta stacja, co poprzednio** - niezaleznie
-         * od tego, czy grala z telefonu, czy przez Android Auto. Stan jest jeden
-         * i wspolny (jedna usluga, jedna sesja), a historia w [Prefs.recent] jest
-         * uzupelniana przy kazdej zmianie pozycji, wiec obie drogi zapisuja sie
-         * tak samo.
+         * The rule: **it must play exactly the same station as before** -
+         * regardless of whether it was playing from the phone or via Android
+         * Auto. There's one shared state (one service, one session), and the
+         * history in [Prefs.recent] is updated on every item change, so both
+         * paths record it the same way.
          *
-         * Kolejnosc: stacja aktualnie zaladowana w odtwarzaczu (gdy cos juz gralo,
-         * nie wolno tego podmienic), potem ostatnio sluchana z historii, potem
-         * pierwsza ulubiona, a na koncu pierwsza z listy.
+         * Order: the station currently loaded in the player (if something was
+         * already playing, it must not be swapped out), then the most recently
+         * listened one from history, then the first favourite, and finally the
+         * first from the list.
          */
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
@@ -973,7 +978,7 @@ class RadioService : MediaLibraryService() {
                 MediaSession.MediaItemsWithStartPosition(
                     listOf(playableItem(station)),
                     0,
-                    // Radio na zywo - pozycja startowa nie ma znaczenia
+                    // Live radio - start position doesn't matter
                     C.TIME_UNSET
                 )
             )
@@ -1034,8 +1039,8 @@ class RadioService : MediaLibraryService() {
         }
 
         /**
-         * Android Auto przysyla pozycje z samym mediaId. Tutaj dokladamy adres
-         * strumienia i pelne metadane - bez tego nie byloby czego odtwarzac.
+         * Android Auto sends items with just a mediaId. Here we add the stream
+         * address and full metadata - without this there'd be nothing to play.
          */
         override fun onAddMediaItems(
             mediaSession: MediaSession,
@@ -1048,7 +1053,7 @@ class RadioService : MediaLibraryService() {
             return Futures.immediateFuture(resolved)
         }
 
-        /** Glosowe "zagraj X" trafia tutaj przez wyszukiwanie. */
+        /** Voice command "play X" arrives here via search. */
         override fun onSetMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -1077,9 +1082,10 @@ class RadioService : MediaLibraryService() {
             .build()
 
     /**
-     * Pozycja listy z akcja "ulubione" dostepna wprost z menu kontekstowego
-     * w Android Auto. Bez tego stacje dalo sie dodac do ulubionych tylko wtedy,
-     * gdy juz gra - a naturalne jest zaznaczenie jej podczas przegladania listy.
+     * A list item with a "favourite" action available directly from the context
+     * menu in Android Auto. Without this, a station could only be added to
+     * favourites while it was already playing - but marking it while browsing
+     * the list is the natural thing to do.
      */
     private fun browseItem(station: Station): MediaItem {
         val isFav = station.id in prefs.favourites
@@ -1097,11 +1103,11 @@ class RadioService : MediaLibraryService() {
             .build()
     }
 
-    /** Definicje akcji, ktore glowica pokaze przy pozycjach listy. */
+    /** Definitions of actions the head unit shows on list items. */
     private fun browseActionsRootList(): ArrayList<Bundle> {
-        // Tu ikona moze byc podana wylacznie adresem, wiec zamiast
-        // android.resource:// z numerem zasobu (niestabilnym miedzy wersjami
-        // i cache'owanym przez glowice) idzie staly adres z LogoProvider.
+        // Here the icon can only be given as a URI, so instead of
+        // android.resource:// with a resource id (unstable across versions
+        // and cached by head units), we use a stable address from LogoProvider.
         fun action(id: String, labelRes: Int, iconName: String, iconRes: Int) = Bundle().apply {
             putString(KEY_ACTION_ID, id)
             putString(KEY_ACTION_LABEL, getString(labelRes))
@@ -1134,8 +1140,8 @@ class RadioService : MediaLibraryService() {
             .build()
 
     /**
-     * Schemat prezentacji wybrany w Opcjach. To sa te cztery uklady, ktore
-     * Android Auto realnie oferuje aplikacjom medialnym.
+     * The presentation scheme chosen in Options. These are the four layouts
+     * Android Auto actually offers media apps.
      */
     private fun contentStyleParams(): MediaLibraryService.LibraryParams {
         val extras = Bundle().apply {
@@ -1157,9 +1163,9 @@ class RadioService : MediaLibraryService() {
         private val CMD_TOGGLE_FAV =
             SessionCommand("net.mspanc.twinsenradio.TOGGLE_FAV", Bundle.EMPTY)
 
-        // Akcje przy pozycjach listy w Android Auto. Klucze pochodza z
-        // androidx.media.utils.MediaConstants - wpisane wprost, bo Media3 nie
-        // wystawia ich we wlasnym MediaConstants.
+        // List item actions in Android Auto. The keys come from
+        // androidx.media.utils.MediaConstants - hardcoded here because Media3
+        // doesn't expose them in its own MediaConstants.
         private const val ACTION_FAVOURITE = "net.mspanc.twinsenradio.FAVOURITE"
         private const val ACTION_UNFAVOURITE = "net.mspanc.twinsenradio.UNFAVOURITE"
 
@@ -1181,22 +1187,22 @@ class RadioService : MediaLibraryService() {
             "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_RESULT_MESSAGE"
 
         /**
-         * Ile czekamy po znaczniku sterujacym, zanim uznamy, ze rozglosnia nie
-         * ma nam nic wiecej do powiedzenia. Wstawki w RMF ida jedna za druga
-         * w odstepie kilku sekund, wiec 15 s spokojnie je przykrywa.
+         * How long we wait after a control marker before deciding the station
+         * has nothing more to tell us. Insertions in RMF follow one another a
+         * few seconds apart, so 15s comfortably covers them.
          */
         private const val MARKER_GRACE_MS = 15_000L
 
-        /** Przyjmowana dlugosc utworu, gdy katalog jej nie zna. */
+        /** Assumed track length when the catalog doesn't know it. */
         private const val FALLBACK_TRACK_MS = 5 * 60_000L
 
         /**
-         * Zapas doliczany do dlugosci utworu, zanim uznamy opis za nieaktualny.
+         * Margin added to the track length before we consider the description stale.
          *
-         * Rozglosnie skracaja utwory, zagaduja koncowki i puszczaja wersje radiowe
-         * krotsze niz katalogowe, wiec czekanie dlugo po czasie nic nie daje.
-         * Pol minuty pokrywa naturalny rozjazd, a jednoczesnie nie zostawia
-         * nieaktualnego tytulu na ekranie na dluzej.
+         * Stations shorten tracks, talk over endings, and play radio edits
+         * shorter than the catalog version, so waiting long past the nominal
+         * time gains nothing. Half a minute covers the natural drift while not
+         * leaving a stale title on screen for too long.
          */
         private const val STALE_GRACE_MS = 30_000L
 

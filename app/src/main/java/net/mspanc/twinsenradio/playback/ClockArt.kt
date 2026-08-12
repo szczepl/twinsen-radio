@@ -12,13 +12,13 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Rysuje zegar, ktory zastepuje okladke.
+ * Draws a clock that replaces the cover art.
  *
- * Bez zewnetrznej biblioteki - to kilkanascie linii na Canvasie, a doklejanie
- * zaleznosci po to, zeby narysowac kolo i dwie kreski, byloby przesada.
+ * No external library - it's a dozen or so lines on a Canvas, and pulling in
+ * a dependency just to draw a circle and two lines would be overkill.
  *
- * Wynik idzie do metadanych jako bajty PNG (`artworkData`), bo grafika
- * generowana w locie nie ma adresu, ktory glowica moglaby pobrac.
+ * The result goes into the metadata as PNG bytes (`artworkData`), because
+ * artwork generated on the fly has no URL that the head unit could fetch.
  */
 object ClockArt {
 
@@ -58,7 +58,7 @@ object ClockArt {
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             textSize = SIZE * 0.30f
         }
-        // wysrodkowanie w pionie po metrykach fontu, nie "na oko"
+        // vertical centering based on font metrics, not by eye
         val metrics = paint.fontMetrics
         val baseline = SIZE / 2f - (metrics.ascent + metrics.descent) / 2f
         canvas.drawText(text, SIZE / 2f, baseline, paint)
@@ -78,7 +78,7 @@ object ClockArt {
         }
         canvas.drawCircle(cx, cy, radius, rim)
 
-        // kreski godzinowe
+        // hour ticks
         val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = fg
             strokeWidth = SIZE * 0.012f
@@ -110,7 +110,7 @@ object ClockArt {
             )
         }
 
-        // wskazowka godzinowa uwzglednia minuty, zeby nie skakala co godzine
+        // the hour hand accounts for minutes, so it doesn't jump every hour
         hand((time.hour % 12) * 30.0 + time.minute * 0.5, radius * 0.52f, SIZE * 0.028f)
         hand(time.minute * 6.0, radius * 0.76f, SIZE * 0.018f)
 

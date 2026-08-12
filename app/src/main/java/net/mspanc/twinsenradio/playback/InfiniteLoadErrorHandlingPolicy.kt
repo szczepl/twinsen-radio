@@ -6,15 +6,16 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 
 /**
- * Polityka ponawiania skrojona pod radio internetowe.
+ * A retry policy tailored for internet radio.
  *
- * Chwilowa utrata LTE nie jest bledem, tylko przerwa - ExoPlayer ma po prostu
- * probowac dalej, w nieskonczonosc, a odtwarzacz zostaje w stanie BUFFERING.
- * Dzieki temu do Android Auto nie leci zaden komunikat o bledzie.
+ * A momentary loss of LTE is not an error, just an interruption - ExoPlayer
+ * should simply keep trying, indefinitely, while the player stays in the
+ * BUFFERING state. That way no error message ever reaches Android Auto.
  *
- * Wyjatek: trwale odpowiedzi 4xx (np. 404 na wycofanym adresie strumienia) nie
- * naprawia sie same, wiec te przepuszczamy dalej - lepiej, zeby uzytkownik
- * zobaczyl, ze stacja wymaga poprawki, niz zeby aplikacja cicho mielila.
+ * Exception: persistent 4xx responses (e.g. a 404 on a decommissioned stream
+ * address) won't fix themselves, so we let those through - it's better for
+ * the user to see that the station needs fixing than for the app to silently
+ * grind away.
  */
 @UnstableApi
 class InfiniteLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy() {

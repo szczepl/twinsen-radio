@@ -9,27 +9,27 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * Wyszukiwanie stacji spoza wbudowanej listy.
+ * Search for stations outside the built-in list.
  *
- * Zrodlo: **radio-browser.info** - otwarty, spolecznosciowy katalog okolo 50 tys.
- * rozglosni. Wybrany, bo jako jedyny sensowny spelnia komplet warunkow: jest
- * darmowy, nie wymaga klucza ani rejestracji, ma jasna licencje na dane,
- * publiczne API i - co najwazniejsze - sam odsiewa martwe strumienie
- * (`hidebroken`), bo cyklicznie je sprawdza. Alternatywy odpadaly: TuneIn i
- * iHeartRadio nie maja otwartego API, Shoutcast wymaga klucza wydawanego
- * recznie, a listy M3U z sieci nikt nie utrzymuje.
+ * Source: **radio-browser.info** - an open, community-run directory of roughly
+ * 50k stations. Chosen because it's the only sensible option that meets the
+ * full set of requirements: it's free, needs no key or registration, has a
+ * clear data license, a public API, and - most importantly - filters out dead
+ * streams itself (`hidebroken`) by checking them periodically. Alternatives
+ * fell short: TuneIn and iHeartRadio have no open API, Shoutcast requires a
+ * manually issued key, and nobody maintains M3U lists found around the web.
  *
- * Uwaga na kolejnosc pol: `url` bywa przekierowaniem albo plikiem .pls,
- * a `url_resolved` to juz konkretny strumien - i tego uzywamy.
+ * Watch the field order: `url` can be a redirect or a .pls file, while
+ * `url_resolved` is already a concrete stream - so that's what we use.
  */
 object RadioBrowser {
 
     private const val TAG = "RadioBrowser"
 
     /**
-     * Serwery katalogu. `all.api` rozklada ruch po zywych wezlach, ale bywa, ze
-     * nie odpowiada - wtedy schodzimy po konkretnych mirrorach. Regulamin API
-     * wymaga rozpoznawalnego User-Agenta i tego przestrzegamy.
+     * Directory servers. `all.api` spreads traffic across live nodes, but it can
+     * fail to respond - in that case we fall back to specific mirrors one by
+     * one. The API's terms require a recognizable User-Agent, which we honor.
      */
     private val MIRRORS = listOf(
         "https://all.api.radio-browser.info",
@@ -38,7 +38,7 @@ object RadioBrowser {
         "https://at1.api.radio-browser.info"
     )
 
-    /** Jedna pozycja z katalogu, jeszcze nie dodana do listy uzytkownika. */
+    /** A single entry from the directory, not yet added to the user's list. */
     data class Found(
         val uuid: String,
         val name: String,
@@ -48,25 +48,25 @@ object RadioBrowser {
         val tags: String?,
         val codec: String?,
         val bitrate: Int,
-        /** Pola tylko na ekran szczegolow - do listy wynikow sie nie mieszcza. */
+        /** Fields for the details screen only - they don't fit in the results list. */
         val countryName: String? = null,
         val language: String? = null,
         val homepage: String? = null,
         val votes: Int = 0,
         /**
-         * Kiedy katalog ostatni raz potwierdzil, ze strumien dziala (UTC).
-         * Wazniejsze, niz sie wydaje - patrz [isCheckStale].
+         * When the directory last confirmed the stream was working (UTC).
+         * More important than it looks - see [isCheckStale].
          */
         val lastCheckOk: String? = null
     ) {
         /**
-         * Czy potwierdzenie jest stare na tyle, ze nic juz nie znaczy.
+         * Whether the confirmation is old enough that it no longer means anything.
          *
-         * Katalog sprawdza zywe stacje mniej wiecej raz na dobe, wiec data
-         * sprzed miesiecy oznacza, ze sprawdzarka dawno sie poddala, a flaga
-         * "dziala" zostala z ostatniego udanego testu. Tak wlasnie wygladal
-         * Triple M Melbourne: lastcheckok = 1 z data siedem miesiecy wstecz,
-         * przy serwerze bez rekordu DNS.
+         * The directory checks live stations roughly once a day, so a date from
+         * months ago means the checker gave up long ago, and the "working" flag
+         * is just left over from the last successful test. That's exactly what
+         * Triple M Melbourne looked like: lastcheckok = 1 with a date seven
+         * months back, on a server with no DNS record left.
          */
         fun isCheckStale(): Boolean = daysSinceCheck()?.let { it > STALE_AFTER_DAYS } ?: false
 
@@ -78,7 +78,7 @@ object RadioBrowser {
                     .toDays()
             }.getOrNull()
         }
-        /** Druga linia na liscie wynikow: "PL · MP3 128 kb/s · rock". */
+        /** Second line in the results list: "PL · MP3 128 kb/s · rock". */
         fun describe(): String = listOfNotNull(
             country?.takeIf { it.isNotBlank() },
             listOfNotNull(
@@ -89,8 +89,8 @@ object RadioBrowser {
         ).joinToString(" · ")
 
         /**
-         * Pozostale adresy tej samej stacji, znalezione w katalogu pod ta sama
-         * nazwa. Uzupelniane przy scalaniu wynikow - patrz [merge].
+         * The other addresses of the same station, found in the directory under
+         * the same name. Filled in while merging results - see [merge].
          */
         var alternates: List<StreamVariant> = emptyList()
 
@@ -108,7 +108,7 @@ object RadioBrowser {
             )
         }
 
-        /** np. "MP3 128 kb/s". Katalog nie daje etykiet, wiec skladamy je sami. */
+        /** e.g. "MP3 128 kb/s". The directory doesn't provide labels, so we build them ourselves. */
         fun variantLabel(): String = listOfNotNull(
             codec?.takeIf { it.isNotBlank() && !it.equals("UNKNOWN", true) }?.uppercase(),
             bitrate.takeIf { it > 0 }?.let { "$it kb/s" }
@@ -116,8 +116,8 @@ object RadioBrowser {
     }
 
     /**
-     * @param query fragment nazwy stacji; puste zapytanie nie ma sensu, bo
-     *   katalog oddalby wtedy przypadkowe 50 tysiecy pozycji.
+     * @param query fragment of the station name; an empty query makes no sense,
+     *   since the directory would then hand back a random 50 thousand entries.
      */
     suspend fun search(query: String, limit: Int = 40): List<Found> = withContext(Dispatchers.IO) {
         val q = query.trim()
@@ -139,12 +139,13 @@ object RadioBrowser {
     }
 
     /**
-     * Scala pozycje, ktore sa ta sama stacja nadajaca pod kilkoma adresami.
+     * Merges entries that are actually the same station broadcasting under
+     * several addresses.
      *
-     * Katalog trzyma kazdy strumien jako osobny wpis, wiec "Jazz Radio" potrafi
-     * wystapic cztery razy - raz w MP3 128, raz w AAC 64 i tak dalej. Zamiast
-     * zasypywac uzytkownika powtorkami, zostawiamy jedna pozycje (ta o najlepszej
-     * przeplywnosci) i doklejamy reszte jako warianty do wyboru.
+     * The directory keeps each stream as a separate entry, so "Jazz Radio" can
+     * show up four times - once in MP3 128, once in AAC 64, and so on. Instead
+     * of flooding the user with duplicates, we keep a single entry (the one
+     * with the best bitrate) and attach the rest as selectable variants.
      */
     private fun merge(found: List<Found>): List<Found> {
         val groups = LinkedHashMap<String, MutableList<Found>>()
@@ -168,8 +169,8 @@ object RadioBrowser {
             val stream = o.optString("url_resolved").ifBlank { o.optString("url") }
             val name = o.optString("name").trim()
             if (stream.isBlank() || name.isBlank()) return@mapNotNull null
-            // Ten sam ADRES nie ma po co wystepowac dwa razy; rozne adresy tej
-            // samej stacji scala dopiero merge() ponizej.
+            // No reason for the same ADDRESS to appear twice; different addresses
+            // of the same station only get merged by merge() below.
             if (!seen.add(stream)) return@mapNotNull null
             Found(
                 uuid = o.optString("stationuuid").ifBlank { stream.hashCode().toString() },
@@ -208,9 +209,9 @@ object RadioBrowser {
     const val DISCOVERED_PREFIX = "rb:"
 
     /**
-     * Powyzej tylu dni od ostatniego udanego sprawdzenia traktujemy potwierdzenie
-     * katalogu jako bezwartosciowe. Zywe stacje sa sprawdzane mniej wiecej raz
-     * na dobe, wiec miesiac to juz bardzo duzy zapas.
+     * Beyond this many days since the last successful check, we treat the
+     * directory's confirmation as worthless. Live stations are checked roughly
+     * once a day, so a month is already a very generous margin.
      */
     private const val STALE_AFTER_DAYS = 30L
 }

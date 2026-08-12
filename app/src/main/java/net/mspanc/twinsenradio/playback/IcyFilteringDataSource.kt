@@ -7,14 +7,15 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
 
 /**
- * Nakladka na zrodlo danych, ktora potrafi calkowicie odciac metadane ICY.
+ * A wrapper around a data source that can completely strip ICY metadata.
  *
- * Po co: w trybie diagnostycznym ExoPlayer normalnie nadpisuje pola `title`,
- * `station` i `genre` tym, co przyszlo w naglowkach icy-* oraz w bloku
- * StreamTitle. To zepsulo by caly eksperyment - na AID zobaczylbys nazwe
- * rozglosni zamiast etykiety pola. Usuwamy wiec naglowek zadania `Icy-MetaData`
- * (serwer przestaje wysylac blok w strumieniu) i odfiltrowujemy naglowki
- * odpowiedzi `icy-*` (ExoPlayer nie zbuduje z nich obiektu IcyHeaders).
+ * Why: in diagnostic mode ExoPlayer normally overwrites the `title`,
+ * `station` and `genre` fields with whatever came in the icy-* headers and
+ * the StreamTitle block. That would ruin the whole experiment - on the AID
+ * you'd see the station's name instead of the field label. So we remove the
+ * `Icy-MetaData` request header (the server then stops sending the block in
+ * the stream) and filter out the `icy-*` response headers (so ExoPlayer
+ * won't build an IcyHeaders object from them).
  */
 @UnstableApi
 class IcyFilteringDataSource(

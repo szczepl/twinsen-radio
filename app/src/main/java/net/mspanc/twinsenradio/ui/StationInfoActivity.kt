@@ -23,12 +23,13 @@ import net.mspanc.twinsenradio.playback.MetadataFactory
 import kotlinx.coroutines.launch
 
 /**
- * Szczegoly stacji znalezionej w katalogu, zanim trafi na liste.
+ * Details of a station found in the catalog, before it lands on the list.
  *
- * Po co osobny ekran: w wynikach wyszukiwania mieszcza sie dwie linie, a katalog
- * wie duzo wiecej - kraj, jezyk, kodek, przeplywnosc, strone stacji i liczbe
- * glosow, ktora niezle mowi o tym, czy pozycja jest zywa. Przy nazwach w rodzaju
- * "Radio 1" to bywa jedyny sposob, zeby odroznic wlasciwa stacje od pieciu innych.
+ * Why a separate screen: search results only fit two lines, and the catalog
+ * knows a lot more - country, language, codec, bitrate, the station's homepage
+ * and vote count, which says a fair bit about whether an entry is alive. With
+ * names like "Radio 1" this is often the only way to tell the right station
+ * apart from five others.
  */
 @UnstableApi
 class StationInfoActivity : AppCompatActivity() {
@@ -44,8 +45,8 @@ class StationInfoActivity : AppCompatActivity() {
         prefs = Prefs(this)
 
         b.toolbar.setNavigationOnClickListener { finish() }
-        // Wlasny adres zapisujemy przy wyjsciu - osobny przycisk "zapisz" przy
-        // jednym polu bylby tylko dodatkowym klikiem.
+        // We save the custom address on exit - a separate "save" button next to
+        // a single field would just be an extra click.
         onBackPressedDispatcher.addCallback(this) {
             saveCustomStream()
             finish()
@@ -63,21 +64,21 @@ class StationInfoActivity : AppCompatActivity() {
             name = name,
             genre = intent.getStringExtra(EXTRA_GENRE).orEmpty().ifBlank { "Z sieci" },
             stream = stream,
-            // Nazwa wbudowanego zasobu; stacje z katalogu maja zamiast tego adres
+            // Name of a built-in resource; stations from the catalog have a URL instead
             logo = intent.getStringExtra(EXTRA_LOGO_NAME),
             logoUrl = intent.getStringExtra(EXTRA_LOGO),
             source = Station.Source.DISCOVERED
         )
 
-        // Wersja z repozytorium zna warianty strumienia; intencja niesie tylko
-        // to, co potrzebne do wyswietlenia pozycji jeszcze niedodanej.
+        // The version from the repository knows the stream variants; the intent
+        // only carries what's needed to display an entry that isn't added yet.
         StationRepository.get(this).allIncludingHidden()
             .firstOrNull { it.id == station.id }
             ?.let { station = it }
 
         b.name.text = station.name
-        // Katalog sklada tagi bez spacji ("acid,acid jazz,dance") - rozdzielamy je,
-        // zeby dalo sie to przeczytac.
+        // The catalog packs tags without spaces ("acid,acid jazz,dance") - we split
+        // them so it can be read.
         val tags = intent.getStringExtra(EXTRA_TAGS)
             ?.split(',')
             ?.map { it.trim() }
@@ -108,8 +109,8 @@ class StationInfoActivity : AppCompatActivity() {
             R.string.info_votes,
             intent.getIntExtra(EXTRA_VOTES, 0).takeIf { it > 0 }?.toString().orEmpty()
         )
-        // Data ostatniego potwierdzenia z katalogu. Sama flaga "dziala" nic nie
-        // znaczy bez tej daty - patrz RadioBrowser.isCheckStale.
+        // Date of the last confirmation from the catalog. The "works" flag alone
+        // means nothing without this date - see RadioBrowser.isCheckStale.
         val days = intent.getLongExtra(EXTRA_CHECK_DAYS, -1)
         if (days >= 0) {
             addDetail(
@@ -147,10 +148,10 @@ class StationInfoActivity : AppCompatActivity() {
     }
 
     /**
-     * Warianty strumienia jako lista wyboru.
+     * Stream variants as a selection list.
      *
-     * Zaznaczony jest ten, ktory faktycznie poleci do odtwarzacza - czyli wybor
-     * uzytkownika, a gdy go nie bylo, wariant o najwyzszej przeplywnosci.
+     * The checked one is whichever will actually be sent to the player - that is,
+     * the user's choice, or when there wasn't one, the variant with the highest bitrate.
      */
     private fun renderStreams() {
         val variants = station.variants()
@@ -172,9 +173,10 @@ class StationInfoActivity : AppCompatActivity() {
     }
 
     /**
-     * Wlasne logo z galerii. Kopiujemy plik do katalogu aplikacji, bo adres
-     * wybrany przez systemowy wybierak traci wazoosc po zamknieciu ekranu,
-     * a grafika ma byc dostepna takze dla Android Auto, z innego procesu.
+     * Custom logo from the gallery. We copy the file into the app's directory
+     * because the URI chosen by the system picker loses its validity once the
+     * screen closes, and the artwork needs to be available to Android Auto too,
+     * from a different process.
      */
     private val pickLogo = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.GetContent()
@@ -186,8 +188,8 @@ class StationInfoActivity : AppCompatActivity() {
             contentResolver.openInputStream(uri)?.use { input ->
                 val bitmap = android.graphics.BitmapFactory.decodeStream(input)
                     ?: return@runCatching null
-                // 1024 px to ten sam rozmiar, co nasze wlasne logotypy - na HDU
-                // widac roznice miedzy ostrym a rozmytym kafelkiem.
+                // 1024 px is the same size as our own logos - on the HDU
+                // the difference between a sharp and a blurry tile is visible.
                 val side = maxOf(bitmap.width, bitmap.height).coerceAtMost(1024)
                 val square = android.graphics.Bitmap.createBitmap(
                     side, side, android.graphics.Bitmap.Config.ARGB_8888
@@ -227,10 +229,10 @@ class StationInfoActivity : AppCompatActivity() {
     }
 
     /**
-     * Sprawdzenie strumienia na zadanie.
+     * On-demand stream check.
      *
-     * Katalog podaje date ostatniego udanego testu, ale ta bywa sprzed miesiecy -
-     * jedyna pewna odpowiedz daje wlasne polaczenie, tu i teraz.
+     * The catalog provides the date of the last successful test, but it can be
+     * months old - only your own connection gives a reliable answer, here and now.
      */
     private fun probe() {
         b.btnProbe.isEnabled = false
@@ -256,7 +258,7 @@ class StationInfoActivity : AppCompatActivity() {
         }
     }
 
-    /** Wiersz "etykieta / wartosc"; puste wartosci pomijamy zamiast pokazywac kreske. */
+    /** A "label / value" row; blank values are skipped instead of showing a dash. */
     private fun addDetail(labelRes: Int, value: String) {
         if (value.isBlank()) return
         val row = LinearLayout(this).apply {
@@ -284,9 +286,10 @@ class StationInfoActivity : AppCompatActivity() {
     }
 
     /**
-     * Czy stacja jest na liscie uzytkownika. Dotyczy tak samo wbudowanych, jak
-     * i dociagnietych z katalogu - z punktu widzenia tego ekranu roznica jest
-     * tylko taka, ze wbudowanej nie da sie skasowac, wiec ja ukrywamy.
+     * Whether the station is on the user's list. Applies equally to built-in
+     * stations and ones pulled from the catalog - from this screen's point of
+     * view the only difference is that a built-in one can't be deleted, so we
+     * hide it instead.
      */
     private fun isOnList(): Boolean =
         StationRepository.get(this).all().any { it.id == station.id }
@@ -294,11 +297,11 @@ class StationInfoActivity : AppCompatActivity() {
     private fun toggleOnList() {
         val onList = isOnList()
         when {
-            // Byla na liscie - zdejmujemy. Dociagnieta znika, wbudowana chowa sie
-            // do zbioru ukrytych i da sie ja przywrocic w Opcjach.
+            // It was on the list - we remove it. A discovered one disappears, a built-in
+            // one goes into the hidden set and can be restored in Options.
             onList && prefs.isDiscovered(station.id) -> prefs.removeDiscovered(station.id)
             onList -> prefs.hide(station.id)
-            // Nie bylo - wraca. Wbudowana byla tylko ukryta, wiec ja odkrywamy.
+            // It wasn't there - it comes back. A built-in one was only hidden, so we unhide it.
             prefs.isHidden(station.id) -> prefs.unhide(station.id)
             else -> prefs.addDiscovered(station)
         }
@@ -314,7 +317,7 @@ class StationInfoActivity : AppCompatActivity() {
     private fun renderToggle() {
         val onList = isOnList()
         b.btnToggle.setText(if (onList) R.string.info_remove else R.string.info_add)
-        // Ulubione dotycza wylacznie stacji, ktora juz jest na liscie
+        // Favourites only apply to a station that's already on the list
         b.favourite.visibility = if (onList) android.view.View.VISIBLE else android.view.View.GONE
         if (onList) renderFavourite()
     }
@@ -343,7 +346,7 @@ class StationInfoActivity : AppCompatActivity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        /** Ustawiane, gdy uzytkownik dodal albo usunal stacje na tym ekranie. */
+        /** Set when the user added or removed a station on this screen. */
         const val RESULT_CHANGED = "changed"
 
         private const val EXTRA_ID = "id"
@@ -379,7 +382,7 @@ class StationInfoActivity : AppCompatActivity() {
                 .putExtra(EXTRA_CHECK_DAYS, found.daysSinceCheck() ?: -1L)
         }
 
-        /** Wariant dla stacji juz dodanej - katalog nie jest wtedy potrzebny. */
+        /** Variant for a station that's already added - the catalog isn't needed then. */
         fun intent(context: Context, station: Station): Intent =
             Intent(context, StationInfoActivity::class.java)
                 .putExtra(EXTRA_ID, station.id)

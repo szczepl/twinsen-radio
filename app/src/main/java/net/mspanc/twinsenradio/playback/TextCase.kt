@@ -1,33 +1,36 @@
 package net.mspanc.twinsenradio.playback
 
 /**
- * Porzadkowanie napisow przysylanych przez rozglosnie.
+ * Cleans up text sent by stations.
  *
- * Problem jest realny i widoczny w aucie: Jacaranda FM podaje wszystko
- * WERSALIKAMI, a wytwornie wpisuja tak tytuly do katalogow ("NO ME ARREPIENTO
- * DE SENTIR TANTO"). Na waskim ekranie taki napis zjada dwie linie i krzyczy.
+ * The problem is real and visible in the car: Jacaranda FM sends everything
+ * in ALL CAPS, and labels enter titles into their catalogues the same way
+ * ("NO ME ARREPIENTO DE SENTIR TANTO"). On a narrow screen a string like that
+ * eats two lines and shouts at you.
  *
- * Kolejnosc postepowania jest wazna i celowo taka:
+ * The order of operations matters and is deliberately this:
  *
- *  1. Jesli napis nie jest krzykliwy - nie ruszamy go wcale. Rozglosnia wie
- *     lepiej, jak zapisac wlasny repertuar.
- *  2. Jesli jest krzykliwy, a katalog zna ten sam napis w porzadnym zapisie -
- *     bierzemy wersje z katalogu. To najlepsze zrodlo, bo pochodzi od wydawcy,
- *     a nie z automatu rozglosni.
- *  3. Dopiero gdy katalog tez krzyczy albo nic nie wie - normalizujemy sami.
+ *  1. If the text isn't shouty - leave it alone entirely. The station knows
+ *     best how to spell its own repertoire.
+ *  2. If it's shouty, but the catalogue knows the same text in proper case -
+ *     take the catalogue's version. That's the best source, since it comes
+ *     from the publisher rather than the station's automation.
+ *  3. Only when the catalogue is shouty too, or knows nothing - normalize it
+ *     ourselves.
  */
 object TextCase {
 
-    /** Samogloski razem z polskimi - do rozpoznawania skrotowcow. */
+    /** Vowels including Polish ones - for recognizing abbreviations. */
     private const val VOWELS = "aeiouyąęioóuAEIOUYĄĘIOÓU"
 
     /**
-     * Czy napis jest "krzykliwy", czyli zapisany w calosci wersalikami.
+     * Whether the text is "shouty", i.e. written entirely in all caps.
      *
-     * Wymagamy spacji, wiec pojedyncze wyrazy - "ABBA", "U2", "AC/DC", "MGMT" -
-     * nigdy tu nie trafiaja. Napisow wielowyrazowych nie ograniczamy dlugoscia:
-     * "I TRY" tez krzyczy, a przy progu pieciu liter przechodzilo bokiem.
-     * Skrotowce wewnatrz zdania chroni osobna regula w [tame].
+     * We require a space, so single words - "ABBA", "U2", "AC/DC", "MGMT" -
+     * never end up here. Multi-word text isn't limited by length: "I TRY" is
+     * shouty too, and a five-letter threshold let it slip through. Standalone
+     * abbreviations within a sentence are protected by a separate rule in
+     * [tame].
      */
     fun isShouty(text: String): Boolean {
         val letters = text.filter { it.isLetter() }
@@ -37,11 +40,11 @@ object TextCase {
     }
 
     /**
-     * Sprowadza napis wersalikowy do zapisu z wielkiej litery.
+     * Brings an all-caps string down to title case.
      *
-     * Krotkie wyrazy bez samoglosek zostawiamy w spokoju - to prawie zawsze
-     * skrotowce (DJ, MC, FM, RMF), ktore po "znormalizowaniu" wygladalyby
-     * glupio ("Dj Snake").
+     * Short words without vowels are left alone - they're almost always
+     * abbreviations (DJ, MC, FM, RMF), which would look silly after
+     * "normalizing" ("Dj Snake").
      */
     fun tame(text: String): String = text.split(' ').joinToString(" ") { word ->
         val letters = word.filter { it.isLetter() }
@@ -53,8 +56,8 @@ object TextCase {
     }
 
     /**
-     * @param raw napis z rozglosni
-     * @param fromCatalogue ten sam napis wedlug katalogu (iTunes / MusicBrainz)
+     * @param raw text from the station
+     * @param fromCatalogue the same text according to the catalogue (iTunes / MusicBrainz)
      */
     fun tidy(raw: String?, fromCatalogue: String? = null): String {
         val text = raw?.trim().orEmpty()
@@ -68,7 +71,7 @@ object TextCase {
         return tame(text)
     }
 
-    /** Porownanie z pominieciem wielkosci liter i znakow niealfanumerycznych. */
+    /** Comparison ignoring case and non-alphanumeric characters. */
     private fun sameText(a: String, b: String): Boolean = normalize(a) == normalize(b)
 
     private fun normalize(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")

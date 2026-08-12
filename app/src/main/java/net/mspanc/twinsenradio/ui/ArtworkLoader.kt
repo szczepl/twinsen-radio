@@ -14,19 +14,19 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Wczytuje okladke do ImageView. Swiadomie bez zewnetrznej biblioteki - potrzeba
- * jest jedna: pobrac jeden obrazek po HTTP i pokazac go, z prostym cache.
+ * Loads cover art into an ImageView. Deliberately without an external library -
+ * there's only one need: fetch a single image over HTTP and show it, with a simple cache.
  *
- * Adresy inne niz http(s) - np. android.resource:// z logo stacji - obsluguje
- * sam ImageView, wiec ustawiamy je od razu jako zasob.
+ * URIs other than http(s) - e.g. android.resource:// from a station's logo - are
+ * handled by ImageView itself, so we set them directly as a resource.
  */
 object ArtworkLoader {
 
     private val cache = LruCache<String, Bitmap>(8)
 
     /**
-     * @param uri okladka z metadanych sesji; null albo nie-HTTP oznacza, ze
-     *   pokazujemy [fallbackRes]
+     * @param uri cover art from session metadata; null or non-HTTP means we
+     *   show [fallbackRes]
      */
     fun into(
         scope: LifecycleCoroutineScope,
@@ -34,8 +34,8 @@ object ArtworkLoader {
         fallbackRes: Int,
         target: ImageView
     ) {
-        // Wlasne logo uzytkownika lezy w katalogu aplikacji - czytamy je wprost,
-        // bez pobierania i bez cache po adresie.
+        // The user's own logo lives in the app's directory - we read it directly,
+        // without downloading and without caching by URL.
         if (uri?.scheme == "file") {
             val bitmap = runCatching { BitmapFactory.decodeFile(uri.path) }.getOrNull()
             if (bitmap != null) {
@@ -57,13 +57,13 @@ object ArtworkLoader {
             return
         }
 
-        // pokaz logo, dopoki okladka sie nie sciagnie
+        // show the logo until the cover art has downloaded
         target.setImageResource(fallbackRes)
         target.setTag(TAG_KEY, url)
 
         scope.launch {
             val bitmap = withContext(Dispatchers.IO) { fetch(url) }
-            // w miedzyczasie utwor mogl sie zmienic
+            // the track may have changed in the meantime
             if (bitmap != null && target.getTag(TAG_KEY) == url) {
                 cache.put(url, bitmap)
                 target.setImageBitmap(bitmap)

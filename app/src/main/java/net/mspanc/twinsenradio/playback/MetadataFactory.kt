@@ -19,14 +19,14 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 /**
- * Buduje metadane, ktore trafiaja do MediaSession, a stamtad do Android Auto
- * i dalej do wyswietlacza w desce rozdzielczej.
+ * Builds the metadata that goes into the MediaSession, and from there to Android Auto
+ * and on to the dashboard display.
  */
 class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
     private val artworkBytesCache = HashMap<String, ByteArray?>()
 
-    /** Metadane pozycji na liscie przegladania (Android Auto rysuje z nich kafelek). */
+    /** Metadata for a browse-list item (Android Auto renders a tile from it). */
     fun forBrowseItem(station: Station): MediaMetadata =
         MediaMetadata.Builder()
             .setTitle(station.name)
@@ -49,10 +49,10 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             .build()
 
     /**
-     * Metadane aktualnie odtwarzanej stacji.
+     * Metadata for the currently playing station.
      *
-     * W trybie diagnostycznym kazde pole dostaje swoja polska nazwe - to jest ta
-     * wersja, ktora sluzy do rozpoznania ukladu na AID w Passacie.
+     * In diagnostic mode, every field gets its own Polish name - this is the
+     * version used to figure out the layout on the AID in the Passat.
      */
     fun forPlayback(
         station: Station,
@@ -69,10 +69,10 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             val withApi = prefs.diagnosticShowApiName
             val clock = clockText()
 
-            // Kazde pole niesie swoja nazwe ORAZ zegar, np. "TYT.WYSW 16:44".
-            // Jeden wyjazd daje wtedy odpowiedz na dwa pytania naraz: ktore pole
-            // glowica pokazuje i czy odswieza je w trakcie odtwarzania, czy
-            // zamraza na wartosci z chwili rozpoczecia utworu.
+            // Each field carries its own name AND the clock, e.g. "TYT.WYSW 16:44".
+            // A single drive then answers two questions at once: which field
+            // the head unit shows, and whether it refreshes it during playback
+            // or freezes it at the value from when the track started.
             fun v(api: String): String {
                 val field = DiagnosticFields.TEXT.first { it.api == api }
                 return DiagnosticFields.value(field, withApi) + " " + clock
@@ -100,39 +100,39 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         } else {
             val p = prefs.presentation
 
-            // Zapis poprawiamy raz, w jednym miejscu - wszystkie wiersze i pola
-            // semantyczne korzystaja potem z tych samych napisow. Przy okazji
-            // prostujemy kolejnosc, gdy stacja nadaje "tytul - wykonawca"
-            // zamiast odwrotnie (Jacaranda FM).
+            // We fix up the text once, in one place - all lines and semantic
+            // fields then use the same strings. While at it, we also
+            // straighten out the order when a station broadcasts "title - artist"
+            // instead of the other way round (Jacaranda FM).
             val title = now?.let { displayTitle(it, trackInfo) }.orEmpty()
             val artist = now?.let { displayArtist(it, trackInfo) }.orEmpty()
 
             val top = lineText(p.top, station, now, trackInfo, title, artist)
             val bottom = lineText(p.bottom, station, now, trackInfo, title, artist)
 
-            // Srodkowy wiersz widac wylacznie na AID, wiec to jedyne miejsce, gdzie
-            // mozna cos dopisac bez zasmiecania ekranu centralnego. Dwa przypadki
-            // maja pierwszenstwo przed wyborem uzytkownika:
+            // The middle line is only visible on the AID, so it's the only place where
+            // something can be added without cluttering the central screen. Two cases
+            // take priority over the user's choice:
             val middle = when {
-                // 1. Brak sieci. Zamiast pustki i ciszy bez wyjasnienia - komunikat.
+                // 1. No network. Instead of an unexplained empty silence - a message.
                 PlaybackStatusBus.status.value == PlaybackStatusBus.Status.WAITING_FOR_NETWORK ->
                     context.getString(R.string.aid_waiting_network)
-                // 2. Zegar zamiast okladki jest wlaczony, ale wlasnie zaslonila go
-                //    okladka utworu - wtedy godzina przenosi sie tutaj, zeby nie
-                //    znikala na czas piosenki.
+                // 2. The clock-instead-of-cover option is on, but the track's cover
+                //    art has just covered it up - in that case the time moves here
+                //    so it doesn't disappear for the duration of the song.
                 clockMovesToMiddle(coverArtUrl) -> clockText()
                 else -> lineText(p.middle, station, now, trackInfo, title, artist)
             }
 
-            // Pola, ktore glowica naprawde rysuje. Zmierzone w Passacie
-            // (BADANIA.md): AID czyta subtitle / description / displayTitle,
-            // ekran centralny displayTitle jako duza linie i subtitle jako mala.
+            // The fields the head unit actually renders. Measured in the Passat
+            // (BADANIA.md): the AID reads subtitle / description / displayTitle,
+            // the central screen reads displayTitle as the large line and subtitle as the small one.
             b.setSubtitle(top)
                 .setDescription(middle)
                 .setDisplayTitle(bottom)
-                // Pola semantyczne. Na zadnym ekranie w aucie sie nie pojawiaja,
-                // ale opisuja to, co faktycznie leci - inne systemy potrafia po
-                // nie siegac, wiec trzymamy je uczciwie, a nie jako kopie linii.
+                // Semantic fields. They don't appear on any screen in the car,
+                // but they describe what's actually playing - other systems may
+                // reach for them, so we keep them honest rather than as copies of the lines.
                 .setTitle(titleLine(now, title))
                 .setArtist(artist)
                 .setAlbumTitle(trackInfo?.album.orEmpty())
@@ -145,11 +145,11 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * Tresc pojedynczego wiersza opisu.
+     * The content of a single description line.
      *
-     * Wiersze zawierajace wykonawce sa celowo puste, gdy nie leci utwor -
-     * powielanie nazwy stacji w kilku liniach to dokladnie ta wada, ktora widac
-     * w ReplaIO i w oficjalnej aplikacji RNS.
+     * Lines containing the artist are intentionally empty when no track is playing -
+     * duplicating the station name across several lines is exactly the flaw seen
+     * in ReplaIO and in the official RNS app.
      */
     private fun lineText(
         content: LineContent,
@@ -174,17 +174,17 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             if (now?.isRealSong == true) {
                 listOf(artist, title).filter { it.isNotBlank() }.joinToString(" — ")
             } else {
-                // Poza utworem nie ma czego sklejac - pokaz to samo, co linia tytulu
+                // Outside of a track there's nothing to join - show the same thing as the title line
                 titleLine(now, title)
             }
     }
 
     /**
-     * Czy godzina ma przejsc do srodkowego wiersza.
+     * Whether the time should move to the middle line.
      *
-     * Dotyczy ukladu "zegar zamiast okladki" ustawionego tak, ze zegar ustepuje
-     * miejsca okladce utworu. Bez tego zegar znikalby na kazda piosenke, czyli
-     * przez wiekszosc czasu - a po to sie go wybiera, zeby byl.
+     * Applies to the "clock instead of cover" layout set up so that the clock
+     * yields to the track's cover art. Without this the clock would disappear for
+     * every song, i.e. most of the time - and the whole point of choosing it is that it's there.
      */
     private fun clockMovesToMiddle(coverArtUrl: String?): Boolean =
         prefs.presentation.clockFace != ClockFace.NONE &&
@@ -192,8 +192,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             coverArtUrl != null
 
     /**
-     * Linia tytulu. Poza utworem wstawiamy to, co akurat wiadomo: serwis,
-     * slogan stacji albo etykiete reklamy - byle nie pusty ekran.
+     * The title line. Outside of a track we insert whatever we know at that
+     * moment: the news, the station's slogan, or an ad label - anything but an empty screen.
      */
     private fun titleLine(now: NowPlaying?, title: String): String = when {
         now?.isRealSong == true -> title
@@ -209,8 +209,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 
     private fun applyArtwork(b: MediaMetadata.Builder, station: Station, coverArtUrl: String?) {
-        // Zegar zamiast okladki - rysowany w locie, wiec nie ma adresu i musi
-        // pojechac jako bajty.
+        // Clock instead of cover art - drawn on the fly, so there's no URI and it
+        // has to travel as bytes.
         val p = prefs.presentation
         if (p.clockFace != ClockFace.NONE) {
             val useClock = prefs.clockCoverAlways || coverArtUrl == null
@@ -223,9 +223,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 }
             }
         }
-        // Doszukana okladka utworu ma pierwszenstwo przed logo stacji.
-        // Celowo niezalezne od trybu diagnostycznego: tryb podmienia wylacznie
-        // pola tekstowe na etykiety, grafika ma zachowywac sie zawsze tak samo.
+        // A found track cover art takes priority over the station logo.
+        // Deliberately independent of diagnostic mode: that mode only swaps out
+        // the text fields for labels, the artwork should always behave the same way.
         if (coverArtUrl != null) {
             b.setArtworkUri(Uri.parse(coverArtUrl))
             return
@@ -245,22 +245,22 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * URI logotypu: wbudowany zasob albo zdalna grafika z listy M3U.
+     * The logo URI: a bundled resource or remote artwork from the M3U list.
      *
-     * Wbudowane logo idzie przez [LogoProvider], a nie jako android.resource://
-     * z numerem zasobu - patrz komentarz w tamtej klasie: numery zmieniaja sie
-     * miedzy wersjami, a Android Auto cache'uje grafike po adresie.
+     * The bundled logo goes through [LogoProvider] rather than as an android.resource://
+     * with a resource number - see the comment in that class: the numbers change
+     * between versions, and Android Auto caches artwork by URI.
      */
     fun logoUri(station: Station): Uri {
-        // Wlasna grafika uzytkownika bije wszystko inne
+        // The user's own custom artwork beats everything else
         customLogoFile(station)?.let { return LogoProvider.customUriFor(context, station, it) }
         station.logoUrl?.let { return Uri.parse(it) }
         return LogoProvider.uriFor(context, station, logoResId(station))
     }
 
     /**
-     * Adres logo do pokazania na telefonie. Inaczej niz [logoUri] moze zwrocic
-     * `file://` - lokalne ekrany czytaja plik wprost, bez posrednika.
+     * The logo URI to show on the phone. Unlike [logoUri] it may return a
+     * `file://` URI - local screens read the file directly, without a middleman.
      */
     fun logoDisplayUri(station: Station): Uri? =
         customLogoFile(station)?.let { Uri.fromFile(it) }
@@ -301,7 +301,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         }
 
     companion object {
-        /** 512 px to rozsadny kompromis: HU dostaje ostry obrazek, a Binder nie puchnie. */
+        /** 512 px is a reasonable compromise: the HU gets a sharp image, and the Binder doesn't bloat. */
         private const val ART_SIZE = 512
 
         private val CLOCK_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -309,19 +309,19 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         const val AD_LABEL = "Reklama"
 
         /**
-         * Linia wykonawcy, w razie potrzeby uzupelniona o wydawnictwo.
+         * The artist line, supplemented with the release when needed.
          *
-         * Wspoldzielona przez metadane dla auta i ekran odtwarzania w telefonie -
-         * inaczej na telefonie brakowaloby nazwy plyty, ktora widac w aucie.
+         * Shared between the car metadata and the phone's playback screen -
+         * otherwise the phone would be missing the album name visible in the car.
          *
-         * RMF sam podaje gotowe "Wiktoria Kida / Księga" - takiego zapisu nie
-         * ruszamy. Stacjom, ktore daja samego wykonawce, dokladamy to, co wie
-         * katalog: "Kaeyra · singiel [2024]".
+         * RMF already provides a ready-made "Wiktoria Kida / Księga" - we don't
+         * touch that kind of text. For stations that give just the artist, we
+         * append what the catalog knows: "Kaeyra · single [2024]".
          */
         /**
-         * Tytul i wykonawca w postaci nadajacej sie na ekran: z poprawiona
-         * kolejnoscia (gdy stacja nadaje odwrotnie) i uporzadkowanym zapisem.
-         * Wspoldzielone przez auto i telefon, zeby nie rozjechaly sie miedzy soba.
+         * Title and artist in a form fit for the screen: with corrected
+         * order (when the station broadcasts it reversed) and tidied-up text.
+         * Shared between the car and the phone so they don't drift apart from each other.
          */
         fun displayTitle(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
             val swapped = info?.looksSwapped(now.artist, now.songTitle) == true
@@ -334,15 +334,15 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         }
 
         /**
-         * Sam wykonawca, bez plyty - do uzycia tam, gdzie plyta ma isc na
-         * osobna linie (ekran odtwarzania na telefonie), a nie po kropce.
+         * The artist alone, without the album - for use where the album should go
+         * on a separate line (the phone's playback screen), not after a dot.
          */
         fun composeArtistOnly(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
             val artist = displayArtist(now, info)
             if (artist.isBlank() || info == null) return artist
 
-            // Odetnij koncowke tylko wtedy, gdy katalog potwierdza, ze to nazwa
-            // plyty. Inaczej "Shimza / AR/CO / Kasango" stracilby trzeciego wykonawce.
+            // Only trim the tail when the catalog confirms it's an album
+            // name. Otherwise "Shimza / AR/CO / Kasango" would lose its third artist.
             val parts = artist.split(Regex("\\s+[/,]\\s+"))
             return if (parts.size > 1 && info.tailIsAlbum(parts.last())) {
                 parts.dropLast(1).joinToString(" / ")
@@ -360,23 +360,23 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             if (artistsOnly.isBlank() || !enrich || info == null) return artistsOnly
 
             val album = info.albumLabel() ?: return artistsOnly
-            // Wydawnictwo oddzielamy kropka srodkowa, a nie ukosnikiem - przy kilku
-            // wykonawcach po ukosnikach nie dalo by sie ich odroznic od plyty.
+            // We separate the release with a middle dot, not a slash - with several
+            // artists separated by slashes there'd be no way to tell them apart from the album.
             return "$artistsOnly · $album"
         }
 
-        /** Zawsze dwucyfrowa godzina i minuta, np. "09:07". */
+        /** Always a two-digit hour and minute, e.g. "09:07". */
         fun clockText(): String = LocalTime.now().format(CLOCK_FORMAT)
     }
 }
 
 /**
- * To, co przyszlo w metadanych ICY (Icecast/SHOUTcast) dla biezacego strumienia.
+ * What came in the ICY (Icecast/SHOUTcast) metadata for the current stream.
  *
- * [isStationSelfTitle] oznacza przypadek, w ktorym rozglosnia wpisala w to samo
- * pole nie utwor, tylko wlasna nazwe i slogan albo nazwe audycji - np.
- * "Radio Nowy Świat - Pion i poziom!". Naiwny podzial po " - " robi wtedy
- * "wykonawce" rownego nazwie stacji i nazwa laduje na ekranie dwa razy.
+ * [isStationSelfTitle] denotes the case where the station put not a track but
+ * its own name and slogan, or a show name, into that same field - e.g.
+ * "Radio Nowy Świat - Pion i poziom!". A naive split on " - " then makes the
+ * "artist" equal to the station name, and the name ends up on screen twice.
  */
 data class NowPlaying(
     val raw: String,
@@ -385,31 +385,31 @@ data class NowPlaying(
     val isStationSelfTitle: Boolean = false,
     val isAd: Boolean = false,
     val adDurationMs: Long = 0,
-    /** Znacznik sterujacy rozglosni, np. STOP_AD_BREAK - nie jest trescia. */
+    /** A station control marker, e.g. STOP_AD_BREAK - not content. */
     val isControlMarker: Boolean = false
 ) {
-    /** Slogan albo nazwa audycji - to, co stacja wpisala zamiast utworu. */
+    /** Slogan or show name - what the station put in instead of a track. */
     val slogan: String? get() = if (isStationSelfTitle) songTitle else null
 
     /**
-     * Serwis informacyjny. RMF oznacza go jako "RMF FM - FAKTY", inne stacje
-     * uzywaja slow "wiadomosci", "informacje", "serwis". To nie jest utwor, ale
-     * warto to nazwac po imieniu zamiast pokazywac pusta linie.
+     * A news broadcast. RMF marks it as "RMF FM - FAKTY", other stations
+     * use the words "wiadomosci", "informacje", "serwis". This isn't a track, but
+     * it's worth calling it by name instead of showing an empty line.
      */
     val isNews: Boolean
         get() = slogan?.let { s -> NEWS_WORDS.any { s.contains(it, ignoreCase = true) } } == true
 
-    /** Czy naprawde leci utwor, a nie reklama, znacznik ani wlasna zapowiedz stacji. */
+    /** Whether a track is really playing, as opposed to an ad, a marker, or the station's own announcement. */
     val isRealSong: Boolean
         get() = !isAd && !isStationSelfTitle && !isControlMarker && !songTitle.isNullOrBlank()
 
     companion object {
         /**
-         * Typowy StreamTitle to "Wykonawca - Tytul".
+         * A typical StreamTitle is "Artist - Title".
          *
-         * @param stationName nazwa stacji, potrzebna do rozpoznania wlasnego sloganu
-         * @param rawBlock caly blok ICY - stad rozpoznajemy reklamy. RMF wysyla
-         *   pusty StreamTitle wraz z adw_ad='true', adId i durationMilliseconds.
+         * @param stationName the station name, needed to detect its own slogan
+         * @param rawBlock the whole ICY block - this is how we detect ads. RMF sends
+         *   an empty StreamTitle along with adw_ad='true', adId, and durationMilliseconds.
          */
         fun parse(
             streamTitle: String?,
@@ -424,25 +424,25 @@ data class NowPlaying(
 
             val raw = streamTitle?.trim().orEmpty()
 
-            // Rozglosnie oznaczaja reklamy na dwa sposoby i potrafia je zmieniac:
-            // RMF wysylal blok z adw_ad='true', a teraz przysyla po prostu
-            // StreamTitle='Reklama'. Bez tego wykazu slowo "Reklama" trafialo do
-            // wyszukiwarki okladek i wracalo z okladka uzbeckiej piosenki o tym
-            // tytule.
+            // Stations mark ads in two ways and can switch between them:
+            // RMF used to send a block with adw_ad='true', and now just sends
+            // StreamTitle='Reklama'. Without this list, the word "Reklama" would end up in
+            // the cover art search and come back with the cover of an Uzbek song by that
+            // title.
             if (raw.isNotEmpty() && AD_WORDS.any { it.equals(raw, ignoreCase = true) }) {
                 return NowPlaying(raw, null, null, isAd = true, adDurationMs = adMs)
             }
 
             if (raw.isEmpty()) {
-                // Pusty tytul sam w sobie nie niesie nic, ale jesli towarzyszy mu
-                // znacznik reklamy, to jest konkretna informacja warta pokazania.
+                // An empty title on its own carries nothing, but if it's accompanied
+                // by an ad marker, that's concrete information worth showing.
                 return if (isAd) NowPlaying("", null, null, isAd = true, adDurationMs = adMs) else null
             }
 
-            // Znaczniki sterujace: RMF wysyla w StreamTitle np. STOP_AD_BREAK,
-            // zeby oznaczyc koniec bloku reklamowego. To nie jest tytul utworu -
-            // potraktowany doslownie zostawal na ekranie razem z okladka
-            // poprzedniej piosenki.
+            // Control markers: RMF sends things like STOP_AD_BREAK in StreamTitle
+            // to mark the end of an ad block. This isn't a track title -
+            // taken literally it used to stay on screen together with the
+            // previous song's cover art.
             if (CONTROL_MARKER.matches(raw)) {
                 val upper = raw.uppercase()
                 val breakStarts = upper.contains("START") && upper.contains("AD")
@@ -469,24 +469,24 @@ data class NowPlaying(
         }
 
         /**
-         * Same wielkie litery, cyfry i podkreslniki, bez spacji - tak wygladaja
-         * znaczniki sterujace rozglosni, a nie tytuly utworow.
+         * Only uppercase letters, digits, and underscores, no spaces - that's what
+         * station control markers look like, not track titles.
          */
         private val CONTROL_MARKER = Regex("^[A-Z0-9][A-Z0-9_]{3,}$")
 
-        /** Slowa, po ktorych rozpoznajemy serwis informacyjny. */
+        /** Words used to recognize a news broadcast. */
         private val NEWS_WORDS = listOf(
             "fakty", "wiadomosci", "wiadomości", "informacje", "serwis", "news"
         )
 
-        /** Tytuly, ktore w istocie oznaczaja blok reklamowy, a nie utwor. */
+        /** Titles that actually denote an ad block, not a track. */
         private val AD_WORDS = listOf(
             "reklama", "reklamy", "reklamа",
             "spot reklamowy", "blok reklamowy",
             "advertisement", "advert", "commercial", "ad break", "ads"
         )
 
-        /** Porownanie odporne na diakrytyki, wielkosc liter i slowo "radio". */
+        /** A comparison resilient to diacritics, letter case, and the word "radio". */
         private fun similar(a: String, b: String): Boolean {
             fun norm(s: String) = s.lowercase()
                 .replace("ł", "l")

@@ -18,19 +18,21 @@ import net.mspanc.twinsenradio.data.Station
 import java.io.File
 
 /**
- * Wystawia logotypy stacji pod **stalym** adresem `content://.../logo/<id>`.
+ * Serves station logos under a **stable** `content://.../logo/<id>` address.
  *
- * Po co to w ogole istnieje: wczesniej logo jechalo do Android Auto jako
- * `android.resource://net.mspanc.twinsenradio/2131165359`. W takim adresie
- * siedzi numeryczny identyfikator zasobu, a ten zmienia sie przy niemal kazdej
- * przebudowie aplikacji - wystarczy dolozyc jeden plik do res/drawable. Android
- * Auto pamieta pobrane grafiki pod adresem, wiec po aktualizacji ten sam numer
- * wskazywal juz inna stacje i HDU rysowalo logo z pamieci - stad "RMF FM" pod
- * logotypem Radia Nowy Swiat.
+ * Why this exists at all: logos used to go to Android Auto as
+ * `android.resource://net.mspanc.twinsenradio/2131165359`. That kind of
+ * address embeds a numeric resource ID, and that ID changes on almost every
+ * app rebuild - adding a single file to res/drawable is enough. Android Auto
+ * caches downloaded artwork by address, so after an update the same number
+ * would already point to a different station, and the head unit would draw
+ * the logo from its own cache - hence "RMF FM" appearing under Radio Nowy
+ * Swiat's logo.
  *
- * Tutaj adres opisuje stacje, a nie zasob, wiec jest stabilny miedzy wersjami.
- * Numer zasobu doklejamy jako parametr `?v=`, zeby przy podmianie samej grafiki
- * (ten sam identyfikator stacji, inny plik) cache uniewaznil sie dokladnie raz.
+ * Here the address describes the station, not the resource, so it's stable
+ * across versions. The resource number is appended as a `?v=` parameter, so
+ * that when the artwork itself is swapped (same station ID, different file)
+ * the cache is invalidated exactly once.
  */
 class LogoProvider : ContentProvider() {
 
@@ -39,9 +41,9 @@ class LogoProvider : ContentProvider() {
     override fun getType(uri: Uri): String = "image/png"
 
     /**
-     * Grafike oddajemy z pliku w cache, a nie z potoku: czytelnicy po drugiej
-     * stronie (Android Auto, Glide) potrafia pytac o rozmiar i przewijac, a
-     * potok tego nie obsluguje.
+     * We hand back the image from a cached file rather than a pipe: readers
+     * on the other side (Android Auto, Glide) can query the size and seek,
+     * which a pipe doesn't support.
      */
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
         val context = context ?: return null
@@ -77,12 +79,13 @@ class LogoProvider : ContentProvider() {
     override fun delete(uri: Uri, s: String?, a: Array<out String>?): Int = 0
 
     /**
-     * Zamienia zasob na plik PNG. Rysujemy raz - kolejne odczyty ida juz z dysku,
-     * a nazwa pliku zawiera numer zasobu, wiec po przebudowie powstaje nowy plik.
+     * Turns a resource into a PNG file. We render once - subsequent reads
+     * come from disk, and since the file name contains the resource number,
+     * a rebuild produces a new file.
      */
     private fun renderToCache(context: Context, uri: Uri): File? = runCatching {
-        // Wlasna grafika uzytkownika lezy juz gotowa w katalogu aplikacji -
-        // nie ma czego renderowac, wystarczy ja oddac.
+        // The user's own custom artwork already sits ready in the app's
+        // directory - there's nothing to render, just hand it back.
         if (uri.pathSegments.firstOrNull() == "custom") {
             val path = uri.getQueryParameter(PARAM_PATH) ?: return@runCatching null
             return@runCatching File(path).takeIf { it.exists() }
@@ -111,30 +114,33 @@ class LogoProvider : ContentProvider() {
         private const val PARAM_PATH = "p"
         private const val SIZE = 512
 
-        /** Musi zgadzac sie z android:authorities w manifescie. */
+        /** Must match android:authorities in the manifest. */
         fun authority(context: Context): String = "${context.packageName}.logos"
 
         /**
-         * @param resId numer zasobu z tej wersji aplikacji - trafia do adresu
-         *   wylacznie po to, zeby uniewaznic cache po podmianie grafiki.
+         * @param resId the resource number from this version of the app -
+         *   included in the address solely to invalidate the cache when the
+         *   artwork is swapped.
          */
         fun uriFor(context: Context, station: Station, resId: Int): Uri =
             build(context, "logo", station.id, resId)
 
         /**
-         * Adres ikony przycisku w Android Auto. Powod jest ten sam co przy logo,
-         * tylko objaw inny: przyciski dostawaly numer zasobu, a HDU pamieta
-         * narysowana ikone pod tym numerem. Po przebudowie aplikacji numery
-         * przesuwaja sie (wystarczy dolozyc jeden plik do res/drawable) i w
-         * miejscu zapelnionej gwiazdki pojawialo sie to, co wczesniej mialo jej
-         * numer - pusta gwiazdka albo wrecz kwadrat.
+         * Address of a button icon in Android Auto. The reason is the same as
+         * for the logo, just the symptom differs: buttons used to get a
+         * resource number, and the head unit remembers the icon it drew under
+         * that number. After an app rebuild the numbers shift (adding a
+         * single file to res/drawable is enough), and where a filled star
+         * should be, whatever previously had that number would show up
+         * instead - an empty star, or even a plain square.
          */
         fun iconUri(context: Context, name: String, resId: Int): Uri =
             build(context, "icon", name, resId)
 
         /**
-         * Grafika wgrana przez uzytkownika. Czas modyfikacji pliku trafia do
-         * adresu, zeby podmiana logo uniewaznila to, co glowica ma w pamieci.
+         * Artwork uploaded by the user. The file's modification time is
+         * included in the address, so that replacing the logo invalidates
+         * what the head unit has cached.
          */
         fun customUriFor(context: Context, station: Station, file: File): Uri =
             Uri.Builder()

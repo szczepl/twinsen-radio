@@ -10,21 +10,22 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * Szuka okladki dla aktualnie granego utworu.
+ * Looks up cover art for the track currently playing.
  *
- * Skad wiadomo, ze tak sie to robi: strumien ICY **nie niesie zadnej grafiki** -
- * przychodzi w nim wylacznie tekst (StreamTitle i ewentualnie StreamUrl).
- * Rozglosnie doklejaja okladki po stronie klienta, odpytujac zewnetrzny katalog.
- * Webplayer Radia Nowy Swiat robi dokladnie to, co ponizej - w jego
- * `neoplayer-min.js` siedzi:
+ * How we know this is the right approach: the ICY stream **carries no artwork
+ * at all** - it only ever carries text (StreamTitle and optionally StreamUrl).
+ * Stations bolt cover art on client-side by querying an external catalogue.
+ * Radio Nowy Swiat's web player does exactly what's below - its
+ * `neoplayer-min.js` contains:
  *
  *     $.ajax({ url: `https://itunes.apple.com/search?term=${title} ${artist}&media=music` })
  *
- * Katalog iTunes jest darmowy, nie wymaga klucza ani rejestracji i zwraca adres
- * okladki w polu artworkUrl100, ktory da sie podmienic na wieksza rozdzielczosc.
+ * The iTunes catalogue is free, needs no key or registration, and returns the
+ * artwork address in the artworkUrl100 field, which can be swapped for a
+ * higher resolution.
  *
- * Alternatywy, gdyby trafienia byly slabe: MusicBrainz + Cover Art Archive
- * (darmowe, wolniejsze), Deezer API (darmowe), Last.fm i Spotify (wymagaja klucza).
+ * Fallbacks in case hits are poor: MusicBrainz + Cover Art Archive (free,
+ * slower), Deezer API (free), Last.fm and Spotify (require a key).
  */
 object CoverArtLookup {
 
@@ -35,24 +36,25 @@ object CoverArtLookup {
     private const val MUSICBRAINZ_AGENT = "TwinsenRadio/0.1 (twinsen@mspanc.net)"
 
     /**
-     * Co udalo sie ustalic o utworze. Poza okladka katalog zna tez nazwe wydawnictwa
-     * i rok - a tego rozglosnie zwykle nie podaja.
+     * What we managed to find out about the track. Besides artwork, the
+     * catalogue also knows the release name and year - which stations
+     * usually don't provide.
      */
     data class TrackInfo(
         val artworkUrl: String?,
         val album: String?,
         val year: Int?,
         val isSingle: Boolean,
-        /** Dlugosc utworu z katalogu; 0 gdy nieznana. */
+        /** Track duration from the catalogue; 0 when unknown. */
         val durationMs: Long = 0,
         /**
-         * Tytul i wykonawca **wedlug katalogu**. Sluza do poprawienia zapisu,
-         * gdy rozglosnia krzyczy wersalikami - patrz [TextCase.tidy].
+         * Title and artist **according to the catalogue**. Used to fix up the
+         * text when a station shouts in all caps - see [TextCase.tidy].
          */
         val trackName: String? = null,
         val artistName: String? = null
     ) {
-        /** np. "Księga [2024]" albo "singiel [2024]". */
+        /** e.g. "Księga [2024]" or "singiel [2024]" (the literal produced below). */
         fun albumLabel(): String? {
             val name = when {
                 isSingle -> "singiel"
@@ -63,13 +65,14 @@ object CoverArtLookup {
         }
 
         /**
-         * Czy koncowka podana przez rozglosnie to nazwa wydawnictwa, a nie kolejny
-         * wykonawca.
+         * Whether the tail provided by the station is the release name rather
+         * than another artist.
          *
-         * Po samym separatorze tego nie odroznisz: RMF pisze "Wiktoria Kida / Księga"
-         * (wykonawca i plyta), ale rownie dobrze przysyla "Shimza / AR/CO / Kasango"
-         * (trzech wykonawcow) albo "Nico / Vinz" (nazwa zespolu ze slashem).
-         * Rozstrzyga dopiero porownanie z tym, co o utworze wie katalog.
+         * You can't tell this from the separator alone: RMF writes "Wiktoria
+         * Kida / Księga" (artist and album), but it just as happily sends
+         * "Shimza / AR/CO / Kasango" (three artists) or "Nico / Vinz" (a band
+         * name that contains a slash). Only comparing against what the
+         * catalogue knows about the track settles it.
          */
         fun tailIsAlbum(tail: String): Boolean {
             val a = album ?: return false
@@ -77,22 +80,23 @@ object CoverArtLookup {
         }
 
         /**
-         * Czy rozglosnia podala wykonawce i tytul w odwrotnej kolejnosci.
+         * Whether the station gave the artist and title in reverse order.
          *
-         * Nie wszyscy trzymaja sie schematu "Wykonawca - Tytul". Jacaranda FM
-         * nadaje odwrotnie, co widac w podsluchu strumienia:
+         * Not everyone sticks to the "Artist - Title" scheme. Jacaranda FM
+         * broadcasts it backwards, as seen by sniffing the stream:
          *
          *   StreamTitle='THINKING ABOUT YOU - GOODLUCK'
          *   StreamTitle='WHAT'S LOVE GOT TO DO WITH IT - KYGO [+] TINA TURNER'
          *
-         * Po samym napisie tego nie rozstrzygniesz - "Nico / Vinz" moze byc
-         * i zespolem, i dwoma slowami tytulu. Rozstrzyga dopiero katalog: jesli
-         * to, co wzielismy za wykonawce, jest u niego tytulem, a to, co wzielismy
-         * za tytul - wykonawca, to znaczy, ze pola sa zamienione.
+         * You can't settle this from the text alone - "Nico / Vinz" could be
+         * a band name or two words of a title. Only the catalogue can decide:
+         * if what we took for the artist turns out to be the title there, and
+         * what we took for the title turns out to be the artist, the fields
+         * are swapped.
          *
-         * Dzieki temu nie trzeba oznaczac stacji recznie w stations.json ani
-         * zgadywac - poprawka wynika z danych i dziala dla kazdej rozglosni,
-         * ktora tak nadaje.
+         * This means stations don't need to be flagged by hand in
+         * stations.json, nor guessed at - the fix follows from the data and
+         * works for any station that broadcasts this way.
          */
         fun looksSwapped(artist: String?, title: String?): Boolean {
             val a = normalize(artist.orEmpty())
@@ -100,10 +104,11 @@ object CoverArtLookup {
             val catalogueTitle = normalize(trackName.orEmpty())
             if (a.isEmpty() || t.isEmpty() || catalogueTitle.isEmpty()) return false
 
-            // Rozstrzyga jeden warunek: czy to, co wzielismy za wykonawce, jest
-            // w katalogu tytulem utworu. Porownywanie takze wykonawcy nie dziala,
-            // bo przy wspolpracach napisy sie rozjezdzaja - stacja podaje
-            // "KYGO [+] TINA TURNER", a katalog samo "Tina Turner".
+            // A single condition decides it: whether what we took for the
+            // artist is the track title in the catalogue. Comparing the
+            // artist too doesn't work, because on collaborations the strings
+            // diverge - the station gives "KYGO [+] TINA TURNER", while the
+            // catalogue just gives "Tina Turner".
             return a == catalogueTitle && t != catalogueTitle
         }
 
@@ -111,7 +116,7 @@ object CoverArtLookup {
             .replace(Regex("[^\\p{L}\\p{N}]"), "")
     }
 
-    /** Male, ograniczone cache - w aucie i tak krecimy sie po kilku stacjach. */
+    /** Small, bounded cache - in the car we cycle through just a few stations anyway. */
     private const val CACHE_LIMIT = 64
     private val cache = object : LinkedHashMap<String, TrackInfo?>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TrackInfo?>) =
@@ -119,9 +124,9 @@ object CoverArtLookup {
     }
 
     /**
-     * @return dane utworu albo null, jesli nic nie znaleziono. Null jest tez
-     *   zapamietywany, zeby nie odpytywac w kolko o utwory, ktorych w katalogu
-     *   nie ma (a takich w polskich rozglosniach jest sporo).
+     * @return track data, or null if nothing was found. Null is cached too,
+     *   so we don't keep re-querying for tracks that aren't in the catalogue
+     *   (and there are plenty of those among Polish stations).
      */
     suspend fun find(artist: String?, title: String?): TrackInfo? = withContext(Dispatchers.IO) {
         val a = artist?.trim().orEmpty()
@@ -135,9 +140,10 @@ object CoverArtLookup {
             .onFailure { Log.w(TAG, "iTunes nie odpowiedzial: ${it.message}") }
             .getOrNull()
 
-        // iTunes ma slabe pokrycie starszego polskiego repertuaru - "Czesław
-        // Niemen - Lipowa łyżka" nie ma tam wcale, a MusicBrainz zna i utwor,
-        // i wydawnictwo. Pytamy go tylko wtedy, gdy Apple nie zna utworu.
+        // iTunes has poor coverage of older Polish repertoire - "Czesław
+        // Niemen - Lipowa łyżka" isn't there at all, while MusicBrainz knows
+        // both the track and the release. We only query it when Apple
+        // doesn't know the track.
         if (result == null && a.isNotEmpty()) {
             result = runCatching { queryMusicBrainz(a, t) }
                 .onFailure { Log.w(TAG, "MusicBrainz nie odpowiedzial: ${it.message}") }
@@ -150,9 +156,9 @@ object CoverArtLookup {
     }
 
     /**
-     * Zapas dla utworow, ktorych nie ma w iTunes. MusicBrainz to otwarta baza
-     * z duzo lepszym pokryciem polskiej i starszej muzyki; okladki bierzemy
-     * z powiazanego Cover Art Archive.
+     * Fallback for tracks not found in iTunes. MusicBrainz is an open
+     * database with much better coverage of Polish and older music; artwork
+     * is taken from the linked Cover Art Archive.
      */
     private fun queryMusicBrainz(artist: String, title: String): TrackInfo? {
         val query = "artist:\"$artist\" AND recording:\"$title\""
@@ -162,7 +168,7 @@ object CoverArtLookup {
         val recordings = JSONObject(body).optJSONArray("recordings") ?: return null
         if (recordings.length() == 0) return null
         val recording = recordings.getJSONObject(0)
-        // Zapis wedlug bazy - przydaje sie, gdy rozglosnia krzyczy wersalikami
+        // Spelling according to the database - useful when a station shouts in all caps
         val catalogueTitle = recording.optString("title").ifBlank { null }
         val catalogueArtist = recording.optJSONArray("artist-credit")
             ?.optJSONObject(0)?.optString("name")?.ifBlank { null }
@@ -174,8 +180,9 @@ object CoverArtLookup {
         val year = release.optString("date").take(4).toIntOrNull()
         val mbid = release.optString("id").ifBlank { null }
 
-        // Cover Art Archive nie ma okladek do wszystkiego, wiec sprawdzamy, czy
-        // adres w ogole cokolwiek zwraca - inaczej wyslalibysmy do auta martwy link.
+        // Cover Art Archive doesn't have artwork for everything, so we check
+        // whether the address returns anything at all - otherwise we'd be
+        // sending a dead link to the car.
         val art = mbid?.let { id ->
             val candidate = "$COVER_ART/release/$id/front-500"
             if (headOk(candidate)) candidate else null
@@ -198,7 +205,7 @@ object CoverArtLookup {
             connectTimeout = 8_000
             readTimeout = 8_000
             instanceFollowRedirects = true
-            // MusicBrainz wymaga rozpoznawalnego User-Agenta z kontaktem
+            // MusicBrainz requires a recognizable User-Agent with contact info
             setRequestProperty("User-Agent", MUSICBRAINZ_AGENT)
         }
         try {
@@ -238,13 +245,14 @@ object CoverArtLookup {
             if (results.length() == 0) return null
             val row = results.getJSONObject(0)
 
-            // iTunes oddaje miniature 100x100; podmiana w adresie daje pelny rozmiar
+            // iTunes returns a 100x100 thumbnail; swapping it in the URL gives full size
             val art = row.optString("artworkUrl100").ifBlank { null }
                 ?.replace("100x100bb", "600x600bb")
 
             val rawAlbum = row.optString("collectionName").ifBlank { null }
-            // Single sa w katalogu nazywane "Tytul - Single"; wtedy nazwa
-            // wydawnictwa nic nie wnosi i lepiej napisac wprost "singiel".
+            // Singles are named "Title - Single" in the catalogue; in that
+            // case the release name adds nothing, and it's better to just
+            // write "singiel" outright.
             val isSingle = rawAlbum?.endsWith(" - Single", ignoreCase = true) == true ||
                 row.optInt("trackCount", 0) == 1
             val album = rawAlbum?.removeSuffix(" - Single")?.removeSuffix(" - EP")

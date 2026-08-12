@@ -40,11 +40,11 @@ class MainActivity : AppCompatActivity() {
 
     private var controller: MediaController? = null
 
-    /** Stacja do wlaczenia, gdy tylko kontroler sie podepnie (patrz [EXTRA_PLAY_STATION]). */
+    /** Station to switch on as soon as the controller attaches (see [EXTRA_PLAY_STATION]). */
     private var pendingStationId: String? = null
 
     private val notificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* nieobowiazkowe */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* optional */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,15 +65,15 @@ class MainActivity : AppCompatActivity() {
             loadLogo = ::showLogo,
             onClick = ::play,
             onAction = { prefs.toggleFavourite(it.id) },
-            // Logo prowadzi do szczegolow. Sam wiersz zostaje przy graniu - to
-            // najczestsza czynnosc i nie ma jej po co utrudniac.
+            // The logo leads to details. Tapping the row itself keeps playing - that's
+            // the most common action and there's no reason to make it harder.
             onLogoClick = { startActivity(StationInfoActivity.intent(this, it)) }
         )
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
 
-        // Dwie zakladki zamiast jednej dlugiej listy - ulubione sa tym, po co
-        // siega sie najczesciej, wiec maja byc na wyciagniecie jednego stuknienia.
+        // Two tabs instead of one long list - favourites are what's reached for
+        // most often, so they should be one tap away.
         b.tabs.addTab(b.tabs.newTab().setText(R.string.tab_all))
         b.tabs.addTab(b.tabs.newTab().setText(R.string.tab_favourites))
         b.tabs.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
@@ -85,7 +85,7 @@ class MainActivity : AppCompatActivity() {
         b.search.doAfterTextChanged { refreshList() }
         b.search.setOnClickListener { showHistory() }
         b.search.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) showHistory() }
-        // Zapamietujemy dopiero zatwierdzone zapytanie, a nie kazdy znak po drodze
+        // We only remember the confirmed query, not every keystroke along the way
         b.search.setOnEditorActionListener { _, _, _ ->
             prefs.pushLocalSearch(b.search.text?.toString().orEmpty())
             refreshHistory()
@@ -98,7 +98,7 @@ class MainActivity : AppCompatActivity() {
             val c = controller ?: return@setOnClickListener
             if (c.isPlaying) c.pause() else c.play()
         }
-        // Stukniecie w pasek rozwija pelnoekranowy odtwarzacz
+        // Tapping the bar expands the full-screen player
         b.miniPlayer.setOnClickListener {
             if (PlaybackStatusBus.stationId.value != null) {
                 startActivity(Intent(this, NowPlayingActivity::class.java))
@@ -143,9 +143,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Pozwala wlaczyc stacje z zewnatrz, bez dotykania ekranu:
+     * Allows switching on a station from the outside, without touching the screen:
      *   adb shell am start -n net.mspanc.twinsenradio/.ui.MainActivity --es play_station rns
-     * Przydatne do testow i jako punkt zaczepienia pod skroty.
+     * Useful for testing and as a hook point for shortcuts.
      */
     private fun handleIntent(intent: Intent?) {
         val id = intent?.getStringExtra(EXTRA_PLAY_STATION) ?: return
@@ -186,7 +186,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Wybor porzadku listy. Zapamietywany, wiec wystarczy ustawic raz.
+     * Choice of list order. It's remembered, so it only needs to be set once.
      */
     private fun showSortDialog() {
         val options = StationSort.LABELS.toTypedArray()
@@ -201,8 +201,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Pokazuje albo chowa pole wyszukiwania. Schowanie czysci zapytanie - lista
-     * ma wracac do pelnej, a nie zostawac przefiltrowana przez niewidoczny tekst.
+     * Shows or hides the search field. Hiding it clears the query - the list
+     * should go back to full, not stay filtered by invisible text.
      */
     private fun toggleSearch() {
         val visible = b.searchLayout.visibility == android.view.View.VISIBLE
@@ -241,8 +241,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Logo stacji. Wbudowane siedza w APK, ale stacje dociagniete z katalogu maja
-     * je pod adresem w sieci - stad dwie drogi.
+     * Station logo. Built-in ones live in the APK, but stations pulled in from
+     * the directory have theirs at a network address - hence the two paths.
      */
     private fun showLogo(station: Station, view: android.widget.ImageView) {
         ArtworkLoader.into(
@@ -256,9 +256,9 @@ class MainActivity : AppCompatActivity() {
     private fun play(station: Station) {
         val c = controller ?: return
 
-        // Ta sama stacja, ktora wlasnie gra - nie ruszamy strumienia, tylko
-        // otwieramy ekran odtwarzania. Ponowne ustawienie pozycji zrywalo
-        // polaczenie i bylo slychac przerwe.
+        // The same station that's already playing - we don't touch the stream,
+        // just open the playback screen. Resetting the position again used to
+        // drop the connection and you'd hear a gap.
         if (PlaybackStatusBus.stationId.value == station.id && c.isPlaying) {
             startActivity(Intent(this, NowPlayingActivity::class.java))
             return
@@ -282,22 +282,22 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             PlaybackStatusBus.coverArtUrl.collect { renderMiniPlayer() }
         }
-        // Ulubione moga zmienic sie na ekranie odtwarzania albo w aucie. Stan nie
-        // jest czescia modelu stacji, wiec DiffUtil sam z siebie nic nie odswiezy.
+        // Favourites can change on the playback screen or in the car. The state
+        // isn't part of the station model, so DiffUtil won't refresh anything on its own.
         lifecycleScope.launch {
             Prefs.favouritesFlow.collect {
-                // Na zakladce ulubionych zmiana gwiazdki zmienia sklad listy,
-                // a nie tylko ikone - stad pelna przebudowa.
+                // On the favourites tab, toggling the star changes the list's
+                // contents, not just the icon - hence the full rebuild.
                 if (b.tabs.selectedTabPosition == 1) refreshList()
                 adapter.notifyItemRangeChanged(0, adapter.itemCount)
             }
         }
-        // Stacja dodana albo usunieta w wyszukiwarce ma pojawic sie tutaj od razu,
-        // bez wychodzenia z ekranu.
+        // A station added or removed in the discovery search should appear here
+        // immediately, without leaving the screen.
         lifecycleScope.launch {
             Prefs.discoveredFlow.collect { refreshList() }
         }
-        // Ukrycie albo przywrocenie stacji tez musi od razu przebudowac liste
+        // Hiding or restoring a station must also rebuild the list immediately
         lifecycleScope.launch {
             Prefs.hiddenFlow.collect { refreshList() }
         }
@@ -305,17 +305,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Wracamy ze szczegolow - stacja mogla tam zniknac albo zmienic ulubione
+        // Returning from details - the station might have disappeared there or its favourite status changed
         refreshList()
         adapter.notifyItemRangeChanged(0, adapter.itemCount)
     }
 
     /**
-     * Przebudowa listy po zmianie jej zawartosci.
+     * Rebuilds the list after its contents change.
      *
-     * Przewiniecie na gore nie jest kosmetyka: RecyclerView trzyma kotwice na
-     * pozycji, ktora widac, wiec stacja przywrocona na poczatek ladowala nad
-     * widocznym obszarem i wygladalo to, jakby przywrocenie nie zadzialalo.
+     * Scrolling to the top isn't cosmetic: RecyclerView anchors to the
+     * position that's visible, so a station restored to the beginning would
+     * load above the visible area, making it look like the restore hadn't worked.
      */
     private fun refreshList() {
         val query = b.search.text?.toString().orEmpty()
@@ -333,8 +333,8 @@ class MainActivity : AppCompatActivity() {
         val now = PlaybackStatusBus.nowPlaying.value
 
         b.miniTitle.text = station?.name ?: getString(R.string.nothing_playing)
-        // Na telefonie metadane maja byc metadanymi - tryb diagnostyczny dotyczy
-        // tego, co wysylamy do auta, i sygnalizujemy go tylko na ekranie odtwarzania.
+        // On the phone, metadata should just be metadata - diagnostic mode concerns
+        // what we send to the car, and we only signal it on the playback screen.
         b.miniSubtitle.text = when {
             now?.isRealSong == true -> {
                 val info = PlaybackStatusBus.trackInfo.value

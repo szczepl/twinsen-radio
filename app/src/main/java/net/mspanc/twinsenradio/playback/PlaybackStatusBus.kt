@@ -4,8 +4,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Prosty kanal informacyjny miedzy usluga odtwarzania a UI telefonu.
- * Oba zyja w tym samym procesie, wiec nie ma sensu ciagnac tego przez Bindera.
+ * A simple information channel between the playback service and the phone
+ * UI. Both live in the same process, so there's no point routing this
+ * through a Binder.
  */
 object PlaybackStatusBus {
 
@@ -16,9 +17,10 @@ object PlaybackStatusBus {
     val nowPlaying: StateFlow<NowPlaying?> = _nowPlaying
 
     /**
-     * Okladka biezacego utworu, niezaleznie od tego, co poszlo do Android Auto.
-     * Telefon ma zawsze pokazywac okladke albo logo stacji - zegar zamiast
-     * okladki jest ficzerem wylacznie dla ekranu w aucie.
+     * The cover art of the current track, regardless of what was sent to
+     * Android Auto. The phone should always show the cover art or the
+     * station logo - the clock replacing the cover art is a feature meant
+     * only for the screen in the car.
      */
     private val _coverArtUrl = MutableStateFlow<String?>(null)
     val coverArtUrl: StateFlow<String?> = _coverArtUrl
@@ -27,7 +29,7 @@ object PlaybackStatusBus {
         _coverArtUrl.value = url
     }
 
-    /** Co katalog wie o utworze - wydawnictwo i rok, potrzebne takze na telefonie. */
+    /** What the catalog knows about the track - label and year, needed on the phone too. */
     private val _trackInfo = MutableStateFlow<CoverArtLookup.TrackInfo?>(null)
     val trackInfo: StateFlow<CoverArtLookup.TrackInfo?> = _trackInfo
 
@@ -36,16 +38,17 @@ object PlaybackStatusBus {
     }
 
     /**
-     * Opis jakosci biezacego strumienia - kodek, przeplywnosc, probkowanie.
-     * Tylko dla telefonu; w aucie nie ma pola, w ktorym daloby sie to napisac.
+     * A description of the current stream's quality - codec, bitrate, sample
+     * rate. For the phone only; in the car there's no field to display it in.
      */
     private val _quality = MutableStateFlow<String?>(null)
     val quality: StateFlow<String?> = _quality
 
     /**
-     * Rzeczywista przeplywnosc z dekodera, w kb/s - dla stacji, ktore nie
-     * deklaruja jej w katalogu (jeden, "goly" adres streamu bez wariantow).
-     * Wtedy przycisk jakosci pokazuje ta liczbe zamiast placeholdera.
+     * The actual bitrate from the decoder, in kb/s - for stations that don't
+     * declare it in the catalog (a single, "bare" stream URL with no
+     * variants). In that case the quality button shows this number instead
+     * of a placeholder.
      */
     private val _qualityKbps = MutableStateFlow<Int?>(null)
     val qualityKbps: StateFlow<Int?> = _qualityKbps
@@ -61,7 +64,7 @@ object PlaybackStatusBus {
     enum class Status {
         IDLE, CONNECTING, BUFFERING, PLAYING, RECONNECTING, WAITING_FOR_NETWORK,
 
-        /** Siec jest, ale stacja milczy - najczesciej wycofany adres strumienia. */
+        /** The network is up, but the station is silent - usually a decommissioned stream URL. */
         STATION_UNREACHABLE
     }
 
@@ -71,8 +74,9 @@ object PlaybackStatusBus {
             _nowPlaying.value = null
             _coverArtUrl.value = null
             _trackInfo.value = null
-            // Nowa stacja to nowy strumien - stara jakosc przestaje obowiazywac
-            // od razu, a nowa poznamy dopiero po pierwszej ramce z dekodera.
+            // A new station means a new stream - the old quality stops being
+            // valid immediately, and we'll only learn the new one after the
+            // first frame from the decoder.
             _quality.value = null
             _qualityKbps.value = null
         }

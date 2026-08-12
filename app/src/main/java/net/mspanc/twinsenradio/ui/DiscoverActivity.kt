@@ -23,12 +23,12 @@ import net.mspanc.twinsenradio.databinding.ActivityDiscoverBinding
 import net.mspanc.twinsenradio.playback.MetadataFactory
 
 /**
- * Wyszukiwanie stacji, ktorych nie ma na wbudowanej liscie.
+ * Search for stations that aren't on the built-in list.
  *
- * Katalog i powody jego wyboru opisuje [RadioBrowser]. Tutaj jest tylko warstwa
- * widoku: wpisany tekst, wyniki, przycisk dodawania i przejscie do szczegolow.
- * Dodana stacja trafia do [Prefs] i od tej chwili zachowuje sie jak kazda inna -
- * da sie ja polubic, wlaczyc i znalezc w aucie.
+ * The catalog and the reasons behind choosing it are described in [RadioBrowser]. This
+ * class is only the view layer: the entered text, results, the add button and the
+ * transition to details. An added station lands in [Prefs] and from then on behaves
+ * like any other - it can be favorited, played and found in the car.
  */
 @UnstableApi
 class DiscoverActivity : AppCompatActivity() {
@@ -38,13 +38,13 @@ class DiscoverActivity : AppCompatActivity() {
     private lateinit var metadata: MetadataFactory
     private lateinit var adapter: StationAdapter
 
-    /** Ostatnie zapytanie w locie - kasujemy je przy kazdym nowym znaku. */
+    /** The latest in-flight query - we cancel it on every new character. */
     private var searchJob: Job? = null
 
     /**
-     * Powrot ze szczegolow. Gdy stacja zostala dodana albo usunieta, czyscimy
-     * pole wyszukiwania - uzytkownik ma wtedy zobaczyc swoja liste z nowa
-     * pozycja, a nie te same wyniki, w ktorych przed chwila grzebal.
+     * Return from details. When a station was added or removed, we clear the
+     * search field - the user should then see their list with the new entry,
+     * not the same results they were just browsing through.
      */
     private val details = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -57,8 +57,8 @@ class DiscoverActivity : AppCompatActivity() {
     }
 
     /**
-     * Wyniki ostatniego wyszukiwania, zeby po stuknieciu w wiersz miec czym
-     * zapelnic ekran szczegolow. [Station] nie niesie kraju ani kodeka.
+     * Results of the latest search, so that tapping a row has something to
+     * populate the details screen with. [Station] doesn't carry country or codec.
      */
     private var lastResults: List<RadioBrowser.Found> = emptyList()
 
@@ -81,10 +81,10 @@ class DiscoverActivity : AppCompatActivity() {
             }
         }
 
-        // Cofniecie z wynikami na ekranie wraca najpierw do stanu wyjsciowego -
-        // paska wyszukiwania, ostatnich zapytan i wlasnej listy - a dopiero
-        // drugie wychodzi do listy stacji. Wyskakiwanie od razu na zewnatrz po
-        // dodaniu stacji odbieralo mozliwosc sprawdzenia, czy faktycznie doszla.
+        // Going back while results are on screen first returns to the initial
+        // state - the search bar, recent queries and your own list - and only
+        // the second back press exits to the station list. Jumping straight out
+        // after adding a station took away the chance to confirm it actually landed.
         onBackPressedDispatcher.addCallback(this) { goBack() }
 
         adapter = StationAdapter(
@@ -104,8 +104,8 @@ class DiscoverActivity : AppCompatActivity() {
         b.query.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) showHistory() }
         refreshHistory()
 
-        // Dodanie albo usuniecie stacji ma od razu przelozyc sie na ikony przy
-        // wierszach - takze wtedy, gdy zmiana przyszla z ekranu szczegolow.
+        // Adding or removing a station should immediately be reflected in the
+        // row icons - even when the change came from the details screen.
         lifecycleScope.launch {
             Prefs.discoveredFlow.collect {
                 adapter.notifyItemRangeChanged(0, adapter.itemCount)
@@ -116,13 +116,13 @@ class DiscoverActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Wracamy ze szczegolow - stan przyciskow mogl sie tam zmienic.
+        // Returning from details - button state may have changed there.
         adapter.notifyItemRangeChanged(0, adapter.itemCount)
     }
 
     /**
-     * Porzadek wynikow. Katalog oddaje je wedlug liczby glosow i to zostaje
-     * domyslne - najlepiej odsiewa pozycje martwe i przypadkowe.
+     * Ordering of results. The catalog returns them by vote count and that stays
+     * the default - it filters out dead and random entries best.
      */
     private fun sortResults(found: List<RadioBrowser.Found>): List<RadioBrowser.Found> =
         when (prefs.discoverSort) {
@@ -142,7 +142,7 @@ class DiscoverActivity : AppCompatActivity() {
             ) { dialog, which ->
                 prefs.discoverSort = DiscoverSort.at(which)
                 dialog.dismiss()
-                // Sortujemy to, co juz mamy - bez ponownego pytania katalogu
+                // We sort what we already have - without re-querying the catalog
                 if (lastResults.isNotEmpty()) {
                     lastResults = sortResults(lastResults)
                     adapter.submitList(lastResults.map { it.toStation() }) {
@@ -170,7 +170,7 @@ class DiscoverActivity : AppCompatActivity() {
 
     private fun queryText() = b.query.text?.toString().orEmpty().trim()
 
-    /** Podpowiedzi z historii; pokazujemy je, gdy pole jest jeszcze puste. */
+    /** Suggestions from history; we show them while the field is still empty. */
     private fun refreshHistory() {
         val history = prefs.webSearchHistory
         b.query.setAdapter(
@@ -185,18 +185,18 @@ class DiscoverActivity : AppCompatActivity() {
     }
 
     /**
-     * Stan pustego pola.
+     * State of the empty field.
      *
-     * Wczesniej lezala tu po prostu lista dodanych stacji, wygladajaca dokladnie
-     * tak samo jak wyniki wyszukiwania - nie dalo sie odroznic, czy to reszta po
-     * poprzednim szukaniu, czy cos wlasnego. Teraz sa dwie wyraznie opisane
-     * rzeczy: ostatnie zapytania do ponowienia jednym stuknieciem i wlasne
-     * stacje z licznikiem w naglowku.
+     * This used to simply show the list of added stations, looking exactly
+     * the same as search results - there was no way to tell whether it was
+     * leftovers from a previous search or something of your own. Now there
+     * are two clearly labeled things: recent queries to repeat with a single
+     * tap, and your own stations with a counter in the header.
      */
     private fun showAdded() {
         val added = prefs.discovered
-        // Bez tego lista zostaje przewinieta tam, gdzie stala przy wynikach,
-        // i pierwsze pozycje chowaja sie pod naglowkiem.
+        // Without this the list stays scrolled to where it was for the results,
+        // and the first entries hide behind the header.
         adapter.submitList(added) { b.list.scrollToPosition(0) }
         renderHistoryChips()
 
@@ -209,7 +209,7 @@ class DiscoverActivity : AppCompatActivity() {
         }
     }
 
-    /** Chipy z historia - jedno stukniecie ponawia zapytanie. */
+    /** Chips with history - a single tap repeats the query. */
     private fun renderHistoryChips() {
         val history = prefs.webSearchHistory
         b.historyChips.removeAllViews()
@@ -228,8 +228,8 @@ class DiscoverActivity : AppCompatActivity() {
     }
 
     /**
-     * Katalog jest publiczny i wspolny dla wszystkich, wiec nie wypada strzelac
-     * do niego przy kazdym nacisnietym klawiszu. Czekamy, az pisanie ucichnie.
+     * The catalog is public and shared by everyone, so it's not appropriate to
+     * hit it on every keystroke. We wait until typing settles down.
      */
     private fun scheduleSearch(query: String) {
         searchJob?.cancel()
@@ -238,7 +238,7 @@ class DiscoverActivity : AppCompatActivity() {
             showAdded()
             return
         }
-        // Szukamy - historia i licznik dodanych ustepuja miejsca wynikom
+        // Searching - history and the added-count give way to the results
         b.historyBox.visibility = View.GONE
         b.subhint.text = ""
 
@@ -259,9 +259,9 @@ class DiscoverActivity : AppCompatActivity() {
     }
 
     /**
-     * Stukniecie w wiersz otwiera szczegoly. Wczesniej robilo to samo, co przycisk
-     * obok - stacja po cichu ladowala na liste, bez zadnego sladu na ekranie,
-     * przez co pierwsze nacisniecie "+" ja usuwalo i wygladalo na nieskuteczne.
+     * Tapping a row opens details. It used to do the same thing as the button
+     * next to it - the station would silently land on the list, with no trace on
+     * screen, which made the first tap of "+" remove it and look ineffective.
      */
     private fun openDetails(station: Station) {
         val found = lastResults.firstOrNull { it.toStation().id == station.id }

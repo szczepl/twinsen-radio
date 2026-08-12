@@ -1,33 +1,36 @@
 package net.mspanc.twinsenradio.data
 
 /**
- * Jeden z adresow, pod ktorymi nadaje ta sama stacja.
+ * One of the addresses under which this same station broadcasts.
  *
- * Rozglosnie czesto daja kilka: Radio Nowy Swiat wystawia MP3 256 kb/s,
- * MP3 128 i AAC+ 64. Katalog radio-browser trzyma je jako osobne pozycje
- * o tej samej nazwie - my scalamy je w jedna stacje z lista wariantow.
+ * Stations often provide several: Radio Nowy Swiat exposes MP3 256 kb/s,
+ * MP3 128, and AAC+ 64. The radio-browser catalog keeps them as separate
+ * entries with the same name - we merge them into a single station with a
+ * list of variants.
  */
 data class StreamVariant(
     val url: String,
     val label: String,
-    /** Przeplywnosc w kb/s; 0 gdy nieznana. Decyduje o wyborze domyslnym. */
+    /** Bitrate in kb/s; 0 when unknown. Determines the default selection. */
     val kbps: Int = 0
 )
 
 /**
- * Jedna rozglosnia. [logo] to nazwa drawable'a wbudowanego w APK (moze byc null),
- * [logoUrl] to zdalna grafika z listy M3U albo z katalogu.
+ * A single station. [logo] is the name of a drawable built into the APK
+ * (can be null), [logoUrl] is remote artwork from an M3U list or from the
+ * catalog.
  *
- * [stream] to adres **efektywny** - ten, ktory faktycznie poleci do odtwarzacza.
- * Ustala go [StationRepository] na podstawie wyboru uzytkownika, a gdy wyboru
- * nie ma - biorac wariant o najwyzszej przeplywnosci.
+ * [stream] is the **effective** address - the one that will actually be sent
+ * to the player. It's determined by [StationRepository] based on the user's
+ * selection, or, when there is no selection, by taking the variant with the
+ * highest bitrate.
  */
 data class Station(
     val id: String,
     val name: String,
     val genre: String,
     val stream: String,
-    /** Wszystkie znane adresy tej stacji. Nigdy pusta po przejsciu przez repozytorium. */
+    /** All known addresses for this station. Never empty after passing through the repository. */
     val streams: List<StreamVariant> = emptyList(),
     val logo: String? = null,
     val logoUrl: String? = null,
@@ -37,14 +40,14 @@ data class Station(
         BUILT_IN,
         USER_M3U,
 
-        /** Dodana recznie z katalogu radio-browser.info, patrz [RadioBrowser]. */
+        /** Added manually from the radio-browser.info catalog, see [RadioBrowser]. */
         DISCOVERED
     }
 
-    /** Identyfikator uzywany w drzewie przegladania Android Auto. */
+    /** Identifier used in the Android Auto browsing tree. */
     val mediaId: String get() = "$MEDIA_ID_PREFIX$id"
 
-    /** Warianty do pokazania - gdy stacja ma jeden adres, robimy z niego pozycje. */
+    /** Variants to display - if a station has just one address, we turn it into a single entry. */
     fun variants(): List<StreamVariant> =
         streams.ifEmpty { listOf(StreamVariant(stream, DEFAULT_LABEL)) }
 

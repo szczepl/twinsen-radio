@@ -5,159 +5,169 @@ car (VW Passat B8 MY2020, Discover Pro / Active Info Display). Not on Google
 Play — clone it, build it yourself with Android Studio or the command line,
 side-load it. GPLv3, fork away.*
 
-Odtwarzacz internetowych rozgłośni radiowych dla **Android Auto**, pisany pod
-konkretne auto: **VW Passat B8 MY2020** z Discover Pro i Active Info Display.
+An internet radio player for **Android Auto**, written for a specific car:
+**VW Passat B8 MY2020** with Discover Pro and Active Info Display.
 
-**Ten projekt nie jest i nie będzie w Google Play.** To build-it-yourself —
-klonujesz repo, budujesz Android Studio albo linią poleceń, wgrywasz na swój
-telefon jako aplikację deweloperską. Kod jest w całości open source (GPLv3) —
-forkuj, zmieniaj, rób z nim co chcesz, byle zgodnie z licencją.
+**This project is not, and will not be, on Google Play.** It's build-it-yourself —
+you clone the repo, build it with Android Studio or the command line, and
+side-load it onto your phone as a developer app. The code is fully open source
+(GPLv3) — fork it, change it, do whatever you want with it, as long as you stick
+to the license.
 
 ---
 
-## Dokumentacja
+## Why this project exists
 
-| Plik | O czym |
+Because the developers of existing radio apps either just ignored me or decided
+that mapping their data to Android Auto's metadata fields wasn't worth their
+time — even though their apps are paid. This one isn't.
+
+---
+
+## Documentation
+
+| File | What it covers |
 |---|---|
-| [INSTRUKCJA.md](INSTRUKCJA.md) | Jak to zbudować, wgrać i uruchomić. Procedury, pułapki, rozwiązywanie problemów. |
-| [KONCEPCJA.md](KONCEPCJA.md) | Jak to jest zbudowane i **dlaczego tak**. Architektura i uzasadnienia decyzji. |
-| [BADANIA.md](BADANIA.md) | Co ustaliliśmy doświadczalnie: które pole gdzie trafia, jak zachowują się stacje, mapowanie ikon w DHU. |
-| [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | Pełna lista bibliotek i usług sieciowych, z jakich korzysta aplikacja. |
-| [CLAUDE.md](CLAUDE.md) | Briefing dla nowej sesji Claude Code. Zacznij tam, jeśli wracasz do projektu po przerwie. |
+| [INSTRUKCJA.md](INSTRUKCJA.md) | How to build it, install it, and run it. Procedures, gotchas, troubleshooting. |
+| [KONCEPCJA.md](KONCEPCJA.md) | How it's built and **why**. Architecture and the reasoning behind decisions. |
+| [BADANIA.md](BADANIA.md) | What we determined experimentally: which field ends up where, how stations behave, icon mapping in DHU. |
+| [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) | Full list of libraries and network services the app uses. |
+| [CLAUDE.md](CLAUDE.md) | Briefing for a new Claude Code session. Start there if you're returning to the project after a break. |
 
 ---
 
-## Co potrafi
+## What it can do
 
-* Odtwarzanie stacji internetowych, drzewo przeglądania w Android Auto:
-  Ulubione, Wszystkie, Ostatnie, Gatunki.
-* Wyszukiwanie stacji spoza wbudowanej listy w katalogu radio-browser.info —
-  tekstem i głosem, z historią wyszukiwań.
-* Wiele strumieni na stację (różne bitrate/kodeki) z ręcznym i pamiętanym
-  wyborem jakości — także dla stacji wbudowanych.
-* Ulubione i lista stacji synchronizowane **na żywo** między telefonem a
-  autem; własne stacje (M3U albo z sieci), usuwanie/przywracanie, sortowanie.
-* Własne logo stacji (wgrywane z telefonu) tam, gdzie wbudowane nie pasuje.
-* Okładki utworów z iTunes, z zapasem w MusicBrainz i Cover Art Archive.
-* Rozpoznawanie reklam, sloganów stacji, serwisów informacyjnych i znaczników
-  sterujących w strumieniu ICY; normalizacja pisowni stacji nadających WIELKIMI
-  LITERAMI.
-* Ciche wznawianie po utracie zasięgu — do auta nie leci żaden komunikat błędu,
-  a odtwarzacz aktywnie czeka na powrót sieci zamiast się poddawać.
-* Wznawianie po podłączeniu wraca do **ostatnio słuchanej** stacji.
-* Jakość strumienia (kodek, przepływność) widoczna i wybieralna na ekranie
-  odtwarzania.
-* **Zmierzone w aucie:** Active Info Display czyta pola `subtitle`,
-  `description` i `displayTitle` — patrz [BADANIA.md](BADANIA.md). Treść
-  każdego z trzech wierszy AID wybiera się osobno w Opcjach.
+* Plays internet stations, with a browse tree in Android Auto:
+  Favorites, All, Recent, Genres.
+* Search for stations outside the built-in list via the radio-browser.info
+  directory — by text and by voice, with search history.
+* Multiple streams per station (different bitrates/codecs), with manual and
+  remembered quality selection — including for built-in stations.
+* Favorites and station list synced **live** between phone and car; your own
+  stations (M3U or from the network), removal/restore, sorting.
+* Custom station logos (uploaded from the phone) for cases where the built-in
+  one doesn't fit.
+* Track artwork from iTunes, falling back to MusicBrainz and Cover Art Archive.
+* Detection of ads, station slogans, news bulletins, and control markers in
+  the ICY stream; case normalization for stations that broadcast in ALL CAPS.
+* Silent recovery after a signal loss — no error message reaches the car,
+  and the player actively waits for the network to come back instead of
+  giving up.
+* Resuming after reconnect goes back to the **last station played**.
+* Stream quality (codec, bitrate) shown and selectable on the playback screen.
+* **Measured in the car:** the Active Info Display reads the `subtitle`,
+  `description`, and `displayTitle` fields — see [BADANIA.md](BADANIA.md). What
+  content goes into each of the three AID lines is chosen separately in
+  Options.
 
 ---
 
-## Szybki start
+## Quick start
 
 ```powershell
-.\tools\install.ps1          # buduje i wgrywa na podłączony telefon
-.\tools\dhu.bat               # wirtualna głowica na Windowsie, do testów bez auta
+.\tools\install.ps1          # builds and installs on the connected phone
+.\tools\dhu.bat               # virtual head unit on Windows, for testing without a car
 ```
 
-Skrypty w `tools/` są pisane pod Windows + PowerShell (tak pracuje autor). Na
-Linuksie/macOS zbudujesz i wgrasz to samo ręcznie przez `./gradlew assembleDebug`
-i `adb install` — patrz [INSTRUKCJA.md](INSTRUKCJA.md) po dokładne kroki,
-wymagane wersje JDK/SDK i to, co trzeba pacnąć na telefonie (tryb dewelopera
-Android Auto, zgoda na debugowanie USB).
+The scripts in `tools/` are written for Windows + PowerShell (that's how the
+author works). On Linux/macOS you'll build and install the same thing manually
+via `./gradlew assembleDebug` and `adb install` — see [INSTRUKCJA.md](INSTRUKCJA.md)
+for exact steps, required JDK/SDK versions, and what needs to be toggled on the
+phone (Android Auto developer mode, USB debugging consent).
 
 ---
 
-## Stacje
+## Stations
 
-32 rozgłośnie wpisane domyślnie w `app/src/main/assets/stations.json` — to
-prywatny wybór autora, nie oficjalna lista partnerska żadnej z nich. Polskie:
-Radio Nowy Świat, Radio 357, RMF (FM, MAXXX, Classic, 24, Polskie Przeboje,
+32 stations are set as defaults in `app/src/main/assets/stations.json` — this
+is the author's private pick, not an official partner list from any of them.
+Polish: Radio Nowy Świat, Radio 357, RMF (FM, MAXXX, Classic, 24, Polskie Przeboje,
 80s, Ballady), Radio ZET, Chilli ZET, Meloradio, Antyradio, Rockserwis.fm,
 TOK FM, Kiss FM, Złote Przeboje, Polskie Radio (Jedynka, Dwójka, Trójka,
 Czwórka, 24, Kierowców), ESKA, ESKA ROCK, VOX FM, Radio Plus, Radio Wnet.
-Zagraniczne: triple j (Australia), smoothfm 80s (Australia), Kiss FM
-Australia, Jacaranda FM (RPA).
+International: triple j (Australia), smoothfm 80s (Australia), Kiss FM
+Australia, Jacaranda FM (South Africa).
 
-Własne stacje dokłada się na dwa sposoby: listą M3U w Opcjach albo wyszukiwarką
-w sieci (menu ⋮ → *Szukaj stacji w sieci*, katalog radio-browser.info).
+You can add your own stations two ways: an M3U list in Options, or the
+in-app search (⋮ menu → *Search stations online*, radio-browser.info directory).
 
-Domyślne logo każdej wbudowanej stacji to link do grafiki hostowanej przez
-samą stację (patrz [Zastrzeżenia prawne](#zastrzeżenia-prawne)) — czasem więc
-wygląda inaczej, niż byś chciał (inne tło, gorsza jakość, czasem żadne).
-Jeśli wolisz swoją wersję, stuknij w logo na ekranie szczegółów stacji i
-wgraj własny obrazek z telefonu — nadpisuje domyślne, tylko lokalnie u
-Ciebie.
+The default logo for each built-in station is a link to artwork hosted by the
+station itself (see [Legal disclaimers](#legal-disclaimers)) — so it sometimes
+looks different than you'd like (different background, lower quality,
+sometimes none at all). If you'd rather use your own version, tap the logo on
+the station details screen and upload your own image from the phone — it
+overrides the default, locally, just for you.
 
 ---
 
-## Struktura projektu
+## Project structure
 
 ```
 app/src/main/java/net/mspanc/twinsenradio/
 ├── data/
-│   ├── Station.kt               model stacji, warianty strumieni
-│   ├── StationRepository.kt     assets + M3U + stacje z katalogu, sortowanie
-│   ├── RadioBrowser.kt          wyszukiwanie w radio-browser.info
-│   ├── StreamProbe.kt           sonda dostępności strumienia na żądanie
+│   ├── Station.kt               station model, stream variants
+│   ├── StationRepository.kt     assets + M3U + directory stations, sorting
+│   ├── RadioBrowser.kt          search on radio-browser.info
+│   ├── StreamProbe.kt           on-demand stream availability probe
 │   ├── M3uParser.kt             #EXTINF, tvg-logo, group-title
-│   ├── Sorting.kt                kryteria sortowania list
-│   ├── Prefs.kt                  ustawienia; ulubione i stacje z sieci jako StateFlow
-│   └── Presentation.kt           układy opisu utworu, zegar, kolory
+│   ├── Sorting.kt                list sorting criteria
+│   ├── Prefs.kt                  settings; favorites and network stations as StateFlow
+│   └── Presentation.kt           track description layouts, clock, colors
 ├── playback/
-│   ├── RadioService.kt           MediaLibraryService: drzewo AA, sesja, ICY, okładki
-│   ├── MetadataFactory.kt        budowa MediaMetadata; rozpoznawanie reklam i sloganów
-│   ├── CoverArtLookup.kt         iTunes, potem MusicBrainz + Cover Art Archive
-│   ├── LogoProvider.kt           logotypy pod stałym adresem content://
-│   ├── TextCase.kt               normalizacja WIELKICH LITER i kolejności pól
-│   ├── ClockArt.kt               zegar rysowany zamiast okładki
-│   ├── StreamQuality.kt          opis kodeka i przepływności
-│   ├── DiagnosticFields.kt       mapa pole → polska etykieta
-│   ├── IcyFilteringDataSource.kt odcięcie ICY w trybie diagnostycznym
+│   ├── RadioService.kt           MediaLibraryService: AA tree, session, ICY, artwork
+│   ├── MetadataFactory.kt        builds MediaMetadata; ad and slogan detection
+│   ├── CoverArtLookup.kt         iTunes, then MusicBrainz + Cover Art Archive
+│   ├── LogoProvider.kt           logos served at a stable content:// address
+│   ├── TextCase.kt               ALL-CAPS normalization and field ordering
+│   ├── ClockArt.kt               clock drawn in place of artwork
+│   ├── StreamQuality.kt          codec and bitrate description
+│   ├── DiagnosticFields.kt       field → label map
+│   ├── IcyFilteringDataSource.kt strips ICY in diagnostic mode
 │   ├── InfiniteLoadErrorHandlingPolicy.kt
-│   ├── ReconnectController.kt    ConnectivityManager + backoff + wykrywanie zawieszenia
-│   ├── KeepCurrentStreamPlayer.kt        brak restartu grającej stacji
-│   ├── ConnectionLog.kt          trwały log podłączających się odbiorników
-│   └── PlaybackStatusBus.kt      kanał usługa → UI telefonu
+│   ├── ReconnectController.kt    ConnectivityManager + backoff + stall detection
+│   ├── KeepCurrentStreamPlayer.kt        no restart for a station already playing
+│   ├── ConnectionLog.kt          persistent log of connecting clients
+│   └── PlaybackStatusBus.kt      service → phone UI channel
 └── ui/
-    ├── MainActivity.kt           lista, wyszukiwarka, mini-odtwarzacz, zakładki
-    ├── NowPlayingActivity.kt     pełnoekranowy odtwarzacz
-    ├── DiscoverActivity.kt       wyszukiwanie stacji w sieci
-    ├── StationInfoActivity.kt    szczegóły stacji, edycja strumieni/logo
-    ├── StreamPicker.kt           wspólny dialog wyboru jakości
-    ├── SettingsActivity.kt       Opcje
-    ├── StationAdapter.kt         lista stacji (współdzielona)
-    └── ArtworkLoader.kt          pobieranie okładek/logo do ImageView
+    ├── MainActivity.kt           list, search, mini-player, tabs
+    ├── NowPlayingActivity.kt     full-screen player
+    ├── DiscoverActivity.kt       online station search
+    ├── StationInfoActivity.kt    station details, stream/logo editing
+    ├── StreamPicker.kt           shared quality-selection dialog
+    ├── SettingsActivity.kt       Options
+    ├── StationAdapter.kt         station list (shared)
+    └── ArtworkLoader.kt          fetches artwork/logos into an ImageView
 ```
 
-Narzędzia warsztatowe są w [tools/](tools/) — opisane w [INSTRUKCJA.md](INSTRUKCJA.md).
+Workshop tooling lives in [tools/](tools/) — documented in [INSTRUKCJA.md](INSTRUKCJA.md).
 
 ---
 
-## Zastrzeżenia prawne
+## Legal disclaimers
 
-* **Logotypy stacji.** Aplikacja nie rozdystrybuowuje żadnych logotypów
-  rozgłośni — `stations.json` zawiera tylko adresy (`logoUrl`) wskazujące na
-  grafiki hostowane przez same stacje albo publiczny katalog
-  radio-browser.info, analogicznie do tego, jak przeglądarka pokazuje favikonę
-  strony. Nazwy i znaki graficzne stacji są własnością ich nadawców; ten
-  projekt nie jest z żadną z nich powiązany ani przez nią sponsorowany. Chcesz
-  inny wygląd logo dla konkretnej stacji (np. inne tło, wyższa rozdzielczość) —
-  wgraj własny obrazek na ekranie szczegółów stacji, patrz [Stacje](#stacje).
-* **Strumienie audio.** Aplikacja jest cienkim klientem ICY/HLS — łączy się
-  wyłącznie z publicznymi adresami strumieni udostępnianymi przez same stacje,
-  niczego nie nagrywa ani nie retransmituje. Dostępność, legalność i prawa do
-  treści każdego strumienia leżą po stronie nadawcy; upewnij się, że masz
-  prawo słuchać danej stacji w swojej jurysdykcji.
-* **Brak gwarancji.** Kod jest udostępniony na licencji GPLv3 „tak jak jest",
-  bez żadnej gwarancji — patrz [LICENSE](LICENSE), sekcje 15–16.
+* **Station logos.** The app does not redistribute any station logos —
+  `stations.json` only contains addresses (`logoUrl`) pointing to artwork
+  hosted by the stations themselves or by the public radio-browser.info
+  directory, similar to how a browser shows a site's favicon. Station names
+  and logos are the property of their broadcasters; this project is not
+  affiliated with or sponsored by any of them. Want a different look for a
+  particular station's logo (e.g. a different background, higher resolution)?
+  Upload your own image on the station details screen, see [Stations](#stations).
+* **Audio streams.** The app is a thin ICY/HLS client — it only connects to
+  the public stream addresses provided by the stations themselves, and it
+  doesn't record or retransmit anything. Availability, legality, and content
+  rights for each stream are the broadcaster's responsibility; make sure
+  you're allowed to listen to a given station in your jurisdiction.
+* **No warranty.** The code is provided under the GPLv3 license "as is",
+  without any warranty — see [LICENSE](LICENSE), sections 15–16.
 
 ---
 
-## Licencja
+## License
 
 ```
-Twinsen Radio — internetowy odtwarzacz radiowy dla Android Auto
+Twinsen Radio — an internet radio player for Android Auto
 Copyright (C) 2026  Leszek Szczepanowski
 
 This program is free software: you can redistribute it and/or modify
@@ -174,5 +184,5 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```
 
-Pełny tekst: [LICENSE](LICENSE). Lista bibliotek i ich licencji:
+Full text: [LICENSE](LICENSE). List of libraries and their licenses:
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

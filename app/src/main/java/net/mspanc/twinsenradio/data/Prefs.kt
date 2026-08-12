@@ -9,8 +9,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Ustawienia aplikacji. Swiadomie na SharedPreferences - czyta z nich takze
- * usluga odtwarzania, a zapisy sa rzadkie.
+ * App settings. Deliberately backed by SharedPreferences - the playback
+ * service reads from it too, and writes are rare.
  */
 class Prefs(context: Context) {
 
@@ -18,50 +18,50 @@ class Prefs(context: Context) {
         context.applicationContext.getSharedPreferences("twinsen_radio", Context.MODE_PRIVATE)
 
     /**
-     * Tryb, w ktorym kazde pole metadanych dostaje swoja polska nazwe zamiast
-     * wartosci.
+     * A mode where every metadata field gets its Polish field name shown
+     * instead of its value.
      *
-     * Domyslnie WYLACZONY. Byl wlaczony dopoki nie wiedzielismy, ktore pola
-     * rysuje deska - pomiar zrobiony 2026-08-11 (BADANIA.md), wiec od tej pory
-     * jest to narzedzie do kolejnych eksperymentow, a nie stan wyjsciowy.
+     * OFF by default. It was on until we knew which fields the head unit
+     * actually renders - measured on 2026-08-11 (BADANIA.md), so from now on
+     * it's a tool for further experiments, not the default state.
      */
     var diagnosticMode: Boolean
         get() = sp.getBoolean(KEY_DIAG, false)
         set(v) = sp.edit { putBoolean(KEY_DIAG, v) }
 
     /**
-     * Czy w trybie diagnostycznym odcinac metadane ICY.
+     * Whether to strip ICY metadata while in diagnostic mode.
      *
-     * Domyslnie NIE. Odcinanie daje pelna determinizm etykiet, ale odbiera
-     * mozliwosc podgladania, co i jak czesto nadaje rozglosnia - a to jest
-     * osobny, ciekawy watek. ICY nadpisuje tylko `title`, `station` i `genre`;
-     * pola, ktore Android Auto faktycznie pokazuje (`displayTitle`, `subtitle`),
-     * pozostaja nasze.
+     * OFF by default. Stripping gives fully deterministic labels, but takes
+     * away the ability to see what and how often a station actually
+     * broadcasts - which is its own interesting topic. ICY only overwrites
+     * `title`, `station`, and `genre`; the fields Android Auto actually shows
+     * (`displayTitle`, `subtitle`) stay ours.
      */
     var stripIcyInDiagnostic: Boolean
         get() = sp.getBoolean(KEY_STRIP_ICY, false)
         set(v) = sp.edit { putBoolean(KEY_STRIP_ICY, v) }
 
-    /** Czy do polskiej etykiety dokleic nazwe pola z API, np. "TYTUL<title>". */
+    /** Whether to append the API field name to the Polish label, e.g. "TYTUL<title>". */
     var diagnosticShowApiName: Boolean
         get() = sp.getBoolean(KEY_DIAG_API, false)
         set(v) = sp.edit { putBoolean(KEY_DIAG_API, v) }
 
-    /** Schemat prezentacji folderow w Android Auto (patrz [ContentStyle]). */
+    /** Presentation scheme for folders in Android Auto (see [ContentStyle]). */
     var browsableStyle: Int
         get() = sp.getInt(KEY_STYLE_BROWSABLE, ContentStyle.CATEGORY_LIST)
         set(v) = sp.edit { putInt(KEY_STYLE_BROWSABLE, v) }
 
-    /** Schemat prezentacji stacji w Android Auto. */
+    /** Presentation scheme for stations in Android Auto. */
     var playableStyle: Int
         get() = sp.getInt(KEY_STYLE_PLAYABLE, ContentStyle.LIST)
         set(v) = sp.edit { putInt(KEY_STYLE_PLAYABLE, v) }
 
     /**
-     * Tresc kolejnych wierszy opisu. Numeracja jak na AID, od gory - patrz
-     * komentarz w [Presentation], tam jest wyjasnione, ktory wiersz idzie
-     * w ktore pole metadanych i dlaczego nie da sie ich rozdzielic miedzy AID
-     * a ekran centralny.
+     * Content of the successive description lines. Numbered like on the AID,
+     * top to bottom - see the comment in [Presentation], which explains which
+     * line goes into which metadata field and why they can't be split between
+     * the AID and the head unit screen.
      */
     var lineTop: Int
         get() = sp.getInt(KEY_LINE_TOP, Presentation.DEFAULT.top.ordinal)
@@ -75,12 +75,12 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_LINE_BOTTOM, Presentation.DEFAULT.bottom.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_BOTTOM, v) }
 
-    /** Czy zamiast okladki rysowac zegar, patrz [ClockFace]. */
+    /** Whether to draw a clock instead of cover art, see [ClockFace]. */
     var clockFace: Int
         get() = sp.getInt(KEY_CLOCK_FACE, Presentation.DEFAULT.clockFace.ordinal)
         set(v) = sp.edit { putInt(KEY_CLOCK_FACE, v) }
 
-    /** Komplet ustawien opisu, zlozony z powyzszych. */
+    /** The full set of description settings, assembled from the above. */
     val presentation: Presentation
         get() = Presentation(
             top = LineContent.at(lineTop),
@@ -90,34 +90,35 @@ class Prefs(context: Context) {
         )
 
     /**
-     * Przy zegarze zamiast okladki: czy ma byc widoczny zawsze (true), czy tylko
-     * wtedy, gdy i tak pokazalibysmy logo stacji, bo okladki nie znaleziono.
+     * With a clock instead of cover art: whether it should always be visible
+     * (true), or only when we'd have shown the station logo anyway because no
+     * cover art was found.
      */
     var clockCoverAlways: Boolean
         get() = sp.getBoolean(KEY_CLOCK_ALWAYS, false)
         set(v) = sp.edit { putBoolean(KEY_CLOCK_ALWAYS, v) }
 
-    /** Kolor tla zegara rysowanego zamiast okladki. */
+    /** Background color of the clock drawn instead of cover art. */
     var clockBackground: Int
         get() = sp.getInt(KEY_CLOCK_BG, 0)
         set(v) = sp.edit { putInt(KEY_CLOCK_BG, v) }
 
-    /** Kolor cyfr i wskazowek zegara; indeks 0 to dobor automatyczny. */
+    /** Color of the clock digits and hands; index 0 means automatic selection. */
     var clockForeground: Int
         get() = sp.getInt(KEY_CLOCK_FG, 0)
         set(v) = sp.edit { putInt(KEY_CLOCK_FG, v) }
 
-    /** Czy uzupelniac linie wykonawcy o wydawnictwo i rok z katalogu iTunes. */
+    /** Whether to enrich the artist line with the release and year from the iTunes catalog. */
     var enrichWithAlbum: Boolean
         get() = sp.getBoolean(KEY_ENRICH_ALBUM, true)
         set(v) = sp.edit { putBoolean(KEY_ENRICH_ALBUM, v) }
 
-    /** Indeks profilu bufora, patrz [BufferProfile.ALL]. */
+    /** Buffer profile index, see [BufferProfile.ALL]. */
     var bufferProfile: Int
         get() = sp.getInt(KEY_BUFFER, 1)
         set(v) = sp.edit { putInt(KEY_BUFFER, v) }
 
-    /** Sposob dostarczania okladki do Android Auto, patrz [ArtworkMode]. */
+    /** How cover art is delivered to Android Auto, see [ArtworkMode]. */
     var artworkMode: Int
         get() = sp.getInt(KEY_ARTWORK, ArtworkMode.RESOURCE_URI)
         set(v) = sp.edit { putInt(KEY_ARTWORK, v) }
@@ -128,7 +129,7 @@ class Prefs(context: Context) {
         set(v) = sp.edit { putString(KEY_M3U, v.joinToString("\n")) }
 
     init {
-        // Jedno zrodlo prawdy dla wszystkich ekranow, zasilone przy pierwszym uzyciu
+        // A single source of truth for all screens, seeded on first use
         synchronized(FAV_LOCK) {
             if (!favouritesSeeded) {
                 _favourites.value = sp.getStringSet(KEY_FAV, emptySet()).orEmpty()
@@ -156,7 +157,7 @@ class Prefs(context: Context) {
             _favourites.value = v
         }
 
-    /** @return true jesli stacja zostala dodana do ulubionych, false jesli usunieta. */
+    /** @return true if the station was added to favourites, false if it was removed. */
     fun toggleFavourite(stationId: String): Boolean {
         val cur = favourites.toMutableSet()
         val added = if (cur.contains(stationId)) {
@@ -171,9 +172,10 @@ class Prefs(context: Context) {
     }
 
     /**
-     * Stacje dodane recznie z katalogu w sieci. Trzymamy komplet danych, a nie
-     * sam identyfikator: katalog moze przestac odpowiadac albo usunac pozycje,
-     * a stacja raz dodana ma dzialac w aucie takze bez zasiegu do katalogu.
+     * Stations added manually from the online directory. We keep the full
+     * data, not just the identifier: the directory can stop responding or
+     * delete an entry, and a station once added should keep working in the
+     * car even without access to the directory.
      */
     val discovered: List<Station> get() = _discovered.value
 
@@ -239,9 +241,9 @@ class Prefs(context: Context) {
     }.getOrElse { emptyList() }
 
     /**
-     * Historie wyszukiwania - osobne dla listy wlasnej i dla katalogu w sieci,
-     * bo to dwa rozne swiaty: tu szuka sie "rmf", tam "jazz radio paris".
-     * Najnowsze na poczatku, bez powtorzen.
+     * Search history - separate for the local list and for the online
+     * directory, because they're two different worlds: here you search for
+     * "rmf", there for "jazz radio paris". Newest first, no duplicates.
      */
     var localSearchHistory: List<String>
         get() = readHistory(KEY_HISTORY_LOCAL)
@@ -269,11 +271,11 @@ class Prefs(context: Context) {
         sp.edit { putString(key, values.take(HISTORY_LIMIT).joinToString("\n")) }
 
     /**
-     * Stacje wbudowane, ktore uzytkownik usunal z listy.
+     * Built-in stations that the user has removed from the list.
      *
-     * Wbudowanych nie da sie skasowac - siedza w assets - wiec zamiast tego
-     * trzymamy zbior ukrytych i pomijamy je przy budowaniu listy. Dzieki temu
-     * usuniecie jest odwracalne, a plik z lista zostaje nietkniety.
+     * Built-in stations can't actually be deleted - they live in assets - so
+     * instead we keep a set of hidden ones and skip them when building the
+     * list. That makes removal reversible, and the list file stays untouched.
      */
     val hidden: Set<String> get() = _hidden.value
 
@@ -295,9 +297,9 @@ class Prefs(context: Context) {
     }
 
     /**
-     * Wybrany wariant strumienia dla stacji. Brak wpisu = bierzemy najlepszy,
-     * jaki stacja oferuje. Zapisujemy adres, a nie numer pozycji - lista
-     * wariantow moze sie zmienic przy aktualizacji aplikacji.
+     * The chosen stream variant for a station. No entry = we take the best one
+     * the station offers. We store the address, not the position index - the
+     * variant list can change when the app is updated.
      */
     fun selectedStream(stationId: String): String? =
         sp.getString(KEY_STREAM_PREFIX + stationId, null)
@@ -307,8 +309,8 @@ class Prefs(context: Context) {
     }
 
     /**
-     * Adres wpisany recznie. Ma pierwszenstwo przed wszystkim - takze dla stacji
-     * wbudowanych, ktorych pliku z lista nie da sie edytowac.
+     * A manually entered address. Takes priority over everything - even for
+     * built-in stations, whose list file can't be edited.
      */
     fun customStream(stationId: String): String? =
         sp.getString(KEY_CUSTOM_STREAM_PREFIX + stationId, null)?.takeIf { it.isNotBlank() }
@@ -321,7 +323,7 @@ class Prefs(context: Context) {
         }
     }
 
-    /** Wlasne logo wgrane przez uzytkownika - sciezka do pliku w katalogu aplikacji. */
+    /** Custom logo uploaded by the user - a path to a file in the app's directory. */
     fun customLogo(stationId: String): String? =
         sp.getString(KEY_CUSTOM_LOGO_PREFIX + stationId, null)?.takeIf { it.isNotBlank() }
 
@@ -334,25 +336,26 @@ class Prefs(context: Context) {
     }
 
     /**
-     * Ile razy stacja byla wlaczana. Sluzy do sortowania "najczesciej sluchane" -
-     * po kilku tygodniach jazdy to najlepszy porzadek, jaki mozna zaproponowac.
+     * How many times the station has been turned on. Used to sort by "most
+     * frequently listened to" - after a few weeks of driving this is the best
+     * ordering we can offer.
      */
     fun playCount(stationId: String): Int = sp.getInt(KEY_PLAYS_PREFIX + stationId, 0)
 
     fun bumpPlayCount(stationId: String) =
         sp.edit { putInt(KEY_PLAYS_PREFIX + stationId, playCount(stationId) + 1) }
 
-    /** Porzadek listy stacji, patrz [StationSort]. */
+    /** Station list order, see [StationSort]. */
     var stationSort: StationSort
         get() = StationSort.at(sp.getInt(KEY_SORT_STATIONS, 0))
         set(v) = sp.edit { putInt(KEY_SORT_STATIONS, v.ordinal) }
 
-    /** Porzadek wynikow wyszukiwania w katalogu, patrz [DiscoverSort]. */
+    /** Search results order in the directory, see [DiscoverSort]. */
     var discoverSort: DiscoverSort
         get() = DiscoverSort.at(sp.getInt(KEY_SORT_DISCOVER, 0))
         set(v) = sp.edit { putInt(KEY_SORT_DISCOVER, v.ordinal) }
 
-    /** Ostatnio sluchane, najnowsze na poczatku. */
+    /** Recently listened to, newest first. */
     var recent: List<String>
         get() = sp.getString(KEY_RECENT, "").orEmpty().lines().filter { it.isNotBlank() }
         set(v) = sp.edit { putString(KEY_RECENT, v.take(20).joinToString("\n")) }
@@ -369,13 +372,13 @@ class Prefs(context: Context) {
 
     companion object {
         /**
-         * Ulubione jako strumien, a nie odpytywanie preferencji przy okazji.
+         * Favourites as a stream, rather than polling preferences on demand.
          *
-         * Wczesniej kazdy ekran czytal je we wlasnym momencie - lista przy
-         * wchodzeniu na wierzch, ekran odtwarzania przy renderowaniu, Android Auto
-         * przy budowaniu przyciskow - i stany rozjezdzaly sie miedzy soba.
-         * Teraz jest jedno zrodlo prawdy, ktore oglasza zmiane, a wszyscy
-         * zainteresowani ja obserwuja.
+         * Previously each screen read them at its own moment - the list when
+         * coming to the foreground, the playback screen when rendering,
+         * Android Auto when building buttons - and the states would drift
+         * apart from each other. Now there's a single source of truth that
+         * announces changes, and everyone interested observes it.
          */
         private val _favourites = MutableStateFlow<Set<String>>(emptySet())
         val favouritesFlow: StateFlow<Set<String>> = _favourites
@@ -384,9 +387,9 @@ class Prefs(context: Context) {
         private val FAV_LOCK = Any()
 
         /**
-         * Stacje dociagniete z katalogu - tak samo jak ulubione, jedno zrodlo
-         * prawdy ze strumieniem zmian, zeby lista na telefonie i drzewo w aucie
-         * przebudowaly sie w tej samej chwili.
+         * Stations pulled in from the directory - just like favourites, a
+         * single source of truth with a change stream, so the list on the
+         * phone and the tree in the car rebuild at the same moment.
          */
         private val _discovered = MutableStateFlow<List<Station>>(emptyList())
         val discoveredFlow: StateFlow<List<Station>> = _discovered
@@ -394,7 +397,7 @@ class Prefs(context: Context) {
         private var discoveredSeeded = false
         private val DISCOVERED_LOCK = Any()
 
-        /** Ukryte stacje wbudowane - tak samo obserwowalne jak ulubione. */
+        /** Hidden built-in stations - observable just like favourites. */
         private val _hidden = MutableStateFlow<Set<String>>(emptySet())
         val hiddenFlow: StateFlow<Set<String>> = _hidden
 
@@ -425,7 +428,7 @@ class Prefs(context: Context) {
         const val KEY_SORT_STATIONS = "sort_stations"
         const val KEY_SORT_DISCOVER = "sort_discover"
 
-        // Klucze zalezne od stacji - pelny klucz to prefiks plus jej identyfikator
+        // Station-dependent keys - the full key is the prefix plus its identifier
         private const val KEY_STREAM_PREFIX = "stream_choice_"
         private const val KEY_CUSTOM_STREAM_PREFIX = "stream_custom_"
         private const val KEY_CUSTOM_LOGO_PREFIX = "logo_custom_"
@@ -433,14 +436,14 @@ class Prefs(context: Context) {
         const val KEY_HISTORY_LOCAL = "search_history_local"
         const val KEY_HISTORY_WEB = "search_history_web"
 
-        /** Tyle wpisow wystarczy - dluzsza lista i tak nie miesci sie na ekranie. */
+        /** This many entries is enough - a longer list wouldn't fit on screen anyway. */
         private const val HISTORY_LIMIT = 10
     }
 }
 
 /**
- * Cztery schematy prezentacji, ktore Android Auto faktycznie udostepnia aplikacjom
- * medialnym (klucze CONTENT_STYLE_* w rozszerzeniach MediaBrowser).
+ * The four presentation schemes that Android Auto actually exposes to media
+ * apps (the CONTENT_STYLE_* keys in the MediaBrowser extensions).
  */
 object ContentStyle {
     const val LIST = 1
@@ -464,11 +467,11 @@ object ContentStyle {
 }
 
 object ArtworkMode {
-    /** android.resource:// - Android Auto pobiera logo wprost z zasobow APK. */
+    /** android.resource:// - Android Auto fetches the logo directly from APK resources. */
     const val RESOURCE_URI = 0
-    /** Bajty PNG w polu artworkData - dziala nawet gdy HU nie umie w URI. */
+    /** PNG bytes in the artworkData field - works even when the HU can't handle URIs. */
     const val EMBEDDED_BYTES = 1
-    /** Brak okladki - do sprawdzenia, co AID pokazuje bez grafiki. */
+    /** No cover art - for checking what the AID shows without graphics. */
     const val NONE = 2
 
     val LABELS = listOf(
@@ -478,7 +481,7 @@ object ArtworkMode {
     )
 }
 
-/** Profile buforowania. Wartosci w ms. */
+/** Buffering profiles. Values in ms. */
 data class BufferProfile(
     val label: String,
     val minBufferMs: Int,

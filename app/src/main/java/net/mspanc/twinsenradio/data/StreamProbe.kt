@@ -7,33 +7,33 @@ import java.net.URL
 import java.net.UnknownHostException
 
 /**
- * Sprawdza tu i teraz, czy strumien w ogole odpowiada.
+ * Checks right here, right now, whether a stream responds at all.
  *
- * Po co, skoro katalog ma flage "dziala": ta flaga pochodzi z **ostatniego**
- * sprawdzenia, ktore bywa sprzed miesiecy. Triple M Melbourne mial
- * `lastcheckok = 1` z data 2026-01-15, a serwer `wz3drp.scahw.com.au` nie ma juz
- * nawet rekordu DNS. Bez wlasnej sondy taka pozycja ladowala na liscie i
- * buforowala sie w nieskonczonosc.
+ * Why bother, given the directory has a "working" flag: that flag comes from
+ * the **last** check, which can be months old. Triple M Melbourne had
+ * `lastcheckok = 1` dated 2026-01-15, while the server `wz3drp.scahw.com.au`
+ * no longer even has a DNS record. Without our own probe, such an entry would
+ * load into the list and buffer forever.
  *
- * Sonda celowo nie pobiera calego strumienia - wystarczy poczatek, zeby
- * odroznic dzialajacy serwer od martwego.
+ * The probe deliberately doesn't fetch the whole stream - the beginning is
+ * enough to tell a working server from a dead one.
  */
 object StreamProbe {
 
     enum class Result {
-        /** Serwer odpowiedzial i oddaje dane. */
+        /** The server responded and is returning data. */
         OK,
 
-        /** Nazwa hosta nie istnieje - serwer zostal wycofany. */
+        /** The hostname doesn't exist - the server has been decommissioned. */
         NO_HOST,
 
-        /** Serwer odpowiedzial bledem, np. 403 przy blokadzie regionalnej. */
+        /** The server responded with an error, e.g. 403 for a regional block. */
         HTTP_ERROR,
 
-        /** Nic nie przyszlo w zadanym czasie. */
+        /** Nothing arrived within the given time. */
         TIMEOUT,
 
-        /** Cokolwiek innego - brak sieci, blad TLS. */
+        /** Anything else - no network, TLS error. */
         FAILED
     }
 
@@ -46,7 +46,7 @@ object StreamProbe {
                 readTimeout = TIMEOUT_MS
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", StationRepository.USER_AGENT)
-                // Prosimy o metadane ICY - przy okazji sprawdzamy, czy stacja je daje
+                // Ask for ICY metadata - as a side effect this checks whether the station provides it
                 setRequestProperty("Icy-MetaData", "1")
             }
             try {
@@ -55,7 +55,7 @@ object StreamProbe {
                     val extra = if (code == 403) " (blokada regionalna?)" else ""
                     return@withContext Report(Result.HTTP_ERROR, "HTTP $code$extra")
                 }
-                // Czy naprawde cos plynie - sam kod 200 potrafi oddac strone bledu
+                // Whether something is actually streaming - a bare 200 code can just be an error page
                 val buffer = ByteArray(PROBE_BYTES)
                 val read = conn.inputStream.use { it.read(buffer) }
                 if (read <= 0) {

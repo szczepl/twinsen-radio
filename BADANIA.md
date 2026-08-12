@@ -1,152 +1,159 @@
-# Badania
+# Findings
 
-Wyniki ustalone doświadczalnie, nie z dokumentacji. Zapisane, bo każdy z nich
-kosztował osobne dochodzenie.
+Results established experimentally, not from documentation. Written down
+because each one cost a separate investigation.
 
 ---
 
-## 1. Które pole trafia gdzie
+## 1. Which field goes where
 
-Zebrane na realnym Galaxy S20+ w projekcji Android Auto (DHU 2.1, 2026-08-10).
+Collected on a real Galaxy S20+ in Android Auto projection (DHU 2.1, 2026-08-10).
 
-### Ekran odtwarzania Android Auto
+### Android Auto playback screen
 
-| co widać | z którego pola |
+| what's shown | from which field |
 |---|---|
-| duża linia | `displayTitle` |
-| mała linia pod nią | `subtitle` |
-| okładka | `artworkUri` |
+| large line | `displayTitle` |
+| small line below it | `subtitle` |
+| artwork | `artworkUri` |
 
-**Ani `title`, ani `artist` nie pojawiają się na tym ekranie** — mimo że są
-ustawione. Android Auto bierze warianty „display".
+**Neither `title` nor `artist` shows up on this screen** — even though they're
+set. Android Auto uses the "display" variants.
 
-### Okno „Media Playback Status" w DHU
+### The "Media Playback Status" window in DHU
 
-| etykieta DHU | z którego pola |
+| DHU label | from which field |
 |---|---|
 | Song | `displayTitle` |
 | Artist | `subtitle` |
 | Album | `description` |
 
-`description` lądujący w polu „Album" to najmniej oczywisty wynik z całej serii.
+`description` landing in the "Album" field is the least obvious result of the
+whole series.
 
-### Active Info Display w Passacie — POTWIERDZONE
+### Active Info Display in the Passat — CONFIRMED
 
-Odczytane z trybu diagnostycznego w aucie, 2026-08-11. **Hipoteza była błędna** —
-AID nie bierze `artist` / `albumTitle` / `title`, tylko dokładnie te same pola
-„display", z których korzysta ekran centralny:
+Read from the car's diagnostic mode, 2026-08-11. **The hypothesis was wrong** —
+AID doesn't use `artist` / `albumTitle` / `title`, but exactly the same
+"display" fields the central screen uses:
 
-| linia na AID | pole |
+| line on AID | field |
 |---|---|
-| górna (mała) | `subtitle` |
-| środkowa (mała) | `description` |
-| dolna (pogrubiona) | `displayTitle` |
-| grafika | `artworkUri` |
+| top (small) | `subtitle` |
+| middle (small) | `description` |
+| bottom (bold) | `displayTitle` |
+| artwork | `artworkUri` |
 
-Zdjęcie z auta w trybie diagnostycznym:
+Photo from the car in diagnostic mode:
 
 ```
-        [ okładka utworu ]
+        [ track artwork ]
         PODTYTUL<subtitle> 08:55
         OPIS<description> 08:55
         TYT.WYSW<displayTitle>
         08:55
 ```
 
-Zegar w każdym polu odświeżał się na bieżąco — czyli **AID czyta metadane na
-żywo**, nie zamraża ich na wartości z chwili rozpoczęcia utworu.
+The clock in every field updated live — meaning **AID reads metadata live**,
+it doesn't freeze them at the value from the moment the track started.
 
-**Konsekwencja projektowa.** AID i ekran centralny dzielą pola, więc nie da się
-sterować nimi niezależnie: cokolwiek wstawimy w linię AID, pojawi się też na
-ekranie centralnym. Zegar w linii tekstu będzie widoczny w obu miejscach i to
-jest świadomy kompromis, a nie usterka.
+**Design consequence.** AID and the central screen share fields, so they
+can't be controlled independently: whatever we put in the AID line will also
+show up on the central screen. The clock in the text line will be visible in
+both places, and that's a deliberate trade-off, not a bug.
 
-Mapowanie w drugą stronę, dla porządku:
+The mapping in the other direction, for the record:
 
-| pole | ekran centralny AA | AID |
+| field | AA central screen | AID |
 |---|---|---|
-| `displayTitle` | duża linia | dolna linia |
-| `subtitle` | mała linia | górna linia |
-| `description` | nie pokazywane | środkowa linia |
+| `displayTitle` | large line | bottom line |
+| `subtitle` | small line | top line |
+| `description` | not shown | middle line |
 
-Czyli **górna linia AID powiela małą linię ekranu centralnego**. Środkowa linia
-jest jedynym miejscem, które AID ma na wyłączność. Dla porównania: ReplaIO
-wstawia tam zawsze nazwę stacji, a aplikacja RNŚ zostawia ją pustą.
+So **the top AID line duplicates the small line of the central screen**. The
+middle line is the only spot AID has exclusively. For comparison: ReplaIO
+always puts the station name there, while the RNŚ app leaves it empty.
 
-Rozdzielczości, dla porządku:
+Resolutions, for the record:
 
-* Digital Cockpit Pro w Passacie B8 (10,25") — 1280 × 480 na cały wyświetlacz.
-* Ekran centralny: Discover Pro 9,2" — 1280 × 640 fizycznie, ale głowica
-  zachowuje się jak układ 1,78 przy gęstości 240 dpi (patrz INSTRUKCJA).
+* Digital Cockpit Pro in the Passat B8 (10.25") — 1280 × 480 for the whole
+  display.
+* Central screen: Discover Pro 9.2" — 1280 × 640 physically, but the head
+  unit behaves like a 1.78 layout at 240 dpi density (see INSTRUKCJA).
 
-Rozdzielczości, dla porządku:
+Resolutions, for the record:
 
-* Digital Cockpit Pro w Passacie B8 (10,25") — 1280 × 480 na cały wyświetlacz.
-* Obszar treści między zegarami — **szacunkowo** ~500 × 400 px; to oszacowanie
-  z proporcji ekranu, nie specyfikacja VW.
-* Ekran centralny: Composition/Discover Media 8" — 800 × 480; Discover Pro
-  9,2" — 1280 × 640.
+* Digital Cockpit Pro in the Passat B8 (10.25") — 1280 × 480 for the whole
+  display.
+* Content area between the clocks — **estimated** ~500 × 400 px; this is an
+  estimate from screen proportions, not a VW spec.
+* Central screen: Composition/Discover Media 8" — 800 × 480; Discover Pro
+  9.2" — 1280 × 640.
 
 ---
 
-## 2. Mapowanie ikon w Desktop Head Unit
+## 2. Icon mapping in the Desktop Head Unit
 
-Dochodzenie z 2026-08-10, po tym jak w HDU zamiast gwiazdki pojawiły się romby
-i kwadraty.
+Investigation from 2026-08-10, after diamonds and squares showed up in the
+HDU instead of a star.
 
-Metoda: sonda podmieniająca ikonę przycisku na kolejne wartości, ze zrzutem
-ekranu HDU przy każdej. Wyniki dla naszych zasobów i dla stałych semantycznych:
+Method: a probe swapping the button icon through successive values, with an
+HDU screenshot at each one. Results for our own resources and for the
+semantic constants:
 
-| wysłane | co narysowało HDU |
+| sent | what HDU drew |
 |---|---|
-| nasz **trójkąt** (`ic_probe_triangle`) | pełna gwiazdka |
-| nasz `ic_star_filled_aa` | dwa romby |
-| nasz `ic_star_outline_aa` | kwadrat |
-| `ICON_STAR_FILLED` | nutka |
-| `ICON_STAR_UNFILLED` | kreska |
-| `ICON_HEART_FILLED` | napis „1.8X" |
-| `ICON_THUMB_UP_FILLED` | nic |
+| our **triangle** (`ic_probe_triangle`) | a full star |
+| our `ic_star_filled_aa` | two diamonds |
+| our `ic_star_outline_aa` | a square |
+| `ICON_STAR_FILLED` | a music note |
+| `ICON_STAR_UNFILLED` | a dash |
+| `ICON_HEART_FILLED` | the text "1.8X" |
+| `ICON_THUMB_UP_FILLED` | nothing |
 
-Skan numerów zasobów dał rozwiązanie:
+Scanning the resource numbers gave the answer:
 
-| numer | co rysuje DHU | co jest pod nim dziś |
+| number | what DHU draws | what's under it today |
 |---|---|---|
-| `0x7F0700A0` | pełna gwiazdka | `ic_radio` |
-| `0x7F0700A2` | pusta gwiazdka | `ic_star_filled_aa` |
-| `0x7F0700A7` | **logo KISS FM** | `logo_anty` |
+| `0x7F0700A0` | a full star | `ic_radio` |
+| `0x7F0700A2` | an empty star | `ic_star_filled_aa` |
+| `0x7F0700A7` | **the KISS FM logo** | `logo_anty` |
 
-Ostatni wiersz zdradza wszystko: HDU rysuje **nasze własne zasoby**, tylko
-przesunięte. `0x7F0700A0` i `0x7F0700A2` to pozycje, jakie
-`ic_star_filled_aa` i `ic_star_outline_aa` miały **przed** dołożeniem czterech
-plików do `res/drawable`.
+The last row gives it away: HDU is drawing **our own resources**, just
+shifted. `0x7F0700A0` and `0x7F0700A2` are the positions `ic_star_filled_aa`
+and `ic_star_outline_aa` held **before** four files were added to
+`res/drawable`.
 
-**Wniosek:** Desktop Head Unit trzyma tablicę zasobów z wersji APK sprzed
-reinstalacji i nie odświeża jej. Po przeładowaniu sesji projekcji numery znów
-się zgadzają i ikony rysują się poprawnie — potwierdzone zrzutem.
+**Conclusion:** the Desktop Head Unit keeps a resource table from the APK
+version before the reinstall and doesn't refresh it. After reloading the
+projection session the numbers line up again and the icons draw correctly —
+confirmed with a screenshot.
 
-W aucie problem nie wystąpi, bo tam aplikacja nie jest podmieniana w trakcie
-sesji.
+The problem won't occur in the car, because there the app isn't swapped out
+mid-session.
 
-Ślepe zaułki, których nie ma sensu powtarzać:
+Dead ends not worth repeating:
 
-* `aapt2 --stable-ids` / `--emit-ids` — parametry docierają do aapt2 (nieznana
-  flaga wywala build), ale AGP nie zapisuje pliku, więc nie ma czego czytać.
-* `res/values/public.xml` z jawnymi numerami — aapt2 honoruje je tylko dla
-  frameworka i bibliotek współdzielonych, dla aplikacji ignoruje.
-* Podbicie `versionCode` — nie unieważnia tablicy po stronie DHU.
-* `pm trim-caches` — bez wpływu.
+* `aapt2 --stable-ids` / `--emit-ids` — the parameters reach aapt2 (an
+  unknown flag crashes the build), but AGP doesn't write the file, so
+  there's nothing to read.
+* `res/values/public.xml` with explicit numbers — aapt2 only honors these
+  for the framework and shared libraries; it ignores them for the app.
+* Bumping `versionCode` — doesn't invalidate the table on the DHU side.
+* `pm trim-caches` — no effect.
 
 ---
 
-## 3. Zachowanie stacji
+## 3. Station behavior
 
-* **RMF FM** oznacza reklamy na trzy sposoby: `adw_ad='true'` z pustym
-  `StreamTitle`, słowem z listy, albo wcale. Serwis informacyjny anonsuje jako
-  `FAKTY`. Wysyła też znaczniki sterujące (`STOP_AD_BREAK`), które **nie**
-  oznaczają powrotu muzyki.
-* **Radio Nowy Świat** podaje sensowny `StreamTitle`; przy audycjach wstawia
-  slogan „Pion i poziom!" w formacie `Radio Nowy Świat - Pion i poziom!`.
-* **Jacaranda FM** łamie dwie konwencje naraz. Podsłuch strumienia
+* **RMF FM** marks ads in three ways: `adw_ad='true'` with an empty
+  `StreamTitle`, a word from a list, or not at all. The news bulletin
+  announces itself as `FAKTY`. It also sends control markers
+  (`STOP_AD_BREAK`) which **don't** mean the music is back.
+* **Radio Nowy Świat** provides a sensible `StreamTitle`; during talk shows
+  it inserts the slogan "Pion i poziom!" in the format
+  `Radio Nowy Świat - Pion i poziom!`.
+* **Jacaranda FM** breaks two conventions at once. Stream sniff
   (2026-08-11):
 
   ```
@@ -154,90 +161,97 @@ sesji.
   11:39:43  StreamTitle='WHAT'S LOVE GOT TO DO WITH IT - KYGO [+] TINA TURNER'
   ```
 
-  Po pierwsze **wszystko wersalikami**. Po drugie — i to ważniejsze —
-  kolejność jest **odwrotna**: najpierw tytuł, potem wykonawca. GOODLUCK to
-  zespół z RPA, Kygo to producent. Przy współpracach używa `[+]` zamiast
-  przecinka.
+  First, **everything is in all caps**. Second — and more importantly — the
+  order is **reversed**: title first, then artist. GOODLUCK is a band from
+  South Africa, Kygo is the producer. For collaborations it uses `[+]`
+  instead of a comma.
 
-  Rozpoznajemy to katalogiem, a nie flagą przy stacji: jeśli to, co wzięliśmy
-  za wykonawcę, jest w iTunes tytułem utworu — pola są zamienione. Porównywanie
-  także wykonawcy nie działa, bo przy współpracach napisy się rozjeżdżają
-  (stacja: „KYGO [+] TINA TURNER", katalog: „Tina Turner").
-* **Polskie Radio** — cały plant Shoutcasta (porty 8900–8918) nie odpowiada:
-  połączenie TCP wchodzi, danych brak. Działa wyłącznie HLS, po jednym serwerze
-  na program: `stream11/pr1`, `stream12/pr2`, `stream13/pr3`, `stream14/pr4`,
-  `stream15/pr24`, a Kierowcy na nietypowej ścieżce `stream10/prk/rdk.sdp`.
-  **Segmenty HLS nie niosą tytułów utworów** — jest w nich tylko
-  `com.apple.streaming.transportStreamTimestamp`, żadnego `TIT2`/`TPE1`.
-* Wszystkie 32 strumienie zweryfikowane sondą HTTP z nagłówkiem
-  `Icy-MetaData: 1`; każdy oddaje dane i nagłówki.
+  We detect this via the catalog, not a per-station flag: if what we took to
+  be the artist is the track title in iTunes — the fields are swapped.
+  Comparing the artist too doesn't work, because on collaborations the
+  strings diverge (station: "KYGO [+] TINA TURNER", catalog: "Tina Turner").
+* **Polskie Radio** — the entire Shoutcast plant (ports 8900–8918) doesn't
+  respond: the TCP connection goes through, but no data comes back. Only HLS
+  works, one server per program: `stream11/pr1`, `stream12/pr2`,
+  `stream13/pr3`, `stream14/pr4`, `stream15/pr24`, with Kierowcy on the
+  unusual path `stream10/prk/rdk.sdp`. **HLS segments don't carry track
+  titles** — they only contain `com.apple.streaming.transportStreamTimestamp`,
+  no `TIT2`/`TPE1`.
+* All 32 streams verified with an HTTP probe using the `Icy-MetaData: 1`
+  header; each one returns data and headers.
 
 ---
 
-## 4. Ile naprawdę znaczy „hidebroken" w radio-browser
+## 4. What "hidebroken" really means in radio-browser
 
-Ustalone na przypadku Triple M Melbourne (2026-08-11), który po dodaniu
-buforował się w nieskończoność.
+Established from the Triple M Melbourne case (2026-08-11), which buffered
+forever after being added.
 
-Katalog twierdził, że stacja działa:
+The catalog claimed the station was working:
 
 ```
 lastcheckok    : 1
-lastchecktime  : 2026-01-15      <- siedem miesięcy wcześniej
+lastchecktime  : 2026-01-15      <- seven months earlier
 url_resolved   : https://wz3drp.scahw.com.au/live/3mmm_32.stream/playlist.m3u8
 ```
 
-A host **nie ma rekordu A** — sprawdzone także przez publiczny resolver Google,
-więc to nie kwestia naszej sieci. SCA wycofało ten serwer.
+And the host **has no A record** — also checked via Google's public
+resolver, so it's not a matter of our own network. SCA decommissioned that
+server.
 
-**Wniosek:** `hidebroken` odsiewa stacje, które przy **ostatnim** sprawdzeniu
-były zepsute. Nie znaczy „sprawdzone niedawno". Żywe stacje katalog testuje mniej
-więcej raz na dobę, więc data sprzed miesięcy oznacza, że sprawdzarka dawno się
-poddała, a flaga została z ostatniego udanego testu.
+**Conclusion:** `hidebroken` filters out stations that were broken at their
+**last** check. It doesn't mean "checked recently." The catalog tests live
+stations roughly once a day, so a date from months ago means the checker
+gave up long ago, and the flag is left over from the last successful test.
 
-Stąd trzy zabezpieczenia po naszej stronie:
+Hence three safeguards on our side:
 
-1. Ekran szczegółów pokazuje, **ile dni temu** katalog potwierdził działanie,
-   i przy wartości powyżej 30 dni mówi wprost, że to bardzo dawno.
-2. Przycisk **„Sprawdź, czy strumień działa"** wykonuje własne połączenie tu
-   i teraz. Rozróżnia brak hosta (stacja wycofana), HTTP 403 (często blokada
-   regionalna), brak odpowiedzi i serwer, który oddaje pustkę.
-3. Przy odtwarzaniu: po czterech nieudanych próbach przy działającej sieci
-   status zmienia się z „Ponawiam połączenie" na **„Stacja nie odpowiada"**.
-   Ponawiamy dalej — w aucie nic nie miga — ale na telefonie widać, że problem
-   jest po stronie rozgłośni, a nie zasięgu.
-
----
-
-## 5. Co sprawdzono na emulatorze (API 33)
-
-* `dumpsys media_session` pokazuje `state=3` (PLAYING) i
-  `description=TYT.WYŚW, PODTYTUŁ, OPIS` — diagnostyczne etykiety faktycznie
-  przechodzą przez sesję medialną tak, jak przeczyta je głowica.
-* Powiadomienie ma `android.title=TYTUŁ` — dowód, że odcięcie ICY działa
-  i prawdziwy `StreamTitle` nie nadpisuje pola `title`.
-* Ścieżka `MediaBrowserCompat` (ta, której używa Android Auto) sprawdzona
-  osobnym klientem testowym: korzeń, zakładki, gatunki, flagi browsable/playable.
-* Wyszukiwanie ignoruje diakrytyki: „nowy swiat" → Radio Nowy Świat.
-
-### Znane, nieistotne dla auta
-
-SystemUI zgłasza `Cannot resume with ComponentInfo{...RadioService}` — to sonda
-„wznowienia odtwarzania" z panelu powiadomień, odrzucana przez Media3 wewnątrz
-jego legacy stuba, zanim wywoła nasz kod. Efekt czysto kosmetyczny.
+1. The details screen shows **how many days ago** the catalog confirmed the
+   station was working, and above 30 days it states outright that this is a
+   very long time ago.
+2. The **"Check if the stream works"** button makes its own connection right
+   here, right now. It distinguishes a missing host (station decommissioned),
+   HTTP 403 (often a regional block), no response, and a server that returns
+   nothing.
+3. During playback: after four failed attempts on a working network, the
+   status changes from "Reconnecting" to **"Station not responding"**. We
+   keep retrying — nothing flickers in the car — but on the phone it's
+   visible that the problem is on the broadcaster's side, not signal
+   coverage.
 
 ---
 
-## 5. Czego dowiedzieliśmy się z ReplaIO
+## 5. What was checked on the emulator (API 33)
 
-Archiwum ReplaIO było punktem odniesienia przy dwóch problemach.
+* `dumpsys media_session` shows `state=3` (PLAYING) and
+  `description=TYT.WYŚW, PODTYTUŁ, OPIS` — the diagnostic labels actually do
+  pass through the media session exactly as the head unit will read them.
+* The notification has `android.title=TYTUŁ` — proof that the ICY cutoff
+  works and the real `StreamTitle` doesn't overwrite the `title` field.
+* The `MediaBrowserCompat` path (the one Android Auto uses) checked with a
+  separate test client: root, tabs, genres, browsable/playable flags.
+* Search ignores diacritics: "nowy swiat" → Radio Nowy Świat.
 
-* **Ikony bez tinta.** ReplaIO publikuje custom actions dokładnie jak my, z tym
-  samym `pathData` gwiazdki — różnica była wyłącznie w `android:tint`.
-* **Per-item favourites w liście AA: ReplaIO ich nie ma.** Zero wystąpień
-  `CUSTOM_BROWSER_ACTION` w całym kodzie. Ich gwiazdka istnieje tylko przy
-  odtwarzaczu. Czyli nie byli dowodem, że odświeżanie listy jest osiągalne.
-* **Nie używają Media3.** W kodzie jest `MediaSessionCompat` i
-  `MediaBrowserServiceCompat` — wołają stare API bezpośrednio. To naprowadziło
-  na podejrzenie mostu Media3 i podniesienie wersji do 1.11.0, co naprawiło
-  odświeżanie listy Ulubionych.
+### Known, irrelevant to the car
+
+SystemUI reports `Cannot resume with ComponentInfo{...RadioService}` — this
+is a "resume playback" probe from the notification panel, rejected by Media3
+inside its legacy stub before it calls our code. Purely cosmetic effect.
+
+---
+
+## 5. What we learned from ReplaIO
+
+The ReplaIO archive was a reference point for two problems.
+
+* **Icons without a tint.** ReplaIO publishes custom actions exactly like we
+  do, with the same star `pathData` — the difference was solely in
+  `android:tint`.
+* **Per-item favorites in the AA list: ReplaIO doesn't have them.** Zero
+  occurrences of `CUSTOM_BROWSER_ACTION` in the entire codebase. Their star
+  only exists next to the player. So they weren't proof that refreshing the
+  list is achievable.
+* **They don't use Media3.** The code has `MediaSessionCompat` and
+  `MediaBrowserServiceCompat` — they call the old API directly. This pointed
+  toward suspecting the Media3 bridge and bumping the version to 1.11.0,
+  which fixed refreshing of the Favorites list.

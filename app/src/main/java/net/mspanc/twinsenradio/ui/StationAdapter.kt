@@ -10,9 +10,9 @@ import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.databinding.ItemStationBinding
 
 /**
- * Lista stacji. Uzywana w dwoch miejscach - na ekranie glownym (przycisk po
- * prawej przelacza ulubione) i w wyszukiwarce w sieci (przycisk dodaje stacje
- * do listy) - dlatego opis pod nazwa i ikona akcji sa parametrami.
+ * List of stations. Used in two places - on the main screen (the button on the
+ * right toggles favourites) and in the online search (the button adds the
+ * station to the list) - that's why the subtitle and the action icon are parameters.
  */
 class StationAdapter(
     private val subtitleFor: (Station) -> String,
@@ -20,7 +20,7 @@ class StationAdapter(
     private val loadLogo: (Station, ImageView) -> Unit,
     private val onClick: (Station) -> Unit,
     private val onAction: (Station) -> Unit,
-    /** Stukniecie w samo logo; null = logo zachowuje sie jak reszta wiersza. */
+    /** Tap on the logo itself; null = the logo behaves like the rest of the row. */
     private val onLogoClick: ((Station) -> Unit)? = null
 ) : ListAdapter<Station, StationAdapter.VH>(DIFF) {
 

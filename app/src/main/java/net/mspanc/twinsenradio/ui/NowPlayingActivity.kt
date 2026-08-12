@@ -23,9 +23,9 @@ import net.mspanc.twinsenradio.playback.RadioService
 import net.mspanc.twinsenradio.playback.TextCase
 
 /**
- * Pelnoekranowy odtwarzacz na telefonie: duza okladka, metadane, sterowanie
- * i strzalka powrotu do listy stacji. Otwiera sie stuknieciem w pasek
- * odtwarzania na ekranie glownym.
+ * Full-screen player on the phone: large cover art, metadata, controls, and
+ * a back arrow to the station list. Opens by tapping the playback bar on
+ * the home screen.
  */
 @UnstableApi
 class NowPlayingActivity : AppCompatActivity() {
@@ -80,8 +80,8 @@ class NowPlayingActivity : AppCompatActivity() {
                 c.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) = render()
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = render()
-                    // bez tego okladka doszukana juz w trakcie utworu nigdy by sie
-                    // nie pojawila - metadane zmieniaja sie osobno od pozycji
+                    // without this, cover art found mid-track would never appear -
+                    // metadata changes separately from playback position
                     override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) = render()
                 })
             }
@@ -96,15 +96,15 @@ class NowPlayingActivity : AppCompatActivity() {
     }
 
     /**
-     * Przycisk jakosci dla granej stacji.
+     * Quality button for the currently playing station.
      *
-     * To ta sama nastawa, co w karcie stacji - zapisujemy ja w [Prefs], wiec
-     * zmiana zrobiona tutaj widoczna jest tam i odwrotnie. Usluga sama
-     * przeladuje strumien, bo obserwuje te preferencje.
+     * It's the same setting as in the station card - we save it in [Prefs], so
+     * a change made here is visible there and vice versa. The service reloads
+     * the stream on its own, since it observes this preference.
      *
-     * Widoczny tylko, gdy naprawde znamy przeplywnosc - z katalogu albo,
-     * dla "golych" adresow bez tej deklaracji, z dekodera na zywo. Bez niej
-     * nie ma czego pokazac, wiec przycisk znika zamiast placeholdera.
+     * Only visible when we actually know the bitrate - from the directory or,
+     * for "bare" URLs without that declaration, from the live decoder. Without
+     * it there's nothing to show, so the button disappears instead of showing a placeholder.
      */
     private fun renderBitrate(station: Station?) {
         val variants = station?.variants().orEmpty()
@@ -123,7 +123,7 @@ class NowPlayingActivity : AppCompatActivity() {
         }
     }
 
-    /** Przeskok na sasiednia stacje z tej samej listy, z zawijaniem. */
+    /** Jump to the neighbouring station in the same list, with wraparound. */
     private fun step(delta: Int) {
         val all = repo.all()
         if (all.isEmpty()) return
@@ -146,17 +146,17 @@ class NowPlayingActivity : AppCompatActivity() {
 
         b.stationName.text = station?.name ?: getString(R.string.nothing_playing)
 
-        // Ta sama logika co w metadanych dla auta: prawdziwy utwor, slogan stacji
-        // albo reklama - nigdy powielona nazwa stacji.
+        // Same logic as in the car metadata: a real track, station slogan, or
+        // an ad - never a duplicated station name.
         when {
             now?.isRealSong == true -> {
                 val info = PlaybackStatusBus.trackInfo.value
-                // Sam wykonawca - plyta idzie osobno, na wlasna linie ponizej
+                // Artist only - the album goes separately, on its own line below
                 b.songArtist.text = MetadataFactory.composeArtistOnly(now, info)
                 val album = (if (prefs.enrichWithAlbum) info?.albumLabel() else null).orEmpty()
                 b.songAlbum.text = album
                 b.songAlbum.visibility = if (album.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
-                // Ta sama obrobka co w aucie: poprawiona kolejnosc i zapis.
+                // Same processing as in the car: corrected order and spelling.
                 b.songTitle.text = MetadataFactory.displayTitle(now, info)
             }
             now?.slogan != null -> {
@@ -190,9 +190,9 @@ class NowPlayingActivity : AppCompatActivity() {
 
         b.diagnosticBanner.visibility =
             if (prefs.diagnosticMode) android.view.View.VISIBLE else android.view.View.GONE
-        // Okladke bierzemy z wlasnej magistrali, a nie z metadanych sesji.
-        // W sesji moze siedziec zegar zamiast okladki - to ficzer wylacznie dla
-        // ekranu w aucie, na telefonie ma byc zawsze okladka albo logo stacji.
+        // We take the cover art from our own bus, not from session metadata.
+        // The session may hold a clock instead of cover art - that's a feature
+        // exclusively for the car screen; on the phone it should always be cover art or the station logo.
         ArtworkLoader.into(
             lifecycleScope,
             PlaybackStatusBus.coverArtUrl.value?.let { android.net.Uri.parse(it) },
@@ -210,8 +210,8 @@ class NowPlayingActivity : AppCompatActivity() {
                 PlaybackStatusBus.Status.IDLE -> R.string.status_idle
             }
         )
-        // Jakosc znamy dopiero po pierwszej ramce z dekodera, wiec dopisujemy ja
-        // dopiero wtedy, gdy naprawde jest co dopisac.
+        // We only know the quality after the first frame from the decoder, so we
+        // only append it once there's actually something to append.
         val quality = PlaybackStatusBus.quality.value
         b.status.text = if (quality.isNullOrBlank()) statusText else "$statusText · $quality"
         renderBitrate(station)

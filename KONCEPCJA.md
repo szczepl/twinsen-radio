@@ -1,29 +1,32 @@
-# Koncepcja
+# Concept
 
-Jak aplikacja jest zbudowana i **dlaczego akurat tak**. Decyzje, które kosztowały
-nas nieudane podejścia, mają tu zapisane uzasadnienie — żeby nikt (łącznie z nami)
-nie wracał do rozwiązań, które już raz nie zadziałały.
-
----
-
-## 1. Czym w ogóle jest Android Auto
-
-To **projekcja**, nie system w aucie. Telefon rysuje cały interfejs i wysyła go
-jako obraz; głowica daje ekran, dotyk i głośniki. Wygląd list, kolory, motyw
-dzień/noc i układ paska to domena Android Auto na telefonie oraz ustawień w
-aucie — aplikacja steruje wyłącznie **treścią**.
-
-Odbiornik AA w samochodzie to zamknięta biblioteka Google licencjonowana
-producentom, wkompilowana w firmware MIB3. Nie ma jej w AOSP i nie da się jej
-„zwirtualizować". DHU jest osobnym narzędziem testowym, zamrożonym w 2022 roku —
-dlatego część rzeczy zachowuje się na biurku inaczej niż w aucie.
-
-Praktyczny wniosek: **wszystko, co dotyczy wyglądu w aucie, trzeba potwierdzić
-w aucie.**
+How the app is built and **why, specifically, it's built that way**. Decisions
+that cost us failed attempts along the way have their rationale recorded here —
+so that nobody (ourselves included) goes back to a solution that has already
+failed once.
 
 ---
 
-## 2. Warstwy
+## 1. What Android Auto Actually Is
+
+It's **projection**, not a system running in the car. The phone renders the
+entire interface and sends it over as an image; the head unit provides the
+screen, touch input, and speakers. The look of lists, colors, day/night theme,
+and toolbar layout are all the domain of Android Auto on the phone and the
+car's own settings — the app controls only the **content**.
+
+The AA receiver in the car is a closed-source Google library licensed to
+manufacturers, compiled into the MIB3 firmware. It isn't part of AOSP and
+can't be "virtualized." The DHU is a separate testing tool, frozen since
+2022 — which is why some things behave differently on the desktop than in
+the actual car.
+
+Practical conclusion: **anything to do with how it looks in the car has to be
+confirmed in the car.**
+
+---
+
+## 2. Layers
 
 ```
 RadioService (MediaLibraryService)
@@ -31,273 +34,306 @@ RadioService (MediaLibraryService)
    │                            │                                      │
    │                            └─► CoverArtLookup ─► TrackInfo ────────┘
    │
-   ├─ PlaybackStatusBus  ──►  UI telefonu (MainActivity, NowPlayingActivity)
-   └─ drzewo przeglądania ──►  Android Auto
+   ├─ PlaybackStatusBus  ──►  Phone UI (MainActivity, NowPlayingActivity)
+   └─ browse tree ──►  Android Auto
 ```
 
-`RadioService` jest jedynym właścicielem stanu odtwarzania. UI telefonu czyta go
-przez `PlaybackStatusBus` (zwykłe `StateFlow`, bo oba żyją w jednym procesie),
-a auto — przez sesję medialną.
+`RadioService` is the sole owner of playback state. The phone UI reads it
+through `PlaybackStatusBus` (a plain `StateFlow`, since both live in the same
+process), while the car reads it through the media session.
 
 ---
 
-## 3. Metadane: skąd się biorą i co z nimi robimy
+## 3. Metadata: where it comes from and what we do with it
 
-Strumień ICY niesie **jedną linijkę tekstu** i nic więcej:
+The ICY stream carries **a single line of text** and nothing else:
 
 ```
-StreamTitle='Bonobo & Joy Crookes - Always on Your Side'   <- wykonawca i utwór
-StreamTitle='Radio Nowy Świat - Pion i poziom!'            <- stacja i slogan
-StreamTitle=''  adw_ad='true'  durationMilliseconds='30000' <- reklama w RMF
-StreamTitle='STOP_AD_BREAK'                                 <- znacznik sterujący
+StreamTitle='Bonobo & Joy Crookes - Always on Your Side'   <- artist and track
+StreamTitle='Radio Nowy Świat - Pion i poziom!'            <- station and slogan
+StreamTitle=''  adw_ad='true'  durationMilliseconds='30000' <- ad break on RMF
+StreamTitle='STOP_AD_BREAK'                                 <- control marker
 ```
 
-Naiwne dzielenie po `" - "` daje w drugim przypadku „wykonawcę" równego nazwie
-stacji — i nazwa ląduje na ekranie dwa razy. **W tę pułapkę wpadają i ReplaIO,
-i oficjalna aplikacja RNŚ.** Dlatego `NowPlaying.parse` porównuje lewą stronę
-z nazwą stacji i rozpoznaje osobno: prawdziwy utwór, slogan stacji, reklamę,
-serwis informacyjny i znacznik sterujący.
+Naively splitting on `" - "` gives, in the second case, an "artist" equal to
+the station name — and the name ends up on screen twice. **Both ReplaIO and
+the official RNŚ app fall into this trap.** That's why `NowPlaying.parse`
+compares the left-hand side against the station name and separately
+recognizes: an actual track, a station slogan, an ad, a news bulletin, and a
+control marker.
 
-Kilka reguł wypracowanych na żywym materiale:
+A few rules worked out from live material:
 
-* **Reklamy w RMF anonsowane są na trzy sposoby** — pustym tytułem z `adw_ad`,
-  słowem z listy (`AD_WORDS`), albo wcale. Stąd dodatkowo wygasanie opisu.
-* **`STOP_AD_BREAK` nie znaczy, że wraca muzyka.** RMF potrafi zaraz po nim
-  wstawić kolejną reklamę. Znacznik jedynie uzbraja timer `MARKER_GRACE_MS`;
-  jeśli w tym czasie przyjdzie cokolwiek konkretnego, to ono wygrywa.
-* **Znacznik sterujący rozpoznajemy regułą** `^[A-Z0-9][A-Z0-9_]{3,}$` — bez
-  tego `STOP_AD_BREAK` trafiał do iTunes jako tytuł utworu.
-* **Wygasanie opisu.** Skoro katalog zna długość utworu, to po
-  `długość + STALE_GRACE_MS` na pewno już nie leci. Gdy długości nie znamy —
-  `FALLBACK_TRACK_MS`. Zamiast pustki pokazujemy wtedy ostatni znany slogan
-  stacji.
-* **Wielkie litery.** Jacaranda FM podaje wszystko WERSALIKAMI, wytwórnie robią
-  to samo w katalogach. Porządkuje to `TextCase` w trzech krokach, w tej
-  kolejności: napis niekrzykliwy zostaje nietknięty → jeśli krzyczy, a katalog
-  zna ten sam napis porządnie zapisany, bierzemy wersję z katalogu (pochodzi od
-  wydawcy) → dopiero gdy katalog też krzyczy, normalizujemy sami. Krótkie wyrazy
-  bez samogłosek zostawiamy w spokoju, bo to prawie zawsze skrótowce — inaczej
-  „DJ Snake" zamieniłby się w „Dj Snake".
+* **Ads on RMF are announced three different ways** — an empty title with
+  `adw_ad`, a word from a list (`AD_WORDS`), or not at all. Hence the added
+  expiry mechanism for the description.
+* **`STOP_AD_BREAK` doesn't mean the music is back.** RMF can slot in another
+  ad right after it. The marker only arms the `MARKER_GRACE_MS` timer; if
+  anything concrete arrives within that window, it wins.
+* **We recognize a control marker by the rule** `^[A-Z0-9][A-Z0-9_]{3,}$` —
+  without it, `STOP_AD_BREAK` was ending up in iTunes as a track title.
+* **Description expiry.** Since the catalog knows the track's duration, after
+  `duration + STALE_GRACE_MS` it's certainly no longer playing. When we don't
+  know the duration — `FALLBACK_TRACK_MS`. Instead of showing nothing, we
+  then fall back to the last known station slogan.
+* **All caps.** Jacaranda FM sends everything in ALL CAPS, and record labels
+  do the same in their catalogs. `TextCase` cleans this up in three steps, in
+  this order: a string that isn't shouting is left untouched → if it is
+  shouting and the catalog knows the same string properly capitalized, we
+  take the catalog's version (it comes from the publisher) → only when the
+  catalog is shouting too do we normalize it ourselves. Short words with no
+  vowels are left alone, since they're almost always acronyms — otherwise
+  "DJ Snake" would turn into "Dj Snake".
 
-### Trzy wiersze opisu i dlaczego nie da się ich rozdzielić
+### Three description lines, and why they can't be split apart
 
-Pomiar w aucie (BADANIA, punkt 1) pokazał, że Active Info Display czyta
-`subtitle`, `description` i `displayTitle` — czyli **te same pola**, z których
-korzysta ekran centralny Android Auto. Ekran centralny pokazuje z nich dwa:
-`displayTitle` jako dużą linię i `subtitle` jako małą.
+Measurements taken in the car (BADANIA, point 1) showed that the Active Info
+Display reads `subtitle`, `description`, and `displayTitle` — that is,
+**the very same fields** the Android Auto central screen uses. The central
+screen shows two of them: `displayTitle` as the large line and `subtitle` as
+the small one.
 
-Stąd konstrukcja opcji: użytkownik wybiera treść **osobno dla każdego z trzech
-wierszy** (tytuł / wykonawca / wykonawca z albumem i rokiem / wykonawca — tytuł /
-nazwa stacji / zegar / puste), a nie z listy gotowych układów. Gotowe presety
-były wygodne, dopóki nie wiedzieliśmy, co jest gdzie; teraz tylko ograniczały.
+Hence the design of the options screen: the user picks content **separately
+for each of the three lines** (title / artist / artist with album and year /
+artist — title / station name / clock / blank), rather than from a list of
+ready-made layouts. Ready-made presets were convenient as long as we didn't
+know what went where; now they were just a limitation.
 
-Konsekwencja, którą trzeba znać: **wiersza 1 i 3 nie da się ukryć przed ekranem
-centralnym**. Zegar wstawiony w linię tekstu pojawi się w obu miejscach. Jedynym
-wierszem widocznym wyłącznie na AID jest środkowy — i dlatego domyślnie stoi
-w nim nazwa stacji, a nie kopia czegoś, co już widać gdzie indziej.
+A consequence worth knowing: **lines 1 and 3 can't be hidden from the central
+screen**. A clock placed in a text line will show up in both places. The only
+line visible exclusively on the AID is the middle one — which is why, by
+default, it holds the station name rather than a copy of something already
+visible elsewhere.
 
-Pola semantyczne (`title`, `artist`, `albumTitle`) wypełniamy niezależnie od
-wierszy, zgodnie z ich znaczeniem. Na żadnym ekranie w aucie się nie pojawiają,
-ale opisują to, co faktycznie leci, i inne systemy potrafią po nie sięgać.
+We fill the semantic fields (`title`, `artist`, `albumTitle`) independently of
+the lines, according to their actual meaning. They don't appear on any screen
+in the car, but they describe what's actually playing, and other systems can
+read them.
 
-### Tryb diagnostyczny
+### Diagnostic mode
 
-Każde pole `MediaMetadata` dostaje swoją krótką polską etykietę (`TYTUŁ`,
-`PODTYTUŁ`, `OPIS`…) razem z zegarem odświeżanym równo na granicy minuty.
-Zegar jest po to, żeby na desce było widać, że wartość jest świeża, a nie
-zamrożona.
+Every `MediaMetadata` field gets its own short Polish label (`TYTUŁ` [TITLE],
+`PODTYTUŁ` [SUBTITLE], `OPIS` [DESCRIPTION]…) together with a clock that
+refreshes right on the minute boundary. The clock is there so it's visible on
+the dashboard that the value is fresh, not stuck.
 
-W tym trybie **odcinamy metadane ICY** (`IcyFilteringDataSource`) — inaczej
-ExoPlayer nadpisałby `title`, `station` i `genre` tym, co przysyła Icecast, i na
-desce zamiast etykiety byłaby nazwa rozgłośni.
+In this mode we **cut off ICY metadata** (`IcyFilteringDataSource`) —
+otherwise ExoPlayer would overwrite `title`, `station`, and `genre` with
+whatever Icecast sends, and the dashboard would show the station name instead
+of the label.
 
-Etykiety są w czystym ASCII: okno „Media Playback Status" w DHU czyta UTF-8 jak
-Latin-1, a o fontach w desce Passata nic pewnego nie wiemy. Etykieta ma służyć
-do rozpoznania pola, nie do typografii.
+The labels are pure ASCII: the "Media Playback Status" window in the DHU
+reads UTF-8 as if it were Latin-1, and we don't know anything for certain
+about the fonts on the Passat's dashboard. The label's job is to identify the
+field, not to look good typographically.
 
 ---
 
-## 4. Okładki
+## 4. Cover Art
 
-ICY **nie niesie żadnej grafiki** — rozgłośnie doklejają okładki po stronie
-klienta. Webplayer Radia Nowy Świat odpytuje iTunes i my robimy to samo:
+ICY **carries no artwork at all** — stations attach cover art on the client
+side. Radio Nowy Świat's web player queries iTunes, and we do the same:
 
-1. **iTunes Search API** — darmowe, bez klucza, zwraca też nazwę wydawnictwa,
-   rok i długość utworu.
-2. **MusicBrainz + Cover Art Archive** — dopiero gdy iTunes nie zna utworu.
-   Apple ma słabe pokrycie starszego polskiego repertuaru (Czesław Niemen,
-   „Lipowa łyżka" — u Apple nie ma wcale, MusicBrainz zna i utwór, i płytę).
+1. **iTunes Search API** — free, no key required, also returns the release
+   name, year, and track duration.
+2. **MusicBrainz + Cover Art Archive** — only once iTunes doesn't know the
+   track. Apple has poor coverage of older Polish repertoire (Czesław Niemen,
+   "Lipowa łyżka" — not on Apple at all, while MusicBrainz knows both the
+   track and the record).
 
-### Zasada: okładka nigdy nie przeżywa utworu, do którego należy
+### Rule: cover art never outlives the track it belongs to
 
-To była nasza pomyłka projektowa, poprawiona po dwóch zgłoszeniach. Pierwotnie
-stara grafika zostawała aż do znalezienia nowej, żeby między utworami nie migało
-logo stacji. W praktyce dawało to gorszy efekt niż mrugnięcie:
+This was a design mistake of ours, fixed after two bug reports. Originally,
+the old artwork stayed on screen until a new one was found, so the station
+logo wouldn't flash between tracks. In practice this produced a worse effect
+than the flash itself:
 
-* obok nazwiska nowego wykonawcy wisiała płyta poprzedniego,
-* po wejściu studia przy „Pion i poziom!" zostawała okładka sprzed chwili.
+* the previous track's cover kept hanging next to the new artist's name,
+* when the studio segment for "Pion i poziom!" came on, the cover from a
+  moment ago stayed put.
 
-Teraz przy każdej zmianie utworu wracamy natychmiast do logo stacji, a okładkę
-pokazujemy dopiero gdy katalog ją znajdzie (zwykle ~200 ms, więc logo rzadko
-zdąży się pojawić). **Kolejność w `apply()` też ma znaczenie**: najpierw
-zerujemy okładkę, dopiero potem wysyłamy metadane — odwrotnie do auta trafiał
-nowy opis ze starą grafiką.
+Now, on every track change, we immediately fall back to the station logo, and
+only show the cover art once the catalog finds it (usually ~200 ms, so the
+logo rarely has time to actually appear). **Order matters in `apply()` too**:
+we clear the cover art first, and only then send the metadata — the other way
+around, the car would receive the new description paired with the old
+artwork.
 
-Ta sama zasada dotyczy danych katalogowych: `trackInfo` zerujemy na wejściu,
-inaczej przez chwilę widać było „Taylor Swift · Black Gold: The Best of Soul
+The same rule applies to catalog data: we clear `trackInfo` on entry,
+otherwise for a moment you'd see "Taylor Swift · Black Gold: The Best of Soul
 Asylum [1992]".
 
 ---
 
-## 5. Logotypy: dlaczego własny ContentProvider
+## 5. Logos: why a custom ContentProvider
 
-Logo szło do Android Auto jako `android.resource://pakiet/2131165359`. W takim
-adresie siedzi **numeryczny identyfikator zasobu, który zmienia się przy niemal
-każdej przebudowie** — wystarczy dołożyć plik do `res/drawable`, bo aapt2
-przydziela numery po kolei, alfabetycznie.
+The logo used to go to Android Auto as
+`android.resource://package/2131165359`. That address embeds a **numeric
+resource ID that changes on almost every rebuild** — just adding a file to
+`res/drawable` is enough, because aapt2 assigns numbers sequentially, in
+alphabetical order.
 
-Android Auto pamięta pobraną grafikę pod adresem. Po aktualizacji ten sam numer
-wskazywał już inną stację i HDU rysowało z pamięci logo Radia Nowy Świat pod
-napisem „RMF FM".
+Android Auto caches the fetched image under that address. After an update,
+the same number pointed at a different station, and the head unit would draw
+the cached Radio Nowy Świat logo under the "RMF FM" label.
 
-`LogoProvider` wystawia je pod `content://…/logo/<id-stacji>?v=<numer>`:
-adres opisuje **stację**, a nie zasób, więc jest stabilny między wersjami.
-Numer zasobu doklejamy jako parametr tylko po to, żeby przy podmianie samej
-grafiki cache unieważnił się dokładnie raz.
+`LogoProvider` exposes them at `content://…/logo/<station-id>?v=<number>`:
+the address describes the **station**, not the resource, so it stays stable
+across versions. We tack the resource number on as a parameter only so that,
+when the artwork itself is swapped out, the cache gets invalidated exactly
+once.
 
-### Logo wbudowanych stacji: linki, nie pliki w repo
+### Built-in station logos: links, not files in the repo
 
-Do publicznego wydania stacje wbudowane przestały mieć logo jako plik w
-`res/drawable-nodpi` — to były znaki towarowe nadawców, redystrybucja ich w
-publicznym repo/APK to inne ryzyko niż samo linkowanie do strumienia. Zamiast
-tego `stations.json` niesie `logoUrl` wskazujący na grafikę hostowaną przez
-samą stację (favicon/apple-touch-icon jej własnej domeny), a `logoUri()` w
-`MetadataFactory` zwraca ten adres wprost — bez pośrednictwa `LogoProvider`,
-bo to już nie jest zasób pakietu, tylko zwykły `http(s)://`.
+For the public release, built-in stations stopped having their logo as a file
+in `res/drawable-nodpi` — those were the broadcasters' trademarks, and
+redistributing them in a public repo/APK is a different kind of risk than
+merely linking to the stream. Instead, `stations.json` now carries a
+`logoUrl` pointing at artwork hosted by the station itself (the
+favicon/apple-touch-icon of its own domain), and `logoUri()` in
+`MetadataFactory` returns that address directly — without going through
+`LogoProvider`, since it's no longer a package resource, just a plain
+`http(s)://` address.
 
-`LogoProvider` nadal obsługuje: własne logo wgrane przez użytkownika (patrz
-niżej), `logo_placeholder` i ikony przycisków w Android Auto — tam numer
-zasobu wciąż jest jedynym kanałem dla starszych głowic (§6).
+`LogoProvider` still handles: custom logos uploaded by the user (see below),
+`logo_placeholder`, and the command-button icons in Android Auto — there, the
+resource number is still the only channel available for older head units
+(§6).
 
-Konsekwencja: wygląd logo zależy teraz od tego, co akurat wystawia strona
-nadawcy — bywa inne tło albo gorsza jakość niż wcześniej bundlowany plik
-(np. Radio Nowy Świat: było przycięte i przekomponowane na czarnym tle
-ręcznie, teraz to bezpośredni link do ich oryginalnego, nieprzyciętego JPG-a
-na białym tle). Kto chce inny wygląd dla konkretnej stacji, wgrywa własny
-obrazek na ekranie jej szczegółów (`StationInfoActivity`, stuknięcie w logo) —
-to nadpisanie trzymane lokalnie w `Prefs`, nie w repo, więc nie ma tego
-problemu prawnego.
-
----
-
-## 6. Ikony przycisków w Android Auto
-
-Tu droga przez numer zasobu jest nie do uniknięcia w starym API, ale jest
-udokumentowane obejście. [Dokumentacja Androida dla samochodów](https://developer.android.com/training/cars/media/enable-playback)
-mówi wprost: jeśli ikona odpowiada którejś ze stałych `CommandButton.ICON_`,
-jej wartość należy wpisać pod kluczem `EXTRAS_KEY_COMMAND_BUTTON_ICON_COMPAT`
-w extras akcji, bo to *„nadpisuje zasób ikony przekazany do
-`CustomAction.Builder` i pozwala systemowi narysować akcję spójnie z
-pozostałymi"*. Głowica rysuje wtedy **własną** gwiazdkę.
-
-Dlatego podajemy ikonę dwoma kanałami: extras (właściwy, dla nowoczesnych HDU)
-i numer zasobu (zapasowy, dla starych — takich jak DHU 2.1 z 2022).
-
-**Czego nie robić, sprawdzone:**
-
-* Nie podawać stałej semantycznej w konstruktorze
-  `CommandButton.Builder(ICON_STAR_FILLED)` licząc, że wystarczy. Media3
-  zamienia ją dla starego API na numer własnego zasobu z AAR-a i DHU narysowało
-  z tego nutkę oraz napis „1.8X".
-* Nie używać `android:tint="@color/…"` w wektorach dla AA. Głowica inflatuje je
-  we własnym procesie i odwołanie do zasobu musi rozwiązać w naszym pakiecie —
-  właśnie na tym się wykładało. Kolor podajemy wprost w `fillColor`.
+Consequence: the logo's appearance now depends on whatever the broadcaster's
+site happens to be serving — the background or quality can be worse than the
+previously bundled file (e.g. Radio Nowy Świat: it used to be manually
+cropped and recomposed on a black background, now it's a direct link to
+their original, uncropped JPG on a white background). Anyone who wants a
+different look for a particular station uploads their own image on that
+station's details screen (`StationInfoActivity`, tap the logo) — that
+override is stored locally in `Prefs`, not in the repo, so it doesn't carry
+the same legal problem.
 
 ---
 
-## 7. Ulubione jako jedno źródło prawdy
+## 6. Command button icons in Android Auto
 
-Przez trzy podejścia łataliśmy ulubione osobno na każdym ekranie — lista przy
-wchodzeniu na wierzch, ekran odtwarzania przy renderowaniu, Android Auto przy
-budowaniu przycisków — i stany rozjeżdżały się między sobą.
+Here the resource-number route is unavoidable under the old API, but there's
+a documented workaround. The
+[Android for Cars documentation](https://developer.android.com/training/cars/media/enable-playback)
+says explicitly: if the icon corresponds to one of the `CommandButton.ICON_`
+constants, its value should be placed under the key
+`EXTRAS_KEY_COMMAND_BUTTON_ICON_COMPAT` in the action's extras, because this
+*"overrides the icon resource passed to `CustomAction.Builder` and lets the
+system draw the action consistently with the rest"*. The head unit then draws
+**its own** star.
 
-Teraz jest jeden `StateFlow` w `Prefs`, a wszyscy zainteresowani go obserwują:
-lista na telefonie, ekran odtwarzania, gwiazdka przy odtwarzaczu w aucie i węzły
-drzewa przeglądania. Zmiana skądkolwiek przekłada się natychmiast na wszystko.
+That's why we supply the icon through two channels: extras (the proper one,
+for modern HDUs) and the resource number (a fallback, for older ones — like
+the DHU 2.1 from 2022).
 
-Tak samo działają stacje dociągnięte z katalogu (`discoveredFlow`).
+**What not to do, verified:**
 
-Uwaga historyczna: lista Ulubionych w Android Auto **nie odświeżała się na
-żywo** mimo poprawnych `notifyChildrenChanged`. Winny okazał się most Media3 do
-starego API `MediaBrowser` — podniesienie Media3 z 1.8.1 na **1.11.0** naprawiło
-to bez zmiany naszego kodu.
-
----
-
-## 8. Odporność na utratę zasięgu
-
-Dwie warstwy, obie celowo ciche — w aucie nie ma migać żaden komunikat:
-
-1. `InfiniteLoadErrorHandlingPolicy` — ExoPlayer ponawia w nieskończoność
-   z narastającym opóźnieniem (0,5 s → 15 s), zostając w stanie `BUFFERING`.
-   Wyjątek: trwałe 4xx przepuszczamy dalej, bo samo się to nie naprawi.
-2. `ReconnectController` — nasłuchuje `ConnectivityManager` i wznawia
-   natychmiast po odzyskaniu zwalidowanej sieci, zamiast czekać na kolejny krok
-   backoffu.
-
-Dodatkowo `WAKE_MODE_NETWORK` trzyma radio przy życiu, a
-`handleAudioBecomingNoisy` pauzuje przy rozłączeniu Bluetooth.
-
-### Dziura, przez którą odtwarzacze wiszą godzinami
-
-Cichy ponawiacz z punktu 1 ma skutek uboczny: skoro **nie zgłasza błędu**, to
-`onPlayerError` może się nigdy nie odpalić. Odtwarzacz wisi wtedy w `BUFFERING`
-ze statusem „OK", a warunek „reaguj na powrót sieci tylko gdy status ≠ OK"
-nie przepuszcza niczego. Tak właśnie zachowują się ReplaIO i TuneIn, które
-potrafią wisieć godzinę po wyjeździe z garażu i dopiero potem zorientować się,
-że sieć wróciła.
-
-Dwie poprawki zamykają to szczelnie:
-
-* **Wyzwalacz sieciowy patrzy na odtwarzacz, nie na status** — reaguje zawsze,
-  gdy użytkownik chce grać, a odtwarzacz nie jest gotowy.
-* **Buforowanie ma limit.** Ciągnące się ponad 12 s nie jest napełnianiem
-  bufora, tylko brakiem połączenia — wtedy nazywamy rzecz po imieniu i sami
-  zaczynamy ponawiać.
-
-Gdy sieci nie ma, w **środkowym wierszu AID** pojawia się „Oczekuję na sieć…".
-To jedyne pole widoczne wyłącznie na desce, więc ekran centralny zostaje czysty.
-
-`KeepCurrentStreamPlayer` ignoruje `setMediaItem` dla stacji, która już gra —
-bez tego wejście na grającą stację z listy zrywało połączenie i było słychać
-przerwę.
+* Don't pass the semantic constant into the
+  `CommandButton.Builder(ICON_STAR_FILLED)` constructor expecting that alone
+  to be enough. For the old API, Media3 converts it into a resource number
+  from its own AAR, and the DHU rendered a music note plus the text "1.8X"
+  from it.
+* Don't use `android:tint="@color/…"` in vector drawables meant for AA. The
+  head unit inflates them in its own process, and the resource reference has
+  to resolve inside our package — that's exactly where it broke down. Supply
+  the color directly in `fillColor` instead.
 
 ---
 
-## 9. Stacje spoza listy
+## 7. Favourites as a single source of truth
 
-Źródłem jest **radio-browser.info** — otwarty, społecznościowy katalog około
-50 tys. rozgłośni. Wybrany, bo jako jedyny spełnia komplet warunków: darmowy,
-bez klucza i rejestracji, z jasną licencją, publicznym API i — co najważniejsze —
-sam odsiewa martwe strumienie (`hidebroken`), bo cyklicznie je sprawdza.
+Across three different approaches, we patched favourites separately on each
+screen — the list when it came to the foreground, the playback screen when
+rendering, Android Auto when building its buttons — and the states drifted
+out of sync with each other.
 
-Odrzucone: TuneIn i iHeartRadio nie mają otwartego API, Shoutcast wymaga klucza
-wydawanego ręcznie, a list M3U z sieci nikt nie utrzymuje.
+Now there's a single `StateFlow` in `Prefs`, and everyone who cares observes
+it: the list on the phone, the playback screen, the star next to the player
+in the car, and the nodes of the browse tree. A change from anywhere
+translates immediately into everything else.
 
-Dodane stacje zapisujemy **w całości**, a nie po identyfikatorze: katalog może
-przestać odpowiadać albo usunąć pozycję, a stacja raz dodana ma działać w aucie
-także bez zasięgu do katalogu.
+Stations pulled in from the catalog work the same way (`discoveredFlow`).
+
+Historical note: the Favourites list in Android Auto **wasn't refreshing
+live**, despite correctly-called `notifyChildrenChanged`. The culprit turned
+out to be Media3's bridge to the old `MediaBrowser` API — upgrading Media3
+from 1.8.1 to **1.11.0** fixed it without changing any of our own code.
 
 ---
 
-## 10. Ograniczenia, o których trzeba pamiętać
+## 8. Resilience to network loss
 
-* **HLS Polskiego Radia nie niesie tytułów utworów.** W segmentach są wyłącznie
-  znaczniki czasu (`com.apple.streaming.transportStreamTimestamp`), żadnego
-  ID3 z `TIT2`/`TPE1`. Jedynka, Dwójka, Trójka, Czwórka, PR24 i Kierowcy pokażą
-  więc tylko nazwę stacji. Alternatywy nie ma — cały plant Shoutcasta Polskiego
-  Radia jest martwy (połączenie TCP wchodzi, danych brak).
-* **triple j ma jeden strumień ogólnokrajowy.** Wersji melbourneńskiej nie ma —
-  `3TJW` przekierowuje na stronę WWW.
-* **AID rysuje samo auto.** Kanał Instrument Cluster w AA przenosi wyłącznie
-  nawigację, więc kafelka muzyki na zegarach nie da się podejrzeć na biurku.
+Two layers, both deliberately silent — no message is meant to flash on
+screen in the car:
+
+1. `InfiniteLoadErrorHandlingPolicy` — ExoPlayer retries indefinitely with a
+   growing delay (0.5 s → 15 s), staying in the `BUFFERING` state. Exception:
+   persistent 4xx errors are passed through, since those won't fix
+   themselves.
+2. `ReconnectController` — listens to `ConnectivityManager` and resumes
+   immediately once a validated network is regained, instead of waiting for
+   the next backoff step.
+
+In addition, `WAKE_MODE_NETWORK` keeps the radio alive, and
+`handleAudioBecomingNoisy` pauses playback when Bluetooth disconnects.
+
+### The gap that leaves players hanging for hours
+
+The silent retrier from point 1 has a side effect: since it **never reports
+an error**, `onPlayerError` may never fire at all. The player then sits in
+`BUFFERING` with an "OK" status, and a condition like "only react to the
+network coming back when status ≠ OK" lets nothing through. This is exactly
+how ReplaIO and TuneIn behave — they can hang for an hour after you drive out
+of the garage before finally noticing the network is back.
+
+Two fixes close this off completely:
+
+* **The network trigger looks at the player, not at its status** — it reacts
+  whenever the user wants playback and the player isn't ready, regardless of
+  status.
+* **Buffering has a limit.** If it drags on past 12 s, that's not the buffer
+  filling up, it's a lack of connection — at that point we call it what it is
+  and start retrying ourselves.
+
+When there's no network, the **middle AID line** shows "Oczekuję na
+sieć…" ("Waiting for network…"). This is the only field visible exclusively
+on the dashboard, so the central screen stays clean.
+
+`KeepCurrentStreamPlayer` ignores `setMediaItem` for a station that's already
+playing — without this, tapping a currently-playing station from the list
+would drop the connection and you'd hear a gap.
+
+---
+
+## 9. Stations beyond the built-in list
+
+The source is **radio-browser.info** — an open, community-maintained catalog
+of roughly 50,000 stations. Chosen because it's the only one that meets the
+full set of requirements: free, no key or registration, a clear license, a
+public API, and — most importantly — it filters out dead streams itself
+(`hidebroken`), since it checks them periodically.
+
+Rejected: TuneIn and iHeartRadio have no open API, Shoutcast requires a key
+issued by hand, and nobody maintains M3U lists scraped from the web.
+
+We store added stations **in full**, not by ID: the catalog might stop
+responding or remove an entry, and a station, once added, should keep working
+in the car even without access to the catalog.
+
+---
+
+## 10. Known limitations
+
+* **Polskie Radio's HLS carries no track titles.** The segments contain only
+  timestamps (`com.apple.streaming.transportStreamTimestamp`), no ID3
+  `TIT2`/`TPE1` at all. Jedynka, Dwójka, Trójka, Czwórka, PR24, and Kierowcy
+  will therefore show only the station name. There's no alternative —
+  Polskie Radio's entire Shoutcast plant is dead (the TCP connection goes
+  through, but there's no data).
+* **triple j has a single, nationwide stream.** There's no Melbourne-specific
+  version — `3TJW` redirects to a web page.
+* **The AID is rendered by the car itself.** The Instrument Cluster channel
+  in AA carries only navigation, so the music tile on the instrument cluster
+  can't be previewed on the desktop.

@@ -8,27 +8,27 @@ import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StreamVariant
 
 /**
- * Sama przeplywnosc, bez kodeka - na przycisk jakosci, zarowno na Now Playing,
- * jak i przy pasku mini-playera. `null`, gdy nie znamy jej znikad - przycisk
- * ma sie wtedy schowac, a nie pokazywac placeholder.
+ * Bitrate alone, without the codec - for the quality button, both on Now Playing
+ * and on the mini-player bar. `null` when we don't know it from anywhere - the
+ * button should then hide itself rather than show a placeholder.
  *
- * @param liveKbps rzeczywista przeplywnosc z dekodera (patrz
- *   [net.mspanc.twinsenradio.playback.PlaybackStatusBus.qualityKbps]) - zapasowa,
- *   gdy stacja to "goly" adres bez zadeklarowanej przeplywnosci w katalogu.
+ * @param liveKbps the actual bitrate from the decoder (see
+ *   [net.mspanc.twinsenradio.playback.PlaybackStatusBus.qualityKbps]) - a fallback
+ *   for when the station is a "bare" URL with no declared bitrate in the catalog.
  */
 fun StreamVariant.kbpsLabel(liveKbps: Int? = null): String? =
     (kbps.takeIf { it > 0 } ?: liveKbps?.takeIf { it > 0 })?.let { "$it kbit" }
 
 /**
- * Etykieta na liste w dialogu wyboru: sam kodek i przeplywnosc, bez dopiskow
- * typu "— zapasowy" czy "— wysoka jakosc" - to ocena, nie fakt o strumieniu.
+ * Label for the selection dialog's list: just the codec and bitrate, without
+ * suffixes like "— fallback" or "— high quality" - that's a judgment, not a fact about the stream.
  */
 fun StreamVariant.plainLabel(): String = label.substringBefore('—').trim()
 
 /**
- * Ten sam dialog wyboru strumienia na ekranie odtwarzania i na pasku
- * mini-playera - lista wariantow z zaznaczeniem, Anuluj/OK. Zmiana leci przez
- * [Prefs], usluga sama przeladuje strumien.
+ * The same stream selection dialog on the playback screen and on the
+ * mini-player bar - a list of variants with a selection, Cancel/OK. The change
+ * goes through [Prefs], the service reloads the stream on its own.
  */
 object StreamPicker {
     fun show(context: Context, station: Station, prefs: Prefs, onChanged: () -> Unit = {}) {

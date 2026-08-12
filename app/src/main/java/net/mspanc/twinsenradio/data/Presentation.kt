@@ -1,23 +1,25 @@
 package net.mspanc.twinsenradio.data
 
 /**
- * Co ma stac w kolejnych liniach opisu na desce.
+ * What should appear in each line of the description on the dashboard.
  *
- * Podzial wierszy wynika wprost z pomiaru w Passacie (2026-08-11, patrz
- * BADANIA.md). Active Info Display czyta trzy pola metadanych:
+ * The line breakdown comes directly from measurements taken in the Passat
+ * (2026-08-11, see BADANIA.md). The Active Info Display reads three metadata
+ * fields:
  *
- *   gorna linia   <- subtitle
- *   srodkowa      <- description
- *   dolna         <- displayTitle
+ *   top line      <- subtitle
+ *   middle        <- description
+ *   bottom        <- displayTitle
  *
- * Te same pola czyta ekran centralny Android Auto, tyle ze pokazuje z nich
- * dwa: duza linia to displayTitle, mala to subtitle. Opisu nie pokazuje wcale.
+ * The Android Auto central screen reads the same fields, except it only
+ * shows two of them: the large line is displayTitle, the small one is
+ * subtitle. It doesn't show the description at all.
  *
- * Wniosek, ktory rzadzi cala ta klasa: **nie da sie sterowac AID niezaleznie od
- * ekranu centralnego**. Cokolwiek wstawimy w gorny albo dolny wiersz, pojawi sie
- * w obu miejscach. Zegar w linii tekstu bedzie wiec widoczny takze na ekranie
- * centralnym i jest to swiadomy kompromis, a nie usterka. Srodkowy wiersz jest
- * jedynym, ktory AID ma na wylacznosc.
+ * The conclusion that governs this whole class: **AID cannot be controlled
+ * independently of the central screen**. Whatever we put in the top or
+ * bottom line will appear in both places. So a clock in a text line will
+ * also be visible on the central screen, and this is a deliberate
+ * trade-off, not a bug. The middle line is the only one AID has exclusively.
  */
 enum class LineContent(val label: String) {
     TITLE("Tytuł utworu"),
@@ -35,7 +37,7 @@ enum class LineContent(val label: String) {
 }
 
 /**
- * Ktory wiersz na desce. Kolejnosc jak na AID, od gory.
+ * Which line on the dashboard. Order as on the AID, from the top.
  */
 enum class Line(val label: String, val hint: String) {
     TOP(
@@ -52,7 +54,7 @@ enum class Line(val label: String, val hint: String) {
     )
 }
 
-/** Czy okladke zastepuje zegar, a jesli tak - w jakiej postaci. */
+/** Whether a clock replaces the artwork, and if so, in what form. */
 enum class ClockFace(val label: String) {
     NONE("Okładka utworu albo logo stacji"),
     DIGITAL("Zegar cyfrowy"),
@@ -64,7 +66,7 @@ enum class ClockFace(val label: String) {
     }
 }
 
-/** Kolorystyka zegara rysowanego zamiast okladki. */
+/** Color scheme for the clock drawn in place of the artwork. */
 object ClockColors {
 
     val BACKGROUNDS: List<Pair<String, Int>> = listOf(
@@ -74,7 +76,7 @@ object ClockColors {
         "Białe" to 0xFFFFFFFF.toInt()
     )
 
-    /** null oznacza dobor automatyczny, kontrastowo do tla. */
+    /** null means automatic selection, contrasting with the background. */
     val FOREGROUNDS: List<Pair<String, Int?>> = listOf(
         "Auto — kontrastowo do tła" to null,
         "Białe" to 0xFFFFFFFF.toInt(),
@@ -85,9 +87,10 @@ object ClockColors {
     fun background(index: Int) = BACKGROUNDS.getOrElse(index) { BACKGROUNDS[0] }.second
 
     /**
-     * Kolor cyfr i wskazowek. Przy "auto" liczymy jasnosc tla wzorem luminancji
-     * i wybieramy czarny albo bialy - to samo, co robi kazdy sensowny system
-     * motywow, a unika nieczytelnego bialego na bialym.
+     * Color of the digits and hands. For "auto", we compute the background's
+     * brightness using the luminance formula and pick black or white - the
+     * same thing every sensible theming system does, avoiding illegible
+     * white-on-white.
      */
     fun foreground(index: Int, backgroundColor: Int): Int {
         FOREGROUNDS.getOrElse(index) { FOREGROUNDS[0] }.second?.let { return it }
@@ -103,7 +106,8 @@ object ClockColors {
 }
 
 /**
- * Komplet ustawien opisu: co w ktorym wierszu i czy zamiast okladki ma byc zegar.
+ * Complete set of description settings: what goes in which line, and whether
+ * a clock should replace the artwork.
  */
 data class Presentation(
     val top: LineContent,
@@ -117,7 +121,7 @@ data class Presentation(
         Line.BOTTOM -> bottom
     }
 
-    /** Czy uklad w ogole potrzebuje odswiezania co minute. */
+    /** Whether the layout needs refreshing every minute at all. */
     val needsClock: Boolean
         get() = clockFace != ClockFace.NONE ||
             top == LineContent.CLOCK ||
@@ -126,10 +130,11 @@ data class Presentation(
 
     companion object {
         /**
-         * Domyslnie: wykonawca z plyta na gorze, nazwa stacji w srodku, tytul
-         * na dole. Srodkowy wiersz dostaje nazwe stacji, bo to jedyne miejsce
-         * widoczne wylacznie na AID - wpisanie tam czegokolwiek, co juz stoi
-         * w pozostalych liniach, byloby marnowaniem jedynej wolnej linii.
+         * Default: artist with album on top, station name in the middle, title
+         * at the bottom. The middle line gets the station name, because it's
+         * the only spot visible exclusively on the AID - putting anything
+         * there that already appears in the other lines would waste the one
+         * free line.
          */
         val DEFAULT = Presentation(
             top = LineContent.ARTIST_ALBUM,

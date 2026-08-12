@@ -10,18 +10,20 @@ import androidx.media3.exoplayer.source.MediaLoadData
 import java.io.IOException
 
 /**
- * Polityka ponawiania celowo nie zglasza bledow sieci wyzej, zeby w aucie nie
- * migaly komunikaty. Efekt uboczny jest taki, ze zerwany strumien wyglada
- * dokladnie jak wolne buforowanie. Ten sluchacz zapisuje w logu, co sie
- * naprawde dzieje - inaczej diagnoza w terenie jest wrozeniem z fusow.
+ * The retry policy deliberately doesn't propagate network errors upward, so
+ * error messages don't flash on screen in the car. The side effect is that a
+ * dropped stream looks exactly like slow buffering. This listener logs what
+ * is actually happening - otherwise diagnosing issues in the field is
+ * guesswork.
  *
  *   adb logcat -s LoadDiag
  */
 @UnstableApi
 class LoadDiagnostics(
     /**
-     * Format ustalony przez dekoder. To jedyne miejsce, w ktorym poznajemy
-     * prawdziwy kodek i probkowanie - naglowki stacji bywaja z nimi niezgodne.
+     * The format as determined by the decoder. This is the only place where
+     * we learn the real codec and sample rate - station headers can disagree
+     * with them.
      */
     private val onAudioFormat: (Format) -> Unit = {}
 ) : AnalyticsListener {
