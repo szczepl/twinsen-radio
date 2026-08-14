@@ -123,18 +123,6 @@ class SettingsActivity : AppCompatActivity() {
             it.isEnabled = usesClock
             it.alpha = if (usesClock) 1f else 0.4f
         }
-
-        // When the clock gives way to the cover art, the time moves into the
-        // middle row - the content choice for that row stops meaning anything
-        // then, so we don't pretend it works.
-        val middleTakenByClock = usesClock && !b.swClockAlways.isChecked
-        b.tilLineMiddle.isEnabled = !middleTakenByClock
-        b.tilLineMiddle.alpha = if (middleTakenByClock) 0.4f else 1f
-        b.tilLineMiddle.helperText = if (middleTakenByClock) {
-            getString(R.string.opt_line_middle_clock)
-        } else {
-            Line.MIDDLE.hint
-        }
     }
 
     /**

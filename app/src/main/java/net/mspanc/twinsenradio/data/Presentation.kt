@@ -28,7 +28,7 @@ enum class LineContent(val label: String) {
     TITLE_ALBUM("Tytuł · płyta"),
     TRACK_FULL("Wykonawca — tytuł"),
     STATION("Nazwa stacji"),
-    CLOCK("Zegar"),
+    CLOCK("Czas / Auto [czas/stacja]"),
     EMPTY("Puste");
 
     companion object {
