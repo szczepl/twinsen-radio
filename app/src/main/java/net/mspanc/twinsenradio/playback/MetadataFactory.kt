@@ -107,21 +107,14 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             val title = now?.let { displayTitle(it, trackInfo) }.orEmpty()
             val artist = now?.let { displayArtist(it, trackInfo) }.orEmpty()
 
-            val top = lineText(p.top, station, now, trackInfo, title, artist)
-            val bottom = lineText(p.bottom, station, now, trackInfo, title, artist)
+            val top = lineText(p.top, station, now, trackInfo, title, artist, coverArtUrl)
+            val bottom = lineText(p.bottom, station, now, trackInfo, title, artist, coverArtUrl)
 
-            // The middle line is only visible on the AID, so it's the only place where
-            // something can be added without cluttering the central screen. Two cases
-            // take priority over the user's choice:
-            val middle = when {
-                // 1. No network. Instead of an unexplained empty silence - a message.
-                PlaybackStatusBus.status.value == PlaybackStatusBus.Status.WAITING_FOR_NETWORK ->
-                    context.getString(R.string.aid_waiting_network)
-                // 2. The clock-instead-of-cover option is on, but the track's cover
-                //    art has just covered it up - in that case the time moves here
-                //    so it doesn't disappear for the duration of the song.
-                clockMovesToMiddle(coverArtUrl) -> clockText()
-                else -> lineText(p.middle, station, now, trackInfo, title, artist)
+            // The middle line is only visible on the AID - the one place where a
+            // network warning can go without cluttering the central screen too.
+            val middle = when (PlaybackStatusBus.status.value) {
+                PlaybackStatusBus.Status.WAITING_FOR_NETWORK -> context.getString(R.string.aid_waiting_network)
+                else -> lineText(p.middle, station, now, trackInfo, title, artist, coverArtUrl)
             }
 
             // The fields the head unit actually renders. Measured in the Passat
@@ -157,9 +150,10 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         now: NowPlaying?,
         info: CoverArtLookup.TrackInfo?,
         title: String,
-        artist: String
+        artist: String,
+        coverArtUrl: String?
     ): String = when (content) {
-        LineContent.CLOCK -> clockText()
+        LineContent.CLOCK -> clockOrStationName(station, coverArtUrl)
         LineContent.STATION -> station.name
         LineContent.EMPTY -> ""
         LineContent.TITLE -> titleLine(now, title)
@@ -186,16 +180,21 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * Whether the time should move to the middle line.
+     * What a line set to "Clock" actually shows.
      *
-     * Applies to the "clock instead of cover" layout set up so that the clock
-     * yields to the track's cover art. Without this the clock would disappear for
-     * every song, i.e. most of the time - and the whole point of choosing it is that it's there.
+     * The graphic clock (drawn in place of the artwork, see [applyArtwork]) and a
+     * text line both saying the time would be redundant - so a text line only
+     * shows the time while the *real* cover art is on screen instead of the
+     * clock graphic. The moment the graphic clock takes over (track's cover art
+     * missing, or "always" mode), the text line switches to the station name,
+     * which is otherwise nowhere to be seen at that point.
      */
-    private fun clockMovesToMiddle(coverArtUrl: String?): Boolean =
-        prefs.presentation.clockFace != ClockFace.NONE &&
-            !prefs.clockCoverAlways &&
-            coverArtUrl != null
+    private fun clockOrStationName(station: Station, coverArtUrl: String?): String {
+        val p = prefs.presentation
+        val clockGraphicShowing = p.clockFace != ClockFace.NONE &&
+            (prefs.clockCoverAlways || coverArtUrl == null)
+        return if (clockGraphicShowing) station.name else clockText()
+    }
 
     /**
      * The title line. Outside of a track we insert whatever we know at that
