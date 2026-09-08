@@ -14,6 +14,12 @@ $apkDir = if ($Release) { 'release' } else { 'debug' }
 
 Push-Location $root
 try {
+    # Testy przed zlozeniem APK. Kosztuja tyle co nic, gdy nic sie nie zmienilo,
+    # a pilnuja regul tekstowych, ktorych na telefonie nie da sie sprawdzic
+    # inaczej niz czekajac, az radio zagra wlasciwy utwor.
+    & "$root\gradlew.bat" ":app:testDebugUnitTest"
+    if ($LASTEXITCODE -ne 0) { throw "Testy nie przeszly - APK nie powstal" }
+
     & "$root\gradlew.bat" ":app:assemble$variant"
     if ($LASTEXITCODE -ne 0) { throw "Build sie nie powiodl" }
 } finally {

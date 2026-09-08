@@ -41,8 +41,19 @@ in the code assumes this specific model.
 ## 2. Building and installing
 
 ```powershell
-.\tools\install.ps1            # debug: builds, installs, launches
+.\tools\install.ps1            # debug: tests, builds, installs, launches
 .\tools\install.ps1 -Release   # release build signed with the debug key
+```
+
+The script runs `:app:testDebugUnitTest` first and refuses to build if it
+fails. Those tests cover the text rules — how a StreamTitle is split, when a
+station has the title and artist the wrong way round, when shouting gets
+brought down — and every case in them was actually broadcast. It is the one
+part of this app that can be checked without a phone, and the alternative is
+waiting for a radio station to play the right song again:
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest    # on its own, ~5 s once warm
 ```
 
 The script sets `JAVA_HOME` and `ANDROID_HOME` for you. If you build manually

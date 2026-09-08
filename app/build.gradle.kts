@@ -59,6 +59,11 @@ dependencies {
     implementation("androidx.media:media:1.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.google.guava:guava:33.3.1-android")
+
+    // Tekst od stacji i decyzje podejmowane na nim to czysta logika. Da sie ja
+    // sprawdzic na JVM - bez telefonu i bez czekania, az radio zagra akurat ten
+    // utwor, na ktorym cos sie wywalilo.
+    testImplementation("junit:junit:4.13.2")
 }
 
 
