@@ -21,6 +21,7 @@ import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.StationRepository
 import net.mspanc.twinsenradio.databinding.ActivitySettingsBinding
 import net.mspanc.twinsenradio.playback.DiagnosticFields
+import net.mspanc.twinsenradio.playback.Trace
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -69,6 +70,16 @@ class SettingsActivity : AppCompatActivity() {
         b.swDiagApi.isChecked = prefs.diagnosticShowApiName
         b.swDiagApi.setOnCheckedChangeListener { _, _ -> renderLegend() }
         renderLegend()
+
+        b.swTrace.isChecked = prefs.traceEnabled
+        b.btnTraceClear.setOnClickListener {
+            Trace.clear(this)
+            // The delete runs on the trace's own thread, so a size read this
+            // instant would still be the old one.
+            b.tvTraceState.postDelayed({ renderTrace() }, 300)
+            Toast.makeText(this, R.string.opt_trace_cleared, Toast.LENGTH_SHORT).show()
+        }
+        renderTrace()
 
         // --- the rest ----------------------------------------------------------
         bind(b.ddBrowsable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.browsableStyle))
@@ -152,6 +163,21 @@ class SettingsActivity : AppCompatActivity() {
         b.tvLegend.text = DiagnosticFields.legend(b.swDiagApi.isChecked)
     }
 
+    /** How much of a drive is on the phone, and where it sits. */
+    private fun renderTrace() {
+        val (count, bytes) = Trace.size(this)
+        b.tvTraceState.text = if (count == 0) {
+            getString(R.string.opt_trace_empty)
+        } else {
+            val size = if (bytes < 1024 * 1024) {
+                "${bytes / 1024} kB"
+            } else {
+                String.format(java.util.Locale.getDefault(), "%.1f MB", bytes / 1024.0 / 1024.0)
+            }
+            getString(R.string.opt_trace_state, count, size) + "\n" + Trace.dir(this).absolutePath
+        }
+    }
+
     private fun save() {
         prefs.lineTop = pick(b.ddLineTop)
         prefs.lineMiddle = pick(b.ddLineMiddle)
@@ -166,6 +192,7 @@ class SettingsActivity : AppCompatActivity() {
 
         prefs.diagnosticMode = b.swDiag.isChecked
         prefs.diagnosticShowApiName = b.swDiagApi.isChecked
+        prefs.traceEnabled = b.swTrace.isChecked
 
         prefs.browsableStyle = ContentStyle.indexToValue(pick(b.ddBrowsable))
         prefs.playableStyle = ContentStyle.indexToValue(pick(b.ddPlayable))

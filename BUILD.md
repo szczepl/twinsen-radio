@@ -224,6 +224,46 @@ adb shell am start -n net.mspanc.twinsenradio/.ui.MainActivity --es play_station
 Relevant logcat tags: `MetaDump` (fields sent to the session), `IcyMeta`
 (raw ICY blocks), `CoverArt`, `LoadDiag`, `RadioService`, `RadioBrowser`.
 
+### The trace of a drive
+
+logcat only exists while a cable is attached, and its buffer is a few minutes
+deep — an hour of driving is gone before anyone looks. So the app also writes
+every event to a file on the phone: one JSON object per line, on by default
+(Options → *Zapis przebiegu do pliku*, which also shows the size and the path).
+
+```powershell
+.\tools\pull-trace.ps1            # -> .\slady\trace\, with a per-file summary
+.\tools\pull-trace.ps1 -Clear     # and wipe the phone's copy afterwards
+```
+
+One run of the service is one file, `trace-yyyyMMdd-HHmmss.jsonl`. Every line
+carries `t` (wall clock), `up` (`elapsedRealtime`, monotonic — the only one
+safe to subtract, since the phone corrects its clock over the network while we
+drive), `st` (station id) and `e`, the kind of event:
+
+| `e` | what it is |
+|---|---|
+| `run`, `uklad`, `end` | version, device, and the layout it was recorded under |
+| `klient`, `klient-koniec` | a controller attached — `…projection.gearhead` is the car |
+| `stacja` | station change: name, stream URL, transition reason |
+| `naglowki` | the stream's icy-* headers; `metaint=0` means it will never send a title |
+| `icy` | the block as it arrived **and** what we parsed out of it |
+| `wstrzymanie` | the first description held back after a switch, and for how long |
+| `wyslano` | the complete set pushed to the session, with `powod` — what prompted it |
+| `katalog` | the iTunes/MusicBrainz answer, and the swap decision taken on it |
+| `jakosc`, `stan`, `net`, `blad` | codec, playback state, network, player errors |
+| `cfg` | a setting changed mid-drive |
+
+Read it with UTF-8 named explicitly — the blank line the app sends is U+00A0,
+and PowerShell's default encoding turns it into mojibake:
+
+```powershell
+[System.IO.File]::ReadAllLines($f, [System.Text.Encoding]::UTF8)
+```
+
+Size: roughly 300 kB per hour of active switching, capped at 8 MB per run and
+32 MB across the directory, oldest runs dropped first.
+
 ---
 
 ## 7. Troubleshooting

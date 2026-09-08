@@ -47,6 +47,15 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_DIAG_API, false)
         set(v) = sp.edit { putBoolean(KEY_DIAG_API, v) }
 
+    /**
+     * Whether a drive is recorded to a file (see [net.mspanc.twinsenradio.playback.Trace]).
+     * On by default: the screens worth studying are in the car, and a drive
+     * that was not recorded cannot be gone back to.
+     */
+    var traceEnabled: Boolean
+        get() = sp.getBoolean(KEY_TRACE, true)
+        set(v) = sp.edit { putBoolean(KEY_TRACE, v) }
+
     /** Presentation scheme for folders in Android Auto (see [ContentStyle]). */
     var browsableStyle: Int
         get() = sp.getInt(KEY_STYLE_BROWSABLE, ContentStyle.CATEGORY_LIST)
@@ -410,6 +419,7 @@ class Prefs(context: Context) {
 
         const val KEY_DIAG = "diagnostic_mode"
         const val KEY_DIAG_API = "diagnostic_api_names"
+        const val KEY_TRACE = "trace_enabled"
         const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"
         const val KEY_LINE_TOP = "line_top"
         const val KEY_LINE_MIDDLE = "line_middle"

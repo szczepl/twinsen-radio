@@ -120,9 +120,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             // The fields the head unit actually renders. Measured in the Passat
             // (FINDINGS.md): the AID reads subtitle / description / displayTitle,
             // the central screen reads displayTitle as the large line and subtitle as the small one.
-            b.setSubtitle(top)
-                .setDescription(middle)
-                .setDisplayTitle(bottom)
+            b.setSubtitle(drawable(top))
+                .setDescription(drawable(middle))
+                .setDisplayTitle(drawable(bottom))
                 // Semantic fields. They don't appear on any screen in the car,
                 // but they describe what's actually playing - other systems may
                 // reach for them, so we keep them honest rather than as copies of the lines.
@@ -136,6 +136,26 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         applyArtwork(b, station, coverArtUrl)
         return b.build()
     }
+
+    /**
+     * A line with nothing to say, in a form the head unit will actually draw.
+     *
+     * We send a complete set on every station change, and measured on the phone
+     * it really is complete: after switching to a station that has announced
+     * nothing, the session carries three empty lines and no trace of the
+     * previous one. What is left on the AID is therefore the head unit's doing -
+     * a field it receives empty is a field it can simply not repaint, and the
+     * previous station's track stays where it was drawn.
+     *
+     * An empty string is not a value; a non-breaking space is. It draws as a
+     * blank line and it replaces what was there. Non-breaking, because a plain
+     * space is trimmed away on the road somewhere and lands as "" again.
+     *
+     * This is a hypothesis about the Passat, not a measurement - the AID cannot
+     * be read from the desk. If it turns out the head unit was clearing the
+     * lines all along, [BLANK] goes back to "" and nothing else changes.
+     */
+    private fun drawable(line: String): String = line.ifBlank { BLANK }
 
     /**
      * The content of a single description line.
@@ -310,6 +330,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         private const val ART_SIZE = 512
 
         private val CLOCK_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+        /** An empty line as a value the head unit can draw - see [drawable]. */
+        private const val BLANK = "\u00A0"
 
         const val AD_LABEL = "Reklama"
 

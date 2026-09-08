@@ -12,3 +12,6 @@ captures/
 *.jks
 *.keystore
 keystore.properties
+
+# Slady przebiegow sciagniete z telefonu - dane z jazdy, nie kod
+slady/

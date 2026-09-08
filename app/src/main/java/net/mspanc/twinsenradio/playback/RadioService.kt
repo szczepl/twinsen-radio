@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -101,6 +102,16 @@ class RadioService : MediaLibraryService() {
     /** Watches whether the track description has gone stale because the station announced nothing. */
     private var staleJob: Job? = null
 
+    /** Holds back the first description of a freshly started station - see [publish]. */
+    private var settleJob: Job? = null
+
+    /**
+     * When the current station was started, on the monotonic clock. Its
+     * description may go on screen [STATION_SETTLE_MS] later, and everything the
+     * station does is measured from here in the trace.
+     */
+    private var stationAtMs = 0L
+
     /** Fingerprint of the last metadata dump - filters out repeats in the log. */
     private var lastDump: String? = null
 
@@ -112,13 +123,20 @@ class RadioService : MediaLibraryService() {
     private var lastSlogan: String? = null
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        // A setting changed halfway through a drive changes what the following
+        // lines in the trace mean, so the change is a line of its own. Not the
+        // app's own bookkeeping though - the play counter and the recent list
+        // are written on every station change, and two lines saying so after
+        // every switch is noise in a file meant to be read.
+        if (key != null && !isBookkeeping(key)) Trace.write("cfg") { put("key", key) }
         when (key) {
             Prefs.KEY_STYLE_BROWSABLE, Prefs.KEY_STYLE_PLAYABLE, Prefs.KEY_M3U -> {
                 session.notifyChildrenChanged(NODE_ROOT, Int.MAX_VALUE, null)
                 BROWSE_NODES.forEach { session.notifyChildrenChanged(it, Int.MAX_VALUE, null) }
             }
+            Prefs.KEY_TRACE -> if (prefs.traceEnabled) startTrace() else Trace.close()
             Prefs.KEY_DIAG -> {
-                refreshCurrentMetadata(force = true)
+                refreshCurrentMetadata(force = true, why = "diag")
                 // Stripping ICY happens when the data source is created, so for
                 // the toggle to take effect immediately the stream must be re-prepared.
                 if (player.playWhenReady && player.currentMediaItem != null) {
@@ -128,7 +146,8 @@ class RadioService : MediaLibraryService() {
             Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK,
             Prefs.KEY_LINE_TOP, Prefs.KEY_LINE_MIDDLE, Prefs.KEY_LINE_BOTTOM,
             Prefs.KEY_CLOCK_FACE, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
-            Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM -> refreshCurrentMetadata(force = true)
+            Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM ->
+                refreshCurrentMetadata(force = true, why = "opcje")
             Prefs.KEY_BUFFER -> Log.i(TAG, "Zmieniono bufor - zadziala po restarcie odtwarzania")
             // A quality change or a custom address change concerns a specific station.
             // The keys are prefixed with its identifier, so we check the beginning.
@@ -141,6 +160,7 @@ class RadioService : MediaLibraryService() {
         prefs = Prefs(this)
         repo = StationRepository.get(this)
         metadata = MetadataFactory(this, prefs)
+        if (prefs.traceEnabled) startTrace()
 
         player = buildPlayer()
         player.addListener(PlayerEvents())
@@ -164,6 +184,7 @@ class RadioService : MediaLibraryService() {
             .build()
 
         reconnect = ReconnectController(this, player) { status ->
+            Trace.write("net") { put("status", status.name) }
             PlaybackStatusBus.setStatus(
                 when (status) {
                     ReconnectController.Status.RECONNECTING -> PlaybackStatusBus.Status.RECONNECTING
@@ -175,7 +196,7 @@ class RadioService : MediaLibraryService() {
             // No network hits the middle line on the dashboard, so the metadata
             // must be pushed again - otherwise the message would only appear at
             // the next track, which in practice means never.
-            refreshCurrentMetadata(force = true)
+            refreshCurrentMetadata(force = true, why = "siec")
         }
         reconnect.start()
         prefs.registerListener(prefsListener)
@@ -214,7 +235,40 @@ class RadioService : MediaLibraryService() {
         session.release()
         player.release()
         scope.cancel()
+        Trace.close()
         super.onDestroy()
+    }
+
+    /**
+     * Keys the app writes to itself on every station change. A star pressed in
+     * the car is a decision and stays in the trace; a play counter is not.
+     */
+    private fun isBookkeeping(key: String): Boolean =
+        key.startsWith("plays_") || key == Prefs.KEY_RECENT
+
+    /**
+     * Opens the trace and writes down the settings it was recorded under.
+     *
+     * The layout is in the file because the same events read differently under
+     * a different one: an empty middle line is a station saying nothing when
+     * the line carries the artist, and it is the layout when the line is set
+     * to "off". Reading that off the phone weeks later is not an option -
+     * by then the settings have moved.
+     */
+    private fun startTrace() {
+        Trace.open(this)
+        val p = prefs.presentation
+        Trace.write("uklad") {
+            put("gora", p.top.name)
+            put("srodek", p.middle.name)
+            put("dol", p.bottom.name)
+            put("zegar", p.clockFace.name)
+            put("zegarZawsze", prefs.clockCoverAlways)
+            put("okladka", prefs.artworkMode)
+            put("album", prefs.enrichWithYear)
+            put("diag", prefs.diagnosticMode)
+            put("bufor", prefs.bufferProfile)
+        }
     }
 
     // --- player construction ----------------------------------------------------
@@ -270,18 +324,29 @@ class RadioService : MediaLibraryService() {
     private inner class PlayerEvents : Player.Listener {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            lastRawIcyTitle = null
-            lastSlogan = null
             // A station change starts everything from scratch. Without this, the cover art
             // from the previous station would stay in the `coverArtUrl` field and come back
             // on screen at the next metadata refresh - after switching from RMF to RNS
             // the RMF cover art would briefly show instead of the Nowy Swiat logo.
-            resetCoverArt()
-            audioFormat = null
-            icyBitrateKbps = 0
-            PlaybackStatusBus.setQuality(null)
+            resetStationState()
             val id = mediaItem?.mediaId?.let { Station.idFromMediaId(it) }
             PlaybackStatusBus.setStation(id)
+
+            Trace.station(id)
+            Trace.write("stacja") {
+                put("nazwa", id?.let { repo.byId(it)?.name })
+                put("url", mediaItem?.localConfiguration?.uri?.toString())
+                put("powod", reason)
+            }
+
+            // The new station starts from the state it would be in with no track:
+            // whatever the layout says belongs on screen when nothing is playing.
+            // Sending it right here means the previous station's title cannot
+            // survive on the dashboard until the new one happens to say something -
+            // and a station that says nothing at all leaves this standing, which
+            // is exactly what it should show.
+            refreshCurrentMetadata(force = true, now = null, why = "zmiana-stacji")
+
             id?.let {
                 prefs.pushRecent(it)
                 // Play count - the only sensible source for a "most listened"
@@ -299,6 +364,18 @@ class RadioService : MediaLibraryService() {
         }
 
         override fun onPlaybackStateChanged(state: Int) {
+            Trace.write("stan") {
+                put(
+                    "stan",
+                    when (state) {
+                        Player.STATE_IDLE -> "idle"
+                        Player.STATE_BUFFERING -> "buforuje"
+                        Player.STATE_READY -> "gotowy"
+                        else -> "koniec"
+                    }
+                )
+                put("gra", player.playWhenReady)
+            }
             PlaybackStatusBus.setStatus(
                 when (state) {
                     Player.STATE_BUFFERING -> PlaybackStatusBus.Status.BUFFERING
@@ -310,6 +387,18 @@ class RadioService : MediaLibraryService() {
                     else -> PlaybackStatusBus.Status.IDLE
                 }
             )
+        }
+
+        /**
+         * Only for the record - the rescue itself is [ReconnectController]'s
+         * job. An error that coincides with a station change is worth being
+         * able to see afterwards, and logcat will not have kept it.
+         */
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            Trace.write("blad") {
+                put("kod", error.errorCodeName)
+                put("opis", error.message)
+            }
         }
 
         override fun onMetadata(meta: Metadata) {
@@ -345,6 +434,16 @@ class RadioService : MediaLibraryService() {
         }
         if (h.metadataInterval > 0) Log.i(TAG_ICY, "icy-metaint = ${h.metadataInterval}")
         Log.i(TAG_ICY, "icy-pub = ${h.isPublic}")
+        // Once per connection, and it says what the station promises about
+        // itself - including metaint, which is 0 on a stream that will never
+        // send a title. That distinguishes "said nothing yet" from "never will".
+        Trace.write("naglowki") {
+            put("name", h.name)
+            put("genre", h.genre)
+            put("br", h.bitrate)
+            put("metaint", h.metadataInterval)
+            put("poStacji", sinceStationMs())
+        }
     }
 
     /**
@@ -378,7 +477,8 @@ class RadioService : MediaLibraryService() {
         // whether metadata arrives once per track or periodically. We log it so
         // it can be measured from the outside.
         val nowMs = System.currentTimeMillis()
-        val sinceLast = if (lastIcyAtMs == 0L) -1 else (nowMs - lastIcyAtMs) / 1000
+        val gapMs = if (lastIcyAtMs == 0L) null else nowMs - lastIcyAtMs
+        val sinceLast = gapMs?.div(1000) ?: -1
         lastIcyAtMs = nowMs
         Log.i(TAG_ICY, "po ${sinceLast}s | StreamTitle='$title'")
 
@@ -390,8 +490,53 @@ class RadioService : MediaLibraryService() {
                 "slogan='${now?.slogan}' reklama=${now?.isAd} " +
                 "znacznik=${now?.isControlMarker} utwor=${now?.isRealSong}"
         )
+        // Both halves on one line: the block exactly as it arrived, and what we
+        // made of it. Reading them apart is how a parser fault gets blamed on a
+        // station, and a station's oddity on the parser.
+        Trace.write("icy") {
+            put("blok", rawBlock)
+            put("tytul", title)
+            put("poStacji", sinceStationMs())
+            put("poPoprzednim", gapMs)
+            put("wykonawca", now?.artist)
+            put("utwor", now?.songTitle)
+            put("slogan", now?.slogan)
+            put("reklama", now?.isAd)
+            put("znacznik", now?.isControlMarker)
+            put("prawdziwy", now?.isRealSong)
+        }
         publish(now)
     }
+
+    /**
+     * Holds back the first description of a freshly started station.
+     *
+     * The station change has just put the "no track" state on screen, and a
+     * stream that already has metadata waiting answers within a fraction of a
+     * second - the two arrive so close together that the head unit renders one
+     * flicker instead of two states. So for [STATION_SETTLE_MS] after a change
+     * the description waits; whatever came last during that window is what goes
+     * up. Nothing arriving is not a case to handle: the "no track" state stands
+     * and we wait for the station to say something, whenever that is.
+     */
+    private fun publish(now: NowPlaying?) {
+        settleJob?.cancel()
+        val wait = stationAtMs + STATION_SETTLE_MS - SystemClock.elapsedRealtime()
+        if (wait > 0) {
+            Log.i(TAG_ICY, "stacja dopiero ruszyla - opis poczeka ${wait}ms")
+            Trace.write("wstrzymanie") { put("ms", wait) }
+            settleJob = scope.launch {
+                delay(wait)
+                publishNow(now)
+            }
+            return
+        }
+        publishNow(now)
+    }
+
+    /** How long the current station has been playing, for the trace. */
+    private fun sinceStationMs(): Long? =
+        if (stationAtMs == 0L) null else SystemClock.elapsedRealtime() - stationAtMs
 
     /**
      * Decides whether an event from ICY should immediately change what's shown on screen.
@@ -404,7 +549,7 @@ class RadioService : MediaLibraryService() {
      * ad - it wins, and if nothing arrives, only then do we fall back to just
      * the station.
      */
-    private fun publish(now: NowPlaying?) {
+    private fun publishNow(now: NowPlaying?) {
         pendingMarkerJob?.cancel()
 
         if (now?.isControlMarker == true && now.isAd != true) {
@@ -449,7 +594,7 @@ class RadioService : MediaLibraryService() {
         // with the old artwork - after the song, the studio would come on and
         // "Pion i poziom!" would still show the previous track's cover.
         updateCoverArt(now, key, sameTrack)
-        refreshCurrentMetadata(force = true, now = now)
+        refreshCurrentMetadata(force = true, now = now, why = "icy")
         scheduleStaleCheck(now)
     }
 
@@ -496,18 +641,38 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Clears everything we knew about the previous track. Called on a station
-     * change, where no trace of the previous one is allowed to remain.
+     * Clears everything we knew about the previous station. Called on a station
+     * change, where no trace of the previous one is allowed to remain - not the
+     * cover art, not the description, and not a timer armed by something the
+     * previous station said. A marker left running was the worst of them: a
+     * STOP_AD_BREAK from the station we just left would fire fifteen seconds
+     * into the new one and wipe a description that had just arrived.
      */
-    private fun resetCoverArt() {
+    private fun resetStationState() {
         coverGeneration++
         coverRevertJob?.cancel()
         staleJob?.cancel()
+        pendingMarkerJob?.cancel()
+        settleJob?.cancel()
+        stationAtMs = SystemClock.elapsedRealtime()
         coverTrackKey = null
         coverArtUrl = null
         trackInfo = null
+        lastRawIcyTitle = null
+        lastSlogan = null
+        // The gap between ICY blocks is measured within one station; carried
+        // across a change it would report the time since the previous one.
+        lastIcyAtMs = 0L
+        // A new station gets its own first dump, even if the description happens
+        // to read the same as the one we just left (two stations, both showing
+        // just the clock).
+        lastDump = null
+        audioFormat = null
+        icyBitrateKbps = 0
         PlaybackStatusBus.setCoverArt(null)
         PlaybackStatusBus.setTrackInfo(null)
+        PlaybackStatusBus.setNowPlaying(null)
+        PlaybackStatusBus.setQuality(null)
     }
 
     /**
@@ -541,7 +706,7 @@ class RadioService : MediaLibraryService() {
             trackInfo = info
             PlaybackStatusBus.setCoverArt(url)
             PlaybackStatusBus.setTrackInfo(info)
-            refreshCurrentMetadata(force = true, now = PlaybackStatusBus.nowPlaying.value)
+            refreshCurrentMetadata(force = true, now = PlaybackStatusBus.nowPlaying.value, why = "katalog")
             // We now know the track length - recompute the moment the description goes stale
             scheduleStaleCheck(PlaybackStatusBus.nowPlaying.value)
         }
@@ -558,7 +723,24 @@ class RadioService : MediaLibraryService() {
         if (key == null) return
 
         scope.launch {
+            val startedAt = SystemClock.elapsedRealtime()
             val info = CoverArtLookup.find(now!!.artist, now.songTitle)
+            // The answer, and the decision taken on it. The swapped flag is here
+            // because the station's own order cannot be judged without it -
+            // Jacaranda sends title first, and that only shows against a catalogue.
+            Trace.write("katalog") {
+                put("pytanieWykonawca", now.artist)
+                put("pytanieUtwor", now.songTitle)
+                put("ms", SystemClock.elapsedRealtime() - startedAt)
+                put("znaleziono", info != null)
+                put("album", info?.album)
+                put("rok", info?.year)
+                put("dlugoscMs", info?.durationMs)
+                put("katalogUtwor", info?.trackName)
+                put("katalogWykonawca", info?.artistName)
+                put("zamiana", info?.looksSwapped(now.artist, now.songTitle))
+                put("aktualne", generation == coverGeneration)
+            }
             if (generation != coverGeneration) return@launch
             applyIfCurrent(info)
         }
@@ -592,6 +774,13 @@ class RadioService : MediaLibraryService() {
             return
         }
         val quality = StreamQuality.of(format, icyBitrateKbps)
+        Trace.write("jakosc") {
+            put("opis", quality.label().ifBlank { null })
+            put("kbps", quality.bitrateKbps.takeIf { it > 0 })
+            put("codec", format.sampleMimeType)
+            put("hz", format.sampleRate.takeIf { it > 0 })
+            put("poStacji", sinceStationMs())
+        }
         PlaybackStatusBus.setQuality(
             quality.label().ifBlank { null },
             quality.bitrateKbps.takeIf { it > 0 }
@@ -609,21 +798,62 @@ class RadioService : MediaLibraryService() {
             // We only refresh the clock when there's somewhere to show it - always
             // in diagnostic mode, otherwise only in layouts that have a clock.
             val needed = prefs.diagnosticMode || prefs.presentation.needsClock
-            if (needed) refreshCurrentMetadata(force = true)
+            if (needed) refreshCurrentMetadata(force = true, why = "zegar")
             scheduleClockTick()
         }
         clockTick = runnable
         clockHandler.postDelayed(runnable, delayToNextMinute + 100)
     }
 
-    private fun refreshCurrentMetadata(force: Boolean, now: NowPlaying? = PlaybackStatusBus.nowPlaying.value) {
+    /**
+     * @param why what prompted the push. Only the trace reads it, and it is the
+     *   difference between "the description changed" and "the minute did".
+     */
+    private fun refreshCurrentMetadata(
+        force: Boolean,
+        now: NowPlaying? = PlaybackStatusBus.nowPlaying.value,
+        why: String = "?"
+    ) {
         val index = player.currentMediaItemIndex
         val item = player.currentMediaItem ?: return
         val station = repo.byMediaId(item.mediaId) ?: return
         if (!force && prefs.diagnosticMode) return
         val fresh = metadata.forPlayback(station, now, coverArtUrl, trackInfo)
         player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(fresh).build())
+        traceMetadata(station, fresh, why)
         dumpMetadata(station, fresh)
+    }
+
+    /**
+     * The set as it goes to the session, on one line.
+     *
+     * Every push is written down, including one that changes nothing - unlike
+     * [dumpMetadata], which drops repeats to keep the preview window readable.
+     * Here a repeat is a fact: it says the car was handed the same thing again,
+     * which is exactly the sort of thing worth being able to count afterwards.
+     */
+    private fun traceMetadata(station: Station, m: MediaMetadata, why: String) {
+        Trace.write("wyslano") {
+            put("powod", why)
+            put("stacjaNazwa", station.name)
+            put("poStacji", sinceStationMs())
+            put("subtitle", m.subtitle?.toString())
+            put("description", m.description?.toString())
+            put("displayTitle", m.displayTitle?.toString())
+            put("title", m.title?.toString())
+            put("artist", m.artist?.toString())
+            put("albumTitle", m.albumTitle?.toString())
+            put("station", m.station?.toString())
+            put("genre", m.genre?.toString())
+            put(
+                "grafika",
+                when {
+                    m.artworkData != null -> "bajty:${m.artworkData?.size}"
+                    m.artworkUri != null -> m.artworkUri.toString()
+                    else -> null
+                }
+            )
+        }
     }
 
     /**
@@ -814,6 +1044,14 @@ class RadioService : MediaLibraryService() {
                 controller.interfaceVersion,
                 controller.connectionHints
             )
+            // Which events happened with the car attached and which on the
+            // phone alone is the first question any of this will be asked, and
+            // the connecting package is the only thing that answers it -
+            // com.google.android.projection.gearhead is the head unit.
+            Trace.write("klient") {
+                put("pakiet", controller.packageName)
+                put("wersja", controller.controllerVersion)
+            }
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
                 .add(CMD_TOGGLE_DIAG)
@@ -824,6 +1062,10 @@ class RadioService : MediaLibraryService() {
                 // A freshly connected controller must get the current star state
                 .setCustomLayout(customLayout())
                 .build()
+        }
+
+        override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) {
+            Trace.write("klient-koniec") { put("pakiet", controller.packageName) }
         }
 
         override fun onCustomCommand(
@@ -1219,6 +1461,17 @@ class RadioService : MediaLibraryService() {
          * few seconds apart, so 15s comfortably covers them.
          */
         private const val MARKER_GRACE_MS = 15_000L
+
+        /**
+         * How long a new station's description waits before it goes on screen.
+         *
+         * Long enough for the head unit to draw the "no track" state as a state
+         * of its own, short enough that nobody reads it as the station being
+         * slow. Measured from the station change, not from the metadata - a
+         * station that answers instantly and one that takes a second both land
+         * at the same moment.
+         */
+        private const val STATION_SETTLE_MS = 1_500L
 
         /** Assumed track length when the catalog doesn't know it. */
         private const val FALLBACK_TRACK_MS = 5 * 60_000L

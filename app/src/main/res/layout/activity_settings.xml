@@ -242,6 +242,27 @@
                         android:fontFamily="monospace"
                         android:padding="12dp"
                         android:textAppearance="?attr/textAppearanceBodySmall" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/swTrace"
+                        style="@style/SettingSwitch"
+                        android:layout_marginTop="16dp"
+                        android:text="@string/opt_trace" />
+
+                    <TextView
+                        style="@style/SettingNote"
+                        android:text="@string/opt_trace_sub" />
+
+                    <TextView
+                        android:id="@+id/tvTraceState"
+                        style="@style/SettingNote" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnTraceClear"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/opt_trace_clear" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

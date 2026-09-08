@@ -42,6 +42,29 @@ a real stumble.
 * **`adb shell input tap` doesn't work during projection** — our activity
   has no focus at that point, so taps land in the void. Don't conclude from
   this that the screen is off (I did that once already, and it was wrong).
+* **Keep the screen awake while working, and put it back afterwards.** A
+  session driven by coordinates falls apart the moment the display sleeps or
+  the keyguard appears, and every tap after that lands nowhere — which reads
+  as a broken app rather than a dark screen. So at the start:
+
+  ```powershell
+  adb shell settings get system screen_off_timeout   # write this down FIRST
+  adb shell svc power stayon true
+  adb shell settings put system screen_off_timeout 1800000
+  ```
+
+  **Undoing it is part of committing** — both settings, in the same breath as
+  `git commit`. A phone left on `stayon true` lights up whenever it is
+  plugged in, and how somebody's phone behaves is not this project's business.
+  Read the old timeout *before* overwriting it: afterwards it cannot be
+  recovered, and guessing at a person's setting hands back a phone that is
+  subtly not theirs.
+* **`am start --es play_station <id>` beats tapping by coordinate** for
+  driving playback from a script — but only into a *fresh* process. Delivered
+  to a running instance it lands in `onNewIntent`, which doesn't handle it,
+  and the app just sits there. `am force-stop` first.
+* **`SettingsActivity` isn't exported**, so `am start` on it is a
+  SecurityException. Options is reached through the overflow menu.
 * **State plainly what you haven't verified.** The user is testing live and
   needs to know what's actually confirmed versus merely compiled.
 * **Terminology:** in Polish we say **HDU**, not "głowica" ("head unit").

@@ -255,3 +255,47 @@ The ReplaIO archive was a reference point for two problems.
   `MediaBrowserServiceCompat` — they call the old API directly. This pointed
   toward suspecting the Media3 bridge and bumping the version to 1.11.0,
   which fixed refreshing of the Favorites list.
+
+---
+
+## 6. Switching stations — what actually crosses the session
+
+Measured on the phone on 2026-09-08, on a build with the metadata dump
+(`adb logcat -s MetaDump IcyMeta`) and on `dumpsys media_session`, which shows
+what a controller — and therefore the head unit — is handed.
+
+**The previous station's description does not survive in our state.** The same
+switch (Jacaranda FM, playing a track with cover art → Antyradio, which says
+nothing) was run on the build before the change and on the build after it. In
+both cases, seconds after the switch:
+
+```
+metadata: size=11, description=null, null, null
+```
+
+Three empty text fields and no trace of Jacaranda. So the stale lines seen on
+the AID are **not** ours to clear — the app sends a complete, empty set, and
+what stays on the dashboard is a head unit not repainting a field it received
+empty. Hence [MetadataFactory.drawable]: an empty line goes out as U+00A0,
+which is a value the head unit has to draw. **Not yet confirmed in the car.**
+
+**Antyradio sends no ICY at all.** Ninety seconds of listening, zero blocks.
+Not "rarely" — never. It is the station to test a switch against.
+
+**How long the first block takes**, from the media item change to the first
+`StreamTitle` (one pass, so an order of magnitude, not a measurement):
+
+| Station | First block |
+|---|---|
+| Radio 357 | 0.15 s |
+| Radio Nowy Świat | 0.5 s |
+| Radio ZET | 0.6 s (empty title) |
+| Chilli ZET | 0.8 s (empty title) |
+| RMF FM | 1.2 s (preroll ad) |
+| Jacaranda FM | 1.7 s |
+| Smooth FM Melbourne | 2.8 s |
+| Antyradio | never |
+
+Half of them answer inside a second, which is why the description now waits
+`STATION_SETTLE_MS` after a switch: without it the empty state and the track
+land together and the head unit renders one flicker instead of two states.
