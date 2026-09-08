@@ -5,6 +5,10 @@ Read this first. Then, depending on the task:
 [BUILD.md](BUILD.md) (workshop procedures),
 [FINDINGS.md](FINDINGS.md) (what's been established experimentally).
 
+Anything that has to be seen on the device rather than assumed goes through
+the `driving-the-phone` skill — the adb mechanics, and the traps that cost a
+round trip each.
+
 ---
 
 ## What this project is about
