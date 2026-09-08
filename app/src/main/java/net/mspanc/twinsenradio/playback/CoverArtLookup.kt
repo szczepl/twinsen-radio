@@ -100,24 +100,70 @@ object CoverArtLookup {
          * This means stations don't need to be flagged by hand in
          * stations.json, nor guessed at - the fix follows from the data and
          * works for any station that broadcasts this way.
+         *
+         * Two questions, because one of them is not always answerable. On
+         * `GIVE ME EVERYTHING - PITBULL [+] NE-YO [+] AFROJACK [+] NAYER`
+         * (Jacaranda, 2026-09-08) the catalogue calls the track "Give Me
+         * Everything (feat. Ne-Yo, Afrojack & Nayer)" - the station's half
+         * against the catalogue's whole, so an exact comparison said no and
+         * the car showed Pitbull as the title for the length of the song. The
+         * suffix in brackets is the catalogue's own addition, so we compare
+         * against the title with and without it; and independently we ask
+         * whether the catalogue's artist is one of the names in what we took
+         * for the title, which settles the same question from the other end.
          */
         fun looksSwapped(artist: String?, title: String?): Boolean {
             val a = normalize(artist.orEmpty())
             val t = normalize(title.orEmpty())
-            val catalogueTitle = normalize(trackName.orEmpty())
-            if (a.isEmpty() || t.isEmpty() || catalogueTitle.isEmpty()) return false
+            if (a.isEmpty() || t.isEmpty()) return false
 
-            // A single condition decides it: whether what we took for the
-            // artist is the track title in the catalogue. Comparing the
-            // artist too doesn't work, because on collaborations the strings
-            // diverge - the station gives "KYGO [+] TINA TURNER", while the
-            // catalogue just gives "Tina Turner".
-            return a == catalogueTitle && t != catalogueTitle
+            // What we took for the artist is the track title in the catalogue,
+            // and what we took for the title is not.
+            val whole = normalize(trackName.orEmpty())
+            val core = normalize(titleCore(trackName.orEmpty()))
+            if (whole.isNotEmpty()) {
+                val artistIsTitle = a == whole || a == core
+                val titleIsTitle = t == whole || t == core
+                if (artistIsTitle && !titleIsTitle) return true
+            }
+
+            // The catalogue's artist stands among the names in what we took for
+            // the title, and nowhere in what we took for the artist. Compared
+            // name by name rather than by substring: "Sia" occurs inside
+            // "Anastasia", and that would be a swap declared on a coincidence.
+            val catalogueArtist = normalize(artistName.orEmpty())
+            if (catalogueArtist.isNotEmpty()) {
+                val amongTitle = names(title.orEmpty()).any { it == catalogueArtist }
+                val amongArtist = names(artist.orEmpty()).any { it == catalogueArtist }
+                if (amongTitle && !amongArtist) return true
+            }
+
+            return false
         }
+
+        /**
+         * The track title without what the catalogue writes after it -
+         * "(feat. ...)", "[Radio Edit]", "- Remastered 2011". A station sends
+         * the bare title.
+         */
+        private fun titleCore(s: String): String =
+            s.substringBefore(" (").substringBefore(" [").substringBefore(" - ")
+
+        /**
+         * The names in a field, as stations separate them: `[+]` (Jacaranda),
+         * a slash (RMF), a comma, an ampersand, "feat"/"ft".
+         */
+        private fun names(s: String): List<String> =
+            s.split(NAME_SEPARATOR)
+                .map { normalize(it) }
+                .filter { it.isNotEmpty() }
 
         private fun normalize(s: String) = s.lowercase()
             .replace(Regex("[^\\p{L}\\p{N}]"), "")
     }
+
+    private val NAME_SEPARATOR =
+        Regex("""\s*(\[\+\]|\+|/|,|&|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b)\s*""", RegexOption.IGNORE_CASE)
 
     /** Small, bounded cache - in the car we cycle through just a few stations anyway. */
     private const val CACHE_LIMIT = 64

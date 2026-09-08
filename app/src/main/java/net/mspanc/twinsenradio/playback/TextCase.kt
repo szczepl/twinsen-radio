@@ -10,6 +10,10 @@ package net.mspanc.twinsenradio.playback
  *
  * The order of operations matters and is deliberately this:
  *
+ *  0. If it's all caps and the catalogue knows the same text in mixed case -
+ *     take the catalogue's. This one goes first because it is the only case
+ *     where somebody demonstrably knows the spelling better than we do, and
+ *     because the rules below would otherwise leave a single word shouting.
  *  1. If the text isn't shouty - leave it alone entirely. The station knows
  *     best how to spell its own repertoire.
  *  2. If it's shouty, but the catalogue knows the same text in proper case -
@@ -32,10 +36,19 @@ object TextCase {
      * abbreviations within a sentence are protected by a separate rule in
      * [tame].
      */
-    fun isShouty(text: String): Boolean {
+    fun isShouty(text: String): Boolean = text.contains(' ') && isAllCaps(text)
+
+    /**
+     * All caps whatever the length - "FUGEES" as much as "KILLING ME SOFTLY".
+     *
+     * Not the same question as [isShouty]: a single all-caps word is left alone
+     * by our own tidying, because that is what ABBA and U2 look like. It is
+     * still worth knowing, for the one case where somebody else knows better -
+     * see [tidy].
+     */
+    fun isAllCaps(text: String): Boolean {
         val letters = text.filter { it.isLetter() }
         if (letters.length < 2) return false
-        if (!text.contains(' ')) return false
         return letters.none { it.isLowerCase() }
     }
 
@@ -62,9 +75,19 @@ object TextCase {
     fun tidy(raw: String?, fromCatalogue: String? = null): String {
         val text = raw?.trim().orEmpty()
         if (text.isEmpty()) return ""
-        if (!isShouty(text)) return text
-
         val catalogue = fromCatalogue?.trim()
+
+        // The catalogue's spelling of the same all-caps text wins - and this is
+        // asked before the "a single word is left alone" rule, which is there
+        // for ABBA and U2 and was also leaving Jacaranda's "FUGEES" shouting
+        // next to a title the catalogue had already spelled properly.
+        if (isAllCaps(text) && !catalogue.isNullOrEmpty() &&
+            !isAllCaps(catalogue) && sameText(text, catalogue)
+        ) {
+            return catalogue
+        }
+
+        if (!isShouty(text)) return text
         if (!catalogue.isNullOrEmpty() && !isShouty(catalogue) && sameText(text, catalogue)) {
             return catalogue
         }
