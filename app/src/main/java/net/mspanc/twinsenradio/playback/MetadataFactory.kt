@@ -24,6 +24,31 @@ import java.time.format.DateTimeFormatter
  */
 class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
+    /**
+     * Whether a head unit is listening right now.
+     *
+     * The presentation settings describe a dashboard, not a phone. The clearest
+     * case is the clock face: it replaces the artwork because the instrument
+     * cluster has nowhere else to put the time. Sent unconditionally, it also
+     * landed in the phone's notification shade - a drawn clock sitting next to
+     * the system's own clock, with the station's logo nowhere to be seen.
+     *
+     * Fixing that in the notification is not possible: the shade's media panel
+     * reads its picture from the media session, the same metadata the head unit
+     * reads, and it ignores the notification's own large icon (measured
+     * 10.09.2026 - a notification provider that demonstrably swapped the icon
+     * changed nothing on screen). One session, one set of artwork.
+     *
+     * So the rule is applied where it belongs: only while something is actually
+     * driving. With no head unit attached the metadata carries the cover art or
+     * the station logo, which is what every screen of the phone wants anyway.
+     *
+     * Only [RadioService] sets this; the copies the UI builds for logo lookups
+     * leave it false, which is correct for them.
+     */
+    @Volatile
+    var carAttached: Boolean = false
+
     private val artworkBytesCache = HashMap<String, ByteArray?>()
 
     /** Metadata for a browse-list item (Android Auto renders a tile from it). */
@@ -211,7 +236,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
      */
     private fun clockOrStationName(station: Station, coverArtUrl: String?): String {
         val p = prefs.presentation
-        val clockGraphicShowing = p.clockFace != ClockFace.NONE &&
+        val clockGraphicShowing = p.clockFace != ClockFace.NONE && carAttached &&
             (prefs.clockCoverAlways || coverArtUrl == null)
         return if (clockGraphicShowing) station.name else clockText()
     }
@@ -237,7 +262,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         // Clock instead of cover art - drawn on the fly, so there's no URI and it
         // has to travel as bytes.
         val p = prefs.presentation
-        if (p.clockFace != ClockFace.NONE) {
+        if (p.clockFace != ClockFace.NONE && carAttached) {
             val useClock = prefs.clockCoverAlways || coverArtUrl == null
             if (useClock) {
                 val bg = ClockColors.background(prefs.clockBackground)

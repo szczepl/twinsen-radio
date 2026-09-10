@@ -156,6 +156,13 @@ class RadioService : MediaLibraryService() {
     @Volatile
     private var lastSlogan: String? = null
 
+    /**
+     * How many head-unit controllers are attached. A count rather than a flag,
+     * because Android Auto connects more than one and they come and go
+     * independently - see [MetadataFactory.carAttached] for what hangs on it.
+     */
+    private var carControllers = 0
+
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         // A setting changed halfway through a drive changes what the following
         // lines in the trace mean, so the change is a line of its own. Not the
@@ -216,6 +223,7 @@ class RadioService : MediaLibraryService() {
             .setSessionActivity(sessionActivity)
             .setCustomLayout(customLayout())
             .build()
+
 
         reconnect = ReconnectController(this, player) { status ->
             Trace.write("net") { put("status", status.name) }
@@ -612,6 +620,39 @@ class RadioService : MediaLibraryService() {
             return
         }
         publishNow(now)
+    }
+
+    /**
+     * Whether this controller is a head unit rather than a screen of the phone.
+     *
+     * Android Auto connects as com.google.android.projection.gearhead, and so
+     * does the Desktop Head Unit used for testing - which is what makes this
+     * checkable from a desk. Everything else (our own activities, the system's
+     * media panel, a watch) is a phone-side reader and must not be sent a
+     * dashboard layout.
+     */
+    private fun isCar(controller: MediaSession.ControllerInfo): Boolean =
+        controller.packageName == PKG_ANDROID_AUTO
+
+    /**
+     * Applies the attached/detached state and re-sends the description if it
+     * changed, so the artwork swaps at the moment the cable goes in or out
+     * rather than at the next track.
+     *
+     * Posted rather than run inline: onConnect has not yet returned its
+     * connection result, and handing the player a new media item before it does
+     * is asking for trouble.
+     */
+    private fun noteCarAttached() {
+        val attached = carControllers > 0
+        if (attached == metadata.carAttached) return
+        clockHandler.post {
+            if (attached == metadata.carAttached) return@post
+            metadata.carAttached = attached
+            Log.i(TAG, if (attached) "glowica podlaczona - wlaczam uklad deski" else "glowica odlaczona - wracam do okladek")
+            Trace.write("glowica") { put("podlaczona", attached) }
+            refreshCurrentMetadata(force = true, why = "glowica")
+        }
     }
 
     /** How long the current station has been playing, for the trace. */
@@ -1213,6 +1254,8 @@ class RadioService : MediaLibraryService() {
                 put("pakiet", controller.packageName)
                 put("wersja", controller.controllerVersion)
             }
+            if (isCar(controller)) carControllers++
+            noteCarAttached()
             // A controller attaching is the head unit starting to read us again,
             // and after a stretch of Doze what it would read may be minutes out
             // of date. This is the most important of the stale checks: the phone
@@ -1238,6 +1281,8 @@ class RadioService : MediaLibraryService() {
 
         override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) {
             Trace.write("klient-koniec") { put("pakiet", controller.packageName) }
+            if (isCar(controller)) carControllers = (carControllers - 1).coerceAtLeast(0)
+            noteCarAttached()
         }
 
         override fun onCustomCommand(
@@ -1644,6 +1689,9 @@ class RadioService : MediaLibraryService() {
          * at the same moment.
          */
         private const val STATION_SETTLE_MS = 1_500L
+
+        /** Android Auto, and the Desktop Head Unit that stands in for it. */
+        private const val PKG_ANDROID_AUTO = "com.google.android.projection.gearhead"
 
         /** Assumed track length when the catalog doesn't know it. */
         private const val FALLBACK_TRACK_MS = 5 * 60_000L
