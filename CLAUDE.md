@@ -124,14 +124,24 @@ default.
 1. **The "Search stations on the network" screen** hasn't been tapped
    through on the device — adb can't open a non-exported activity. The
    network layer has been checked separately.
-2. **RMF's live ad block** — tune `MARKER_GRACE_MS` and `STALE_GRACE_MS` by
-   observing through `tools/meta-log.bat`.
-3. **`tools/pull-log.ps1` with the car connected** — capture `CarInfoInternal`
+2. **The "Own name" field** in a station's details hasn't been opened on the
+   device either — same reason, `StationInfoActivity` isn't exported. The
+   shortening rule under it has unit tests on the real catalog list.
+3. **The controller-attach stale check** (`checkStale("klient")`) needs a
+   real head unit. It's the one that's supposed to fix a dashboard that went
+   out of date while the phone slept, and a phone on a USB cable never
+   exercises it — no `gearhead` connects.
+4. **`tools/pull-log.ps1` with the car connected** — capture `CarInfoInternal`
    from a real MIB3.
-4. **Restore screen timeout** once work is done:
-   `adb shell svc power stayon false`.
 5. Optional: find a "now playing" endpoint for RNŚ and Radio 357, so that
    joining the stream doesn't require waiting for the first ICY block.
+
+**Settled on 2026-09-10** — see [FINDINGS.md](FINDINGS.md), section 7.
+`STALE_GRACE_MS` and `MARKER_GRACE_MS` no longer need guessing at: over
+2 h 09 min of measured listening a station announced the next thing *before*
+the nominal end of a track in 15 of 16 cases and exactly at it once, never
+later. The description now survives an empty `StreamTitle`, a repeated block,
+and a track we joined half way through.
 
 ---
 

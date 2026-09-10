@@ -299,3 +299,108 @@ Not "rarely" — never. It is the station to test a switch against.
 Half of them answer inside a second, which is why the description now waits
 `STATION_SETTLE_MS` after a switch: without it the empty state and the track
 land together and the head unit renders one flicker instead of two states.
+
+---
+
+## 7. When a description stops being true
+
+Measured on the phone on 2026-09-10 over four rotations driven by
+`am start --es play_station`, the last of them 2 h 09 min long. The trace
+gained three events for this (`termin`, `przeterminowanie`, `icy-powtorka`),
+because until then all three causes below arrived in the file looking like
+one and the same "icy" push.
+
+### What a station sends after a track
+
+28 complete observations — that is, excluding the ones cut short by our own
+station switch, which say more about the test schedule than about the
+station:
+
+| Station | next track | ad | slogan | repeat | empty |
+|---|---|---|---|---|---|
+| RMF FM | 10 | 2 | — | — | — |
+| Smooth FM | 3 | — | — | 3 | 2 |
+| Jacaranda FM | — | — | — | 2 | 1 |
+| Radio Nowy Świat | — | — | 5 | — | — |
+
+Each station has its own habit, and **empty blocks and repeats belong to
+Smooth FM and Jacaranda alone** — RMF and RNŚ never do either. RNŚ was
+running film music that hour (Kilar, Preisner) and put its slogan after every
+single piece.
+
+### Stations announce early, never late
+
+For the 16 tracks whose start we actually witnessed (deadline based on a
+catalog length rather than on a guess), the next thing the station said
+arrived **before** the nominal end 15 times and exactly at it once. Never
+later. Mean: 49 s early.
+
+So a catalog length **systematically overstates** time on air — radio edits,
+crossfades, talking over endings. `STALE_GRACE_MS = 30 s` is measured against
+that, and the stale deadline barely ever has to fire while a station behaves
+normally. It matters only in the gap an ad block leaves.
+
+### The three ways a description used to die early
+
+* **An empty `StreamTitle`.** The only input `NowPlaying.parse` returns null
+  for. It means the station has nothing to say, **not** that nothing is
+  playing — Smooth FM sent one 55 s into "Boyzone - A Picture Of You" (3:26)
+  and the dashboard sat on the station name for three minutes. A station that
+  really has stopped playing music says so: RMF's empty title arrives next to
+  `adw_ad`, which parses to an ad, not to null.
+* **A catalog length for a track we joined mid-way.** The server dumps the
+  current `StreamTitle` the moment we attach — four of Smooth FM's five
+  opening blocks arrived within 3 s of connecting. ICY carries no position,
+  so the length says nothing about what is left.
+* **A catalog length from the wrong release.** "Bee Gees - Stayin' Alive"
+  matched a 1:33 soundtrack cut and took the description off screen two
+  minutes into a song with two and a half to run. Hence `MIN_TRACK_MS`: below
+  any radio edit, the number is evidence of a bad match. It cost nothing in
+  the measured run, but it does hold genuinely short pieces (Kilar's *Tango*
+  2:28, Strugała's *Moving to the Ghetto* 1:46 on RNŚ) up to 74 s too long.
+
+### Repeated blocks mean "nothing new", not "still playing"
+
+Stations re-send an identical block. Smooth FM repeated
+"The Bangles - Eternal Flame" for **8 min 46 s** on a 3 min 56 s song, the
+last two copies arriving after the description had correctly expired. So a
+repeat must not push the deadline out and must not put a title back on
+screen. It is recorded and acted on in no other way.
+
+Until this was traced it was invisible: `handleIcyTitle` returned on the
+fingerprint check *before* `Trace.write`, so repeats appeared only in logcat.
+
+### A deadline, not a timer
+
+The phone normally sleeps in a pocket with the radio on the head unit. A
+coroutine `delay` in Doze fires five to eight minutes late — measured at
+19:08:44 against a 19:03:45 deadline, and twice more the same day, always
+with Android Auto disconnected. With AA attached the minute ticker was
+punctual to the second, which makes it easy to conclude wrongly that there is
+no problem.
+
+Being late does no harm while nobody is reading. So staleness is a **deadline
+checked wherever metadata is refreshed** — the clock tick, an ICY block, a
+network change, and a controller attaching, which is the head unit starting
+to read us again. **The controller-attach path has not been confirmed against
+a real head unit.**
+
+### RMF's preroll
+
+Every connection to RMF opens with an ad, and the block states its own
+length: `adw_ad='true' insertionType='preroll' durationMilliseconds='19670'`,
+with the next block arriving 20 s later. The figure is accurate but **not
+constant** — 30 093 ms and 30 040 ms on other connections, 19 670 ms here. It
+describes that insertion, not a rule.
+
+### Catalog station names carry the stream description
+
+radio-browser entries are typed by whoever added them, and the name is what
+the AID shows whenever no track is playing. "Smooth FM 91.5 - Melbourne -
+91.5 FM (AAC+ 320k)" is how a bitrate became the most prominent thing on the
+instrument cluster. Of the eight catalog stations on the test phone, **seven
+needed no change at all** — and one of them, "- 0 N - Smooth Jazz on Radio",
+is what a confident rule ("cut at the first dash") turns into nothing. Hence
+`StationNames`, which removes only an unambiguous codec/bitrate bracket or a
+trailing frequency, and the rename field in the station's details for
+everything else.
