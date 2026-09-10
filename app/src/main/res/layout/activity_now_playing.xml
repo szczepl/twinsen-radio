@@ -37,6 +37,17 @@
         android:scaleType="fitCenter"
         android:src="@drawable/logo_placeholder" />
 
+    <!--
+        Nazwa stacji ma sie zmiescic, a nie zostac przycieta. Nazwy z katalogu
+        radio-browser bywaja dlugie nawet po przejsciu przez StationNames -
+        "Smooth FM 91.5 - Melbourne" to 26 znakow i w jednej linii naglowka
+        konczylo sie to jako "Smooth FM 91.5 - Mel...". Wielokropek w miejscu,
+        gdzie uzytkownik szuka nazwy stacji, wyglada jak bledna nazwa.
+
+        Wiec: dwie linie i czcionka, ktora sie kurczy. Krotkie nazwy dostaja
+        pelny rozmiar naglowka, dlugie schodza az do 16sp. Ellipsize zostaje
+        jako ostatnia deska ratunku dla nazwy, ktora nie zmiesci sie nawet tak.
+    -->
     <TextView
         android:id="@+id/stationName"
         android:layout_width="match_parent"
@@ -45,7 +56,11 @@
         android:layout_marginTop="12dp"
         android:ellipsize="end"
         android:gravity="center"
-        android:maxLines="1"
+        android:maxLines="2"
+        android:autoSizeMaxTextSize="28sp"
+        android:autoSizeMinTextSize="16sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
         android:textAppearance="?attr/textAppearanceHeadlineMedium"
         android:textStyle="bold" />
 
