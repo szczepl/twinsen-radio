@@ -61,7 +61,11 @@ object CoverArtLookup {
         fun albumLabel(includeYear: Boolean = true): String? {
             val name = when {
                 isSingle -> "singiel"
-                !album.isNullOrBlank() -> TextCase.tidy(album)
+                // AlbumNames goes first: the pressing note it removes is exactly
+                // the part that made these lines too long for the dashboard, and
+                // running TextCase over it afterwards means we never spend a
+                // capitalisation decision on text nobody is going to see.
+                !album.isNullOrBlank() -> TextCase.tidy(AlbumNames.shorten(album))
                 else -> return null
             }
             return if (includeYear && year != null) "$name [$year]" else name
