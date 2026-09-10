@@ -107,34 +107,6 @@
                 android:textAppearance="?attr/textAppearanceLabelSmall" />
         </LinearLayout>
 
-        <!--
-            Ta sama nastawa jakosci, co na ekranie odtwarzania - stukniecie
-            otwiera ten sam dialog wyboru strumienia (StreamPicker).
-        -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/bitrate"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="4dp"
-            android:ellipsize="end"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:maxLines="1"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="2dp"
-            android:textAppearance="?attr/textAppearanceLabelSmall"
-            android:textSize="11sp"
-            android:visibility="gone"
-            app:cornerRadius="10dp"
-            app:icon="@drawable/ic_expand_more"
-            app:iconGravity="end"
-            app:iconPadding="2dp"
-            app:iconSize="12dp"
-            app:iconTint="?attr/colorOnSurfaceVariant" />
-
         <ImageButton
             android:id="@+id/playPause"
             android:layout_width="52dp"

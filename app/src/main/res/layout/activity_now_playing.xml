@@ -64,14 +64,30 @@
         android:textAppearance="?attr/textAppearanceHeadlineMedium"
         android:textStyle="bold" />
 
+    <!--
+        Tytul utworu bywa dlugi, ale rzadko - ze 183 tytulow zmierzonych
+        10.09.2026 mediana to 32 znaki, a dopiero ogon (49 powyzej 40 znakow)
+        robi klopot. Wiec tak samo jak przy nazwie stacji: kurczymy czcionke
+        i pozwalamy na trzecia linie, zamiast ciac.
+
+        Ellipsize jest tu wazniejszy niz gdzie indziej, bo bez niego TextView
+        ucinal tekst w polowie slowa i bez zadnego znaku, ze cos zostalo
+        uciete - "...Concerto en mi mineur (SBI" wyglada jak uszkodzony
+        tytul, a nie jak tytul za dlugi na ekran.
+    -->
     <TextView
         android:id="@+id/songTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="24dp"
         android:layout_marginTop="8dp"
+        android:autoSizeMaxTextSize="24sp"
+        android:autoSizeMinTextSize="14sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
+        android:ellipsize="end"
         android:gravity="center"
-        android:maxLines="2"
+        android:maxLines="3"
         android:textAppearance="?attr/textAppearanceHeadlineSmall" />
 
     <!--

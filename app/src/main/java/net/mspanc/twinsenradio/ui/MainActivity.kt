@@ -370,18 +370,10 @@ class MainActivity : AppCompatActivity() {
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause
             else android.R.drawable.ic_media_play
         )
-
-        val variants = station?.variants().orEmpty()
-        val chosen = station?.let { prefs.selectedStream(it.id) } ?: variants.maxByOrNull { it.kbps }?.url
-        val current = variants.firstOrNull { it.url == chosen } ?: variants.firstOrNull()
-        val label = current?.kbpsLabel(PlaybackStatusBus.qualityKbps.value)
-        if (station == null || label == null) {
-            b.bitrate.visibility = android.view.View.GONE
-        } else {
-            b.bitrate.showQuality(label, variants) {
-                StreamPicker.show(this, station, prefs) { renderMiniPlayer() }
-            }
-        }
+        // Bitrate is deliberately not here. The bar has room for three lines of
+        // text and a button, and a quality chip in the middle of it took width
+        // from the station name for information nobody reads in passing. It
+        // lives on the playback screen, where there is space to ask for it.
     }
 
     private fun askForNotificationPermission() {
