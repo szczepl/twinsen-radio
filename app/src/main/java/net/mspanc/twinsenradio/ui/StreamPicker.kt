@@ -1,6 +1,8 @@
 package net.mspanc.twinsenradio.ui
 
 import android.content.Context
+import android.view.View
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.Prefs
@@ -24,6 +26,32 @@ fun StreamVariant.kbpsLabel(liveKbps: Int? = null): String? =
  * suffixes like "— fallback" or "— high quality" - that's a judgment, not a fact about the stream.
  */
 fun StreamVariant.plainLabel(): String = label.substringBefore('—').trim()
+
+/**
+ * Dresses the quality chip on the playback screen and on the mini-player bar.
+ *
+ * The arrow is a promise that tapping opens a list of variants. A station with
+ * a single stream has no list - [StreamPicker.show] returns without doing
+ * anything at all - so on those the arrow pointed at nothing and the tap did
+ * nothing. The bitrate itself is still worth reading, so the chip stays and
+ * loses only the arrow and the tap.
+ */
+fun MaterialButton.showQuality(label: String, variants: List<StreamVariant>, onPick: () -> Unit) {
+    visibility = View.VISIBLE
+    text = label
+    if (variants.size > 1) {
+        setIconResource(R.drawable.ic_expand_more)
+        setOnClickListener { onPick() }
+        isClickable = true
+    } else {
+        // Both halves matter: the icon has to be cleared because this runs
+        // again on every station change, and isClickable because a listener
+        // set to null still leaves a MaterialButton rippling under a finger.
+        icon = null
+        setOnClickListener(null)
+        isClickable = false
+    }
+}
 
 /**
  * The same stream selection dialog on the playback screen and on the

@@ -378,9 +378,7 @@ class MainActivity : AppCompatActivity() {
         if (station == null || label == null) {
             b.bitrate.visibility = android.view.View.GONE
         } else {
-            b.bitrate.visibility = android.view.View.VISIBLE
-            b.bitrate.text = label
-            b.bitrate.setOnClickListener {
+            b.bitrate.showQuality(label, variants) {
                 StreamPicker.show(this, station, prefs) { renderMiniPlayer() }
             }
         }

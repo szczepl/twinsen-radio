@@ -116,9 +116,7 @@ class NowPlayingActivity : AppCompatActivity() {
             b.bitrate.visibility = android.view.View.GONE
             return
         }
-        b.bitrate.visibility = android.view.View.VISIBLE
-        b.bitrate.text = label
-        b.bitrate.setOnClickListener {
+        b.bitrate.showQuality(label, variants) {
             StreamPicker.show(this, station, prefs) { renderBitrate(station) }
         }
     }
