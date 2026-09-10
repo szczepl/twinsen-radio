@@ -45,6 +45,9 @@
     <string name="info_homepage">Strona stacji</string>
     <string name="info_streams">Strumień</string>
     <string name="info_streams_note">Domyślnie gra wariant o najwyższej jakości. Wybór jest zapamiętywany dla tej stacji.</string>
+    <string name="info_own_name">Nazwa własna</string>
+    <string name="info_own_name_note">Puste pole przywraca nazwę z katalogu, skróconą automatycznie. Nazwę widać na liście, w Android Auto i na desce rozdzielczej.</string>
+    <string name="info_catalog_name">W katalogu: %1$s</string>
     <string name="info_custom_stream">Własny adres strumienia</string>
     <string name="info_custom_stream_note">Wpisany tutaj adres ma pierwszeństwo przed powyższymi — działa też dla stacji wbudowanych. Puste pole przywraca wybór z listy.</string>
     <string name="info_change_logo">Zmień logo stacji…</string>

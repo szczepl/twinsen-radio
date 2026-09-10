@@ -215,7 +215,14 @@ class Prefs(context: Context) {
             arr.put(
                 JSONObject()
                     .put("id", s.id)
-                    .put("name", s.name)
+                    // "name" always stays what the catalog said. Shortening
+                    // happens on the way out, in readDiscovered, so a rule we
+                    // improve later re-applies to stations added long ago -
+                    // and a bad shortening can never eat the original.
+                    .put("name", s.catalogName ?: s.name)
+                    // Only a name the user typed goes in here. Absent means
+                    // "whatever the rule makes of it".
+                    .put("nazwaWlasna", if (s.renamed) s.name else "")
                     .put("genre", s.genre)
                     .put("stream", s.stream)
                     .put("streams", variants)
@@ -223,7 +230,34 @@ class Prefs(context: Context) {
             )
         }
         sp.edit { putString(KEY_DISCOVERED, arr.toString()) }
-        _discovered.value = list
+        // Read back rather than publishing `list`: what everyone else sees must
+        // be what a fresh start would give them, shortened names and all.
+        // Publishing the raw list left a station called one thing until the
+        // next launch and another thing afterwards.
+        _discovered.value = readDiscovered()
+    }
+
+    /**
+     * Gives a catalog station a name of the user's own, or - with a blank
+     * [name] - hands it back to [StationNames]. The catalog's own wording is
+     * never overwritten, so this is always reversible.
+     */
+    fun renameDiscovered(stationId: String, name: String) {
+        val wanted = name.trim()
+        saveDiscovered(
+            discovered.map { s ->
+                if (s.id != stationId) {
+                    s
+                } else {
+                    val catalog = s.catalogName ?: s.name
+                    if (wanted.isEmpty()) {
+                        s.copy(name = catalog, catalogName = null, renamed = false)
+                    } else {
+                        s.copy(name = wanted, catalogName = catalog, renamed = true)
+                    }
+                }
+            }
+        )
     }
 
     private fun readDiscovered(): List<Station> = runCatching {
@@ -241,14 +275,19 @@ class Prefs(context: Context) {
                     )
                 }
             }.orEmpty()
+            val catalog = o.getString("name")
+            val own = o.optString("nazwaWlasna").ifBlank { null }
+            val display = own ?: StationNames.shorten(catalog)
             Station(
                 id = o.getString("id"),
-                name = o.getString("name"),
+                name = display,
                 genre = o.optString("genre", "Z sieci"),
                 stream = o.getString("stream"),
                 streams = variants,
                 logoUrl = o.optString("logoUrl").ifBlank { null },
-                source = Station.Source.DISCOVERED
+                source = Station.Source.DISCOVERED,
+                catalogName = catalog.takeIf { it != display },
+                renamed = own != null
             )
         }
     }.getOrElse { emptyList() }

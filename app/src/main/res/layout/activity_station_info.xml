@@ -128,6 +128,40 @@
 
                     <View style="@style/SectionDivider" />
 
+                    <!--
+                        Nazwa wlasna dotyczy tylko stacji z katalogu - wbudowane
+                        maja nazwy pisane recznie i krotkie. Cala trojka znika
+                        razem, stad osobne identyfikatory.
+                    -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/ownNameBox"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/info_own_name">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/ownName"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textCapWords"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <TextView
+                        android:id="@+id/catalogName"
+                        style="@style/SettingNote"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/ownNameNote"
+                        style="@style/SettingNote"
+                        android:text="@string/info_own_name_note" />
+
+                    <View
+                        android:id="@+id/ownNameDivider"
+                        style="@style/SectionDivider" />
+
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"

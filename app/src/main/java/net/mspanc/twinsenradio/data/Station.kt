@@ -27,6 +27,11 @@ data class StreamVariant(
  */
 data class Station(
     val id: String,
+    /**
+     * What to show, everywhere - the list, the browse tree, the dashboard.
+     * Always ready to use; for a catalog station it has already been through
+     * [StationNames] or replaced by whatever the user renamed it to.
+     */
     val name: String,
     val genre: String,
     val stream: String,
@@ -34,7 +39,16 @@ data class Station(
     val streams: List<StreamVariant> = emptyList(),
     val logo: String? = null,
     val logoUrl: String? = null,
-    val source: Source = Source.BUILT_IN
+    val source: Source = Source.BUILT_IN,
+    /**
+     * The name exactly as radio-browser gave it, when [name] no longer matches
+     * it. Only the station's details screen shows this - it's the answer to
+     * "why is this station called that", and the thing to fall back on if a
+     * rename turns out worse than the original.
+     */
+    val catalogName: String? = null,
+    /** Whether [name] is one the user typed, as opposed to one we shortened. */
+    val renamed: Boolean = false
 ) {
     enum class Source {
         BUILT_IN,

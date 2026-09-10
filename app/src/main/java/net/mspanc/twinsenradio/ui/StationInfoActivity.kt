@@ -128,6 +128,7 @@ class StationInfoActivity : AppCompatActivity() {
         b.btnProbe.setOnClickListener { probe() }
         renderStreams()
         b.customStream.setText(prefs.customStream(station.id).orEmpty())
+        renderOwnName()
         b.logo.setOnClickListener { pickLogo.launch("image/*") }
 
         val homepage = intent.getStringExtra(EXTRA_HOMEPAGE)
@@ -333,9 +334,47 @@ class StationInfoActivity : AppCompatActivity() {
             getString(if (fav) R.string.fav_remove else R.string.fav_add)
     }
 
+    /**
+     * The rename field, and underneath it what the catalog actually calls this
+     * station.
+     *
+     * Showing the original matters: the name on the list has usually been
+     * shortened by [StationNames], and without this line there is no way to
+     * tell a shortening from a name somebody typed - nor to copy the original
+     * back if the rule guessed wrong.
+     */
+    private fun renderOwnName() {
+        val editable = station.source == Station.Source.DISCOVERED && station.id.isNotBlank()
+        val visibility = if (editable) android.view.View.VISIBLE else android.view.View.GONE
+        b.ownNameBox.visibility = visibility
+        b.ownNameNote.visibility = visibility
+        b.ownNameDivider.visibility = visibility
+        if (!editable) {
+            b.catalogName.visibility = android.view.View.GONE
+            return
+        }
+        b.ownName.setText(if (station.renamed) station.name else "")
+        val catalog = station.catalogName
+        b.catalogName.visibility = if (catalog == null) {
+            android.view.View.GONE
+        } else {
+            b.catalogName.text = getString(R.string.info_catalog_name, catalog)
+            android.view.View.VISIBLE
+        }
+    }
+
     override fun onPause() {
         saveCustomStream()
+        saveOwnName()
         super.onPause()
+    }
+
+    private fun saveOwnName() {
+        if (station.source != Station.Source.DISCOVERED || station.id.isBlank()) return
+        val typed = b.ownName.text?.toString()?.trim().orEmpty()
+        val current = if (station.renamed) station.name else ""
+        if (typed == current) return
+        prefs.renameDiscovered(station.id, typed)
     }
 
     private fun saveCustomStream() {

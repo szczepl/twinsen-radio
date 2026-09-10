@@ -102,6 +102,40 @@ class RadioService : MediaLibraryService() {
     /** Watches whether the track description has gone stale because the station announced nothing. */
     private var staleJob: Job? = null
 
+    /**
+     * When the current description stops being believable, on the monotonic
+     * clock; 0 means nothing is armed.
+     *
+     * A deadline rather than a timer, because the way this app is actually used
+     * has the phone asleep in a pocket with the radio on the head unit, and a
+     * coroutine `delay` in Doze fires minutes late - measured at five to eight
+     * on the 09-10.09.2026 traces. Being late does no harm as long as nobody is
+     * reading: what matters is that the description is right at the moment
+     * something starts reading it again, and every such moment already passes
+     * through [refreshCurrentMetadata]. [staleJob] stays on as one more trigger,
+     * for when nothing else wakes us.
+     */
+    private var staleAtMs = 0L
+
+    /** What [staleAtMs] was worked out from - only the trace reads it. */
+    private var staleBasis: String? = null
+
+    /** The track [staleAtMs] belongs to, so a late check can't clear a newer one. */
+    private var staleForRaw: String? = null
+
+    /**
+     * Whether we joined the current track partway through, with no way of
+     * knowing how far.
+     *
+     * True right after a station change or a reconnect, because the server
+     * dumps whatever `StreamTitle` is current the moment we attach - on
+     * 09-10.09.2026 four of Smooth FM's five opening blocks arrived within
+     * three seconds of connecting, mid-song every time. ICY carries no position
+     * in the track, so until the station announces a change we have actually
+     * witnessed, a catalog length says nothing about how much is left.
+     */
+    private var positionUnknown = true
+
     /** Holds back the first description of a freshly started station - see [publish]. */
     private var settleJob: Job? = null
 
@@ -185,6 +219,10 @@ class RadioService : MediaLibraryService() {
 
         reconnect = ReconnectController(this, player) { status ->
             Trace.write("net") { put("status", status.name) }
+            // A dropped stream means the next block will be a fresh server dump
+            // of whatever is playing by then - mid-track again, just as at a
+            // station change.
+            if (status == ReconnectController.Status.RECONNECTING) positionUnknown = true
             PlaybackStatusBus.setStatus(
                 when (status) {
                     ReconnectController.Status.RECONNECTING -> PlaybackStatusBus.Status.RECONNECTING
@@ -470,7 +508,24 @@ class RadioService : MediaLibraryService() {
         // The title alone isn't enough to detect a repeat: ads have an empty
         // title, and different insertions only differ in their adId fields.
         val fingerprint = title + "|" + rawBlock.orEmpty()
-        if (fingerprint == lastRawIcyTitle) return
+        if (fingerprint == lastRawIcyTitle) {
+            // A block identical to the last one changes nothing on screen, but
+            // it is not nothing: the station is alive and still naming this
+            // track. Smooth FM re-sent "Paula Abdul - Straight Up" 242s after
+            // the first copy on 10.09.2026. Until now this returned before
+            // Trace.write, so repeats were invisible in the file and only ever
+            // showed up in logcat - which is why nobody could tell whether they
+            // mean "still playing" or "nothing new to say". Recorded, not acted
+            // on: whether a repeat should push the stale deadline out depends on
+            // whether stations also repeat during ad blocks, and that is a
+            // question for the trace, not for a guess here.
+            Trace.write("icy-powtorka") {
+                put("blok", rawBlock)
+                put("poStacji", sinceStationMs())
+                put("poPoprzednim", if (lastIcyAtMs == 0L) null else System.currentTimeMillis() - lastIcyAtMs)
+            }
+            return
+        }
         lastRawIcyTitle = fingerprint
 
         // The gap between ICY blocks is something we don't know about stations:
@@ -481,6 +536,12 @@ class RadioService : MediaLibraryService() {
         val sinceLast = gapMs?.div(1000) ?: -1
         lastIcyAtMs = nowMs
         Log.i(TAG_ICY, "po ${sinceLast}s | StreamTitle='$title'")
+
+        // The first block of a station (or of a fresh connection after a drop)
+        // is the server telling us what is already playing; every block after
+        // it is a change we saw happen. That difference is the whole basis of
+        // the stale deadline - see [positionUnknown].
+        if (gapMs != null) positionUnknown = false
 
         val stationName = player.currentMediaItem?.mediaId?.let { repo.byMediaId(it)?.name }
         val now = NowPlaying.parse(title, stationName, rawBlock)
@@ -504,6 +565,25 @@ class RadioService : MediaLibraryService() {
             put("reklama", now?.isAd)
             put("znacznik", now?.isControlMarker)
             put("prawdziwy", now?.isRealSong)
+            put("pominiete", now == null)
+        }
+
+        // An empty StreamTitle with no ad marker is the only thing NowPlaying.parse
+        // returns null for, and it means the station had nothing to say - not that
+        // nothing is playing. Treating the two as one wiped a description in the
+        // middle of a song: on 10.09.2026 Smooth FM sent an empty block 55s into
+        // "Boyzone - A Picture Of You" (3:26 long) and the dashboard sat on the
+        // station name for three minutes until the next track was announced.
+        //
+        // So we record it and leave the screen and the deadline exactly as they
+        // are. Deciding that a track is over is the stale deadline's job, and it
+        // works from how long the track runs rather than from a station's silence.
+        // A station that really has stopped playing music says so - RMF marks its
+        // ads, and an empty title arrives there alongside adw_ad, which parses to
+        // an ad and not to null.
+        if (now == null) {
+            Log.i(TAG_ICY, "pusty blok bez znacznika reklamy - zostawiam opis bez zmian")
+            return
         }
         publish(now)
     }
@@ -599,45 +679,114 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Cleans up after a track whose end was never announced.
+     * Arms the deadline after which a track whose end was never announced stops
+     * being shown.
      *
      * RMF can enter an ad block without any ICY event - the screen would then
      * keep a title from several minutes ago, because we had no signal that
-     * anything had changed. Instead of guessing with a fixed limit, we use the
-     * track length from the catalog: if a song is 3:20 long, by 4:20 it's
-     * certainly no longer playing. When we don't know the length, we assume
-     * [FALLBACK_TRACK_MS].
+     * anything had changed. How long to wait depends on what we actually know,
+     * and the three cases below used to be treated as one, which is how a
+     * station name ended up over the middle of a song.
      */
     private fun scheduleStaleCheck(now: NowPlaying?) {
         staleJob?.cancel()
+        staleAtMs = 0L
+        staleBasis = null
+        staleForRaw = null
         if (now?.isRealSong != true) return
 
-        val known = trackInfo?.durationMs ?: 0
-        val timeout = (if (known > 0) known else FALLBACK_TRACK_MS) + STALE_GRACE_MS
+        val catalogMs = trackInfo?.durationMs ?: 0
+        val (budget, basis) = when {
+            // We joined this track partway through and the stream won't say how
+            // far, so its length tells us nothing about what is left. Whatever
+            // we pick here is a guess; we make it a generous one, because taking
+            // a correct description off the screen is worse than leaving a
+            // finished one up a while longer.
+            positionUnknown -> FALLBACK_TRACK_MS to "pozycja-nieznana"
+            // A length below any radio edit means the catalog matched a
+            // different release, not that the song is short. "Stayin' Alive"
+            // came back as a 1:33 soundtrack cut on 09.09.2026 and wiped the
+            // description two minutes into a song that was still playing.
+            catalogMs in 1 until MIN_TRACK_MS -> MIN_TRACK_MS to "katalog-za-krotki"
+            catalogMs > 0 -> catalogMs to "katalog"
+            else -> FALLBACK_TRACK_MS to "bez-dlugosci"
+        }
+
+        val timeout = budget + STALE_GRACE_MS
+        staleAtMs = SystemClock.elapsedRealtime() + timeout
+        staleBasis = basis
+        staleForRaw = now.raw
+        // Which of the three cases we landed in, and on what number. Without it
+        // the expiry showed up in the trace as an ordinary "icy" push, and the
+        // only way to tell them apart was to correlate timestamps by hand.
+        Trace.write("termin") {
+            put("utwor", now.raw)
+            put("podstawa", basis)
+            put("dlugoscKatalog", catalogMs)
+            put("zaMs", timeout)
+        }
         staleJob = scope.launch {
             delay(timeout)
-            if (PlaybackStatusBus.nowPlaying.value?.raw != now.raw) return@launch
-            Log.i(
-                TAG_ICY,
-                "utwor '${now.raw}' powinien byc juz po ${timeout / 1000}s - " +
-                    "stacja nic nie przyslala, czyszcze opis"
-            )
-            // If the station has ever given its slogan, it's better to show it
-            // than an empty line - RNS has "Pion i poziom!", RMF "FAKTY" during the news.
-            val slogan = lastSlogan
-            if (slogan != null) {
-                apply(
-                    NowPlaying(
-                        raw = slogan,
-                        artist = null,
-                        songTitle = slogan,
-                        isStationSelfTitle = true
-                    )
-                )
-            } else {
-                apply(null)
-            }
+            checkStale("licznik")
         }
+    }
+
+    /**
+     * Drops a description whose track must be over by now, if it is time.
+     *
+     * Called from [refreshCurrentMetadata] - that is, from every point where
+     * something is about to read what we show - rather than from the timer
+     * alone. See [staleAtMs] for why a timer on its own isn't enough.
+     *
+     * @return whether it fired. A caller that gets `true` has nothing left to
+     *   send: [apply] has already pushed a complete fresh set.
+     */
+    private fun checkStale(trigger: String): Boolean {
+        val deadline = staleAtMs
+        if (deadline == 0L) return false
+        val late = SystemClock.elapsedRealtime() - deadline
+        if (late < 0) return false
+
+        val expired = staleForRaw
+        // Something newer is already on screen - the deadline outlived what it
+        // was armed for and has nothing left to clear.
+        if (PlaybackStatusBus.nowPlaying.value?.raw != expired) {
+            staleAtMs = 0L
+            return false
+        }
+
+        Log.i(TAG_ICY, "utwor '$expired' powinien byc juz po - czyszcze opis ($trigger)")
+        Trace.write("przeterminowanie") {
+            put("utwor", expired)
+            put("podstawa", staleBasis)
+            put("wyzwalacz", trigger)
+            // How far past the deadline we actually got. On a sleeping phone
+            // this runs into minutes, and that number is the whole reason the
+            // check doesn't live in the timer.
+            put("spoznienie", late)
+        }
+        // Cleared before apply(), which refreshes the metadata and so re-enters
+        // this function: the second call sees no deadline and returns at once.
+        staleAtMs = 0L
+        staleBasis = null
+        staleForRaw = null
+
+        // If the station has ever given its slogan, it's better to show it
+        // than an empty line - RNS has "Pion i poziom!", RMF "FAKTY" during the news.
+        val slogan = lastSlogan
+        if (slogan != null) {
+            apply(
+                NowPlaying(
+                    raw = slogan,
+                    artist = null,
+                    songTitle = slogan,
+                    isStationSelfTitle = true
+                )
+            )
+        } else {
+            apply(null)
+        }
+        return true
     }
 
     /**
@@ -652,6 +801,12 @@ class RadioService : MediaLibraryService() {
         coverGeneration++
         coverRevertJob?.cancel()
         staleJob?.cancel()
+        staleAtMs = 0L
+        staleBasis = null
+        staleForRaw = null
+        // Whatever the new station says first describes a track already in
+        // progress, exactly as it did for the one we are leaving.
+        positionUnknown = true
         pendingMarkerJob?.cancel()
         settleJob?.cancel()
         stationAtMs = SystemClock.elapsedRealtime()
@@ -814,6 +969,12 @@ class RadioService : MediaLibraryService() {
         now: NowPlaying? = PlaybackStatusBus.nowPlaying.value,
         why: String = "?"
     ) {
+        // Every refresh is something about to read what we show, so it is also
+        // the moment to ask whether it is still true. Returning here is not an
+        // optimisation: `now` was captured before this line, so carrying on
+        // would push the description checkStale has just retired.
+        if (checkStale(why)) return
+
         val index = player.currentMediaItemIndex
         val item = player.currentMediaItem ?: return
         val station = repo.byMediaId(item.mediaId) ?: return
@@ -1052,6 +1213,17 @@ class RadioService : MediaLibraryService() {
                 put("pakiet", controller.packageName)
                 put("wersja", controller.controllerVersion)
             }
+            // A controller attaching is the head unit starting to read us again,
+            // and after a stretch of Doze what it would read may be minutes out
+            // of date. This is the most important of the stale checks: the phone
+            // slept through the deadline precisely because nobody was looking,
+            // and now somebody is.
+            //
+            // Posted, not launched: the scope runs on Main.immediate, which on
+            // this thread would run the check inside onConnect and hand the
+            // player a new media item before we have returned the controller its
+            // connection result. The post puts it after that.
+            clockHandler.post { checkStale("klient") }
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
                 .add(CMD_TOGGLE_DIAG)
@@ -1475,6 +1647,17 @@ class RadioService : MediaLibraryService() {
 
         /** Assumed track length when the catalog doesn't know it. */
         private const val FALLBACK_TRACK_MS = 5 * 60_000L
+
+        /**
+         * Shortest catalog length we're willing to believe.
+         *
+         * Below this the number is evidence that the lookup matched a different
+         * release, not that a short song is playing - radio simply doesn't play
+         * anything this brief. "Stayin' Alive" matched a 1:33 soundtrack cut,
+         * and the description came off the screen two minutes into a song that
+         * had another two and a half to run.
+         */
+        private const val MIN_TRACK_MS = 150_000L
 
         /**
          * Margin added to the track length before we consider the description stale.
