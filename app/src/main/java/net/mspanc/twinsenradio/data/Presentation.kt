@@ -35,17 +35,19 @@ enum class LineContent(val label: String) {
     EMPTY("Puste"),
     SLOGAN("Slogan stacji"),
     DATE("Data"),
-    CLOCK_DATE("Godzina · data");
+    CLOCK_DATE("Godzina · data"),
+    ALBUM("Płyta");
 
     /**
      * The things this entry actually puts on the line.
      *
-     * Some entries are composites - "Godzina · data" is two of them, "Wykonawca
-     * · tytuł" is two more - and two entries can therefore overlap without
-     * being equal. Pairing "Godzina · data" with "Data" printed the date twice
-     * (seen on the phone, 11.09.2026), which looks like a fault rather than a
-     * layout. The picker uses this to offer, as the second half of a line, only
-     * what the first half isn't already saying.
+     * Every entry still on offer is now a single part, so this reduces to
+     * equality - but it is what got us there. The retired composites were two
+     * parts each and collided with their own halves without equalling them:
+     * pairing "Godzina · data" with "Data" printed the date twice (seen on the
+     * phone, 11.09.2026), which reads as a fault rather than a layout. The rule
+     * stays because it is what keeps the list of offered entries honest if one
+     * of them ever grows a second part again.
      */
     val parts: Set<Part>
         get() = when (this) {
@@ -59,6 +61,7 @@ enum class LineContent(val label: String) {
             SLOGAN -> setOf(Part.SLOGAN)
             DATE -> setOf(Part.DATE)
             CLOCK_DATE -> setOf(Part.CLOCK, Part.DATE)
+            ALBUM -> setOf(Part.ALBUM)
             // Nothing to collide with, which is why it is always on offer.
             EMPTY -> emptySet()
         }
@@ -77,8 +80,7 @@ enum class LineContent(val label: String) {
          * playing song would be stale by definition.
          */
         val WHEN_PLAYING = listOf(
-            TITLE, ARTIST, ARTIST_ALBUM, TITLE_ALBUM,
-            STATION, CLOCK, DATE, EMPTY
+            TITLE, ARTIST, ALBUM, STATION, CLOCK, DATE, EMPTY
         )
 
         /**
@@ -100,14 +102,16 @@ enum class LineContent(val label: String) {
          * the dot; "Godzina · data" always was.
          *
          * Their own redundancy is what forced [overlaps] into existence - they
-         * collided with their halves without equalling them. That machinery
-         * still earns its keep, though: "Wykonawca · płyta" and "Wykonawca" are
-         * a collision nobody can remove, because there is no standalone entry
-         * for the album to split it into.
+         * collided with their halves without equalling them. With [ALBUM] added
+         * as an entry of its own, the last two could go the same way, and every
+         * line is now assembled from parts rather than picked from a list of
+         * pre-joined pairs.
          */
         val RETIRED = mapOf(
             CLOCK_DATE to (CLOCK to DATE),
-            TRACK_FULL to (ARTIST to TITLE)
+            TRACK_FULL to (ARTIST to TITLE),
+            ARTIST_ALBUM to (ARTIST to ALBUM),
+            TITLE_ALBUM to (TITLE to ALBUM)
         )
 
         /**
@@ -119,14 +123,13 @@ enum class LineContent(val label: String) {
             RETIRED[primary]?.let { (a, b) -> LineSpec(a, b) } ?: LineSpec(primary, secondary)
 
         /**
-         * Labels for a picker over [choices]. [ARTIST_ALBUM] and [TITLE_ALBUM]
-         * append the year whenever the catalog knows it and the "add year"
+         * Labels for a picker over [choices]. [ALBUM] appends the year whenever the catalog knows it and the "add year"
          * setting is on - the suffix here just reflects that current setting, so
          * the list doesn't silently promise a year it won't show.
          */
         fun labels(choices: List<LineContent>, includeYear: Boolean): List<String> = choices.map {
             when (it) {
-                ARTIST_ALBUM, TITLE_ALBUM -> it.label + if (includeYear) " (z rokiem)" else " (bez roku)"
+                ALBUM -> it.label + if (includeYear) " (z rokiem)" else " (bez roku)"
                 else -> it.label
             }
         }
@@ -336,7 +339,7 @@ data class Presentation(
          * waste the one free line.
          */
         val DEFAULT_PLAYING = LineSet(
-            top = LineSpec(LineContent.ARTIST_ALBUM),
+            top = LineSpec(LineContent.ARTIST, LineContent.ALBUM),
             middle = LineSpec(LineContent.STATION),
             bottom = LineSpec(LineContent.TITLE)
         )

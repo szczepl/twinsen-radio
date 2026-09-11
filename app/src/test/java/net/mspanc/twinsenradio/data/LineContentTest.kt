@@ -20,7 +20,7 @@ class LineContentTest {
         assertEquals(
             listOf(
                 "TITLE", "ARTIST", "ARTIST_ALBUM", "TITLE_ALBUM", "TRACK_FULL",
-                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE"
+                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE", "ALBUM"
             ),
             LineContent.entries.map { it.name }
         )
@@ -68,13 +68,18 @@ class LineContentTest {
         assertEquals(LineContent.CLOCK.label, labels.first())
     }
 
-    /** The year suffix is a promise about the album lines, and only those. */
+    /**
+     * The year suffix is a promise about the album, and there is exactly one
+     * entry that carries an album now - it used to be spread across two
+     * pre-joined pairs.
+     */
     @Test
-    fun `only the album lines mention the year`() {
+    fun `only the album mentions the year`() {
         val withYear = LineContent.labels(LineContent.WHEN_PLAYING, includeYear = true)
         val withoutYear = LineContent.labels(LineContent.WHEN_PLAYING, includeYear = false)
         val differing = withYear.zip(withoutYear).count { (a, b) -> a != b }
-        assertEquals(2, differing)
+        assertEquals(1, differing)
+        assertTrue(withYear.any { it.startsWith(LineContent.ALBUM.label) })
     }
 
     @Test
@@ -242,8 +247,8 @@ class LineOverlapTest {
 class RetiredCompositeTest {
 
     @Test
-    fun `neither composite is offered any more`() {
-        listOf(LineContent.CLOCK_DATE, LineContent.TRACK_FULL).forEach {
+    fun `no composite is offered any more`() {
+        LineContent.RETIRED.keys.forEach {
             assertFalse("$it gra", it in LineContent.WHEN_PLAYING)
             assertFalse("$it bez utworu", it in LineContent.WHEN_IDLE)
         }
@@ -255,7 +260,7 @@ class RetiredCompositeTest {
         assertEquals(
             listOf(
                 "TITLE", "ARTIST", "ARTIST_ALBUM", "TITLE_ALBUM", "TRACK_FULL",
-                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE"
+                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE", "ALBUM"
             ),
             LineContent.entries.map { it.name }
         )
@@ -291,14 +296,27 @@ class RetiredCompositeTest {
     }
 
     /**
-     * The overlap rule is not left without work: the album entries collide with
-     * their own halves and cannot be split, because there is no entry for the
-     * album on its own.
+     * The point of the whole exercise: a line is assembled from parts, and no
+     * offered entry is a pair of them any more.
      */
     @Test
-    fun `collisions that cannot be split still exist`() {
-        assertTrue(LineContent.ARTIST_ALBUM in LineContent.WHEN_PLAYING)
-        assertTrue(LineContent.ARTIST_ALBUM.overlaps(LineContent.ARTIST))
-        assertTrue(LineContent.TITLE_ALBUM.overlaps(LineContent.ARTIST_ALBUM))
+    fun `every offered entry is a single block`() {
+        (LineContent.WHEN_PLAYING + LineContent.WHEN_IDLE)
+            .filter { it != LineContent.EMPTY }
+            .forEach { assertEquals("$it", 1, it.parts.size) }
+    }
+
+    /** The album became a block of its own, which is what let the last two go. */
+    @Test
+    fun `the album is a block now`() {
+        assertTrue(LineContent.ALBUM in LineContent.WHEN_PLAYING)
+        assertEquals(
+            LineSpec(LineContent.ARTIST, LineContent.ALBUM),
+            LineContent.expandedBy(LineContent.ARTIST_ALBUM, LineContent.EMPTY)
+        )
+        assertEquals(
+            LineSpec(LineContent.TITLE, LineContent.ALBUM),
+            LineContent.expandedBy(LineContent.TITLE_ALBUM, LineContent.EMPTY)
+        )
     }
 }

@@ -242,6 +242,12 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         LineContent.EMPTY -> ""
         LineContent.TITLE -> titleLine(now, title)
         LineContent.ARTIST -> if (now?.isRealSong == true) artist else ""
+        LineContent.ALBUM ->
+            if (now?.isRealSong == true) {
+                info?.albumLabel(prefs.enrichWithYear).orEmpty()
+            } else {
+                ""
+            }
         LineContent.ARTIST_ALBUM ->
             if (now?.isRealSong == true) {
                 composeArtistLine(now, info, prefs.enrichWithYear)
