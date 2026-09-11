@@ -192,6 +192,7 @@ object CoverArtLookup {
         var result = runCatching { query("$a $t".trim()) }
             .onFailure { Log.w(TAG, "iTunes nie odpowiedzial: ${it.message}") }
             .getOrNull()
+            ?.takeIf { TrackMatch.plausible(a, t, it.artistName, it.trackName) }
 
         // iTunes has poor coverage of older Polish repertoire - "Czesław
         // Niemen - Lipowa łyżka" isn't there at all, while MusicBrainz knows
@@ -201,6 +202,7 @@ object CoverArtLookup {
             result = runCatching { queryMusicBrainz(a, t) }
                 .onFailure { Log.w(TAG, "MusicBrainz nie odpowiedzial: ${it.message}") }
                 .getOrNull()
+                ?.takeIf { TrackMatch.plausible(a, t, it.artistName, it.trackName) }
         }
 
         synchronized(cache) { cache[key] = result }
