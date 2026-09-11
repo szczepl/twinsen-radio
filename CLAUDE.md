@@ -143,6 +143,14 @@ the nominal end of a track in 15 of 16 cases and exactly at it once, never
 later. The description now survives an empty `StreamTitle`, a repeated block,
 and a track we joined half way through.
 
+**Closed on 2026-09-11, without an answer:** how many characters the AID
+lines hold. There isn't a number — the cluster font is proportional, so the
+capacity changes with the text. Don't plan a probe for it; plan around
+*three lines, cut from the end*. Also settled that day: the catalogue's
+answer is now checked against the question before its cover art is used
+(iTunes had been handing back its nearest guess), and a description line is
+assembled from single blocks rather than picked from pre-joined pairs.
+
 ---
 
 ## Traps we've already fallen into

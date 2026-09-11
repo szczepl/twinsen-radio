@@ -404,3 +404,21 @@ is what a confident rule ("cut at the first dash") turns into nothing. Hence
 `StationNames`, which removes only an unambiguous codec/bitrate bracket or a
 trailing frequency, and the rename field in the station's details for
 everything else.
+
+### How wide the AID's lines are — not a question with an answer
+
+It kept appearing on the open list, and it does not belong there. The cluster
+draws a **proportional font**: the photograph of 11.09.2026 shows
+"Tylko kochaj mnie" and "18:48 · pt. 11.09" sitting in fields whose capacity in
+characters differs with every word put in them. "IIII" and "mmmm" are the same
+length and nowhere near the same width.
+
+So there is no character count to measure, and a probe with a numbered ruler
+would answer a question nobody can use. What is known is what matters and is
+already known: **three lines, and longer text is cut from the end.**
+
+The consequence is a design rule rather than a measurement. Where two things
+share a line, the second one is kept short — see `MetadataFactory.shortenSecond`
+— because the cut falls at the end, so an over-long second half doesn't lose
+itself, it loses whatever the line was for. The budget there is a judgement
+made against ordinary station names, and it is labelled as one.
