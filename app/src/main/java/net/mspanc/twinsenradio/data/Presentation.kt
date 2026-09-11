@@ -29,13 +29,44 @@ enum class LineContent(val label: String) {
     ARTIST("Wykonawca"),
     ARTIST_ALBUM("Wykonawca · płyta"),
     TITLE_ALBUM("Tytuł · płyta"),
-    TRACK_FULL("Wykonawca — tytuł"),
+    TRACK_FULL("Wykonawca · tytuł"),
     STATION("Nazwa stacji"),
     CLOCK("Godzina"),
     EMPTY("Puste"),
     SLOGAN("Slogan stacji"),
     DATE("Data"),
     CLOCK_DATE("Godzina · data");
+
+    /**
+     * The things this entry actually puts on the line.
+     *
+     * Some entries are composites - "Godzina · data" is two of them, "Wykonawca
+     * · tytuł" is two more - and two entries can therefore overlap without
+     * being equal. Pairing "Godzina · data" with "Data" printed the date twice
+     * (seen on the phone, 11.09.2026), which looks like a fault rather than a
+     * layout. The picker uses this to offer, as the second half of a line, only
+     * what the first half isn't already saying.
+     */
+    val parts: Set<Part>
+        get() = when (this) {
+            TITLE -> setOf(Part.TITLE)
+            ARTIST -> setOf(Part.ARTIST)
+            ARTIST_ALBUM -> setOf(Part.ARTIST, Part.ALBUM)
+            TITLE_ALBUM -> setOf(Part.TITLE, Part.ALBUM)
+            TRACK_FULL -> setOf(Part.ARTIST, Part.TITLE)
+            STATION -> setOf(Part.STATION)
+            CLOCK -> setOf(Part.CLOCK)
+            SLOGAN -> setOf(Part.SLOGAN)
+            DATE -> setOf(Part.DATE)
+            CLOCK_DATE -> setOf(Part.CLOCK, Part.DATE)
+            // Nothing to collide with, which is why it is always on offer.
+            EMPTY -> emptySet()
+        }
+
+    /** Whether putting these two on one line would say something twice. */
+    fun overlaps(other: LineContent): Boolean = parts.any { it in other.parts }
+
+    enum class Part { TITLE, ARTIST, ALBUM, STATION, SLOGAN, CLOCK, DATE }
 
     companion object {
         /**
@@ -125,17 +156,38 @@ enum class ArtContent(val label: String) {
  * between tracks was something you inherited rather than chose.
  */
 data class LineSet(
-    val top: LineContent,
-    val middle: LineContent,
-    val bottom: LineContent
+    val top: LineSpec,
+    val middle: LineSpec,
+    val bottom: LineSpec
 ) {
-    fun contentFor(line: Line): LineContent = when (line) {
+    fun contentFor(line: Line): LineSpec = when (line) {
         Line.TOP -> top
         Line.MIDDLE -> middle
         Line.BOTTOM -> bottom
     }
 
-    fun all(): List<LineContent> = listOf(top, middle, bottom)
+    fun all(): List<LineContent> = listOf(top, middle, bottom).flatMap { it.all() }
+}
+
+/**
+ * One line: up to two things, joined by a dot.
+ *
+ * Three fields is all the head unit gives us, and several of the choices are
+ * short enough to leave most of a line empty - a clock is five characters.
+ * Pairing two of them puts the time and the date, or the station and its
+ * slogan, where one of them used to sit alone.
+ *
+ * [secondary] is [LineContent.EMPTY] by default, and then the line is exactly
+ * what it always was - one thing, no separator. The separator only appears
+ * between two things that are both there; a half-filled pair must not leave a
+ * dot hanging off the end of the text, because on a dashboard that reads as
+ * the line having been cut off.
+ */
+data class LineSpec(
+    val primary: LineContent,
+    val secondary: LineContent = LineContent.EMPTY
+) {
+    fun all(): List<LineContent> = listOf(primary, secondary)
 }
 
 /**
@@ -256,9 +308,9 @@ data class Presentation(
          * waste the one free line.
          */
         val DEFAULT_PLAYING = LineSet(
-            top = LineContent.ARTIST_ALBUM,
-            middle = LineContent.STATION,
-            bottom = LineContent.TITLE
+            top = LineSpec(LineContent.ARTIST_ALBUM),
+            middle = LineSpec(LineContent.STATION),
+            bottom = LineSpec(LineContent.TITLE)
         )
 
         /**
@@ -268,9 +320,9 @@ data class Presentation(
          * the station is saying for itself on the line the AID prints boldest.
          */
         val DEFAULT_IDLE = LineSet(
-            top = LineContent.CLOCK,
-            middle = LineContent.STATION,
-            bottom = LineContent.SLOGAN
+            top = LineSpec(LineContent.CLOCK),
+            middle = LineSpec(LineContent.STATION),
+            bottom = LineSpec(LineContent.SLOGAN)
         )
 
         val DEFAULT = Presentation(

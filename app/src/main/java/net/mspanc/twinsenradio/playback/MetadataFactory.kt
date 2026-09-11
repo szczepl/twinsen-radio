@@ -12,6 +12,7 @@ import net.mspanc.twinsenradio.data.ArtContent
 import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.ClockColors
 import net.mspanc.twinsenradio.data.LineContent
+import net.mspanc.twinsenradio.data.LineSpec
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Station
 import java.io.ByteArrayOutputStream
@@ -140,14 +141,14 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             // what the second set exists to fill.
             val lines = p.setFor(now?.isRealSong == true)
 
-            val top = lineText(lines.top, station, now, trackInfo, title, artist)
-            val bottom = lineText(lines.bottom, station, now, trackInfo, title, artist)
+            val top = lineOf(lines.top, station, now, trackInfo, title, artist)
+            val bottom = lineOf(lines.bottom, station, now, trackInfo, title, artist)
 
             // The middle line is only visible on the AID - the one place where a
             // network warning can go without cluttering the central screen too.
             val middle = when (PlaybackStatusBus.status.value) {
                 PlaybackStatusBus.Status.WAITING_FOR_NETWORK -> context.getString(R.string.aid_waiting_network)
-                else -> lineText(lines.middle, station, now, trackInfo, title, artist)
+                else -> lineOf(lines.middle, station, now, trackInfo, title, artist)
             }
 
             // The fields the head unit actually renders. Measured in the Passat
@@ -191,6 +192,32 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     private fun drawable(line: String): String = line.ifBlank { BLANK }
 
     /**
+     * A whole line: its two halves, joined by a dot.
+     *
+     * The dot appears only between two halves that both have something in them.
+     * A line ending in a dangling separator reads on a dashboard as text that
+     * was cut off, which is a worse lie than a short line.
+     */
+    private fun lineOf(
+        spec: LineSpec,
+        station: Station,
+        now: NowPlaying?,
+        info: CoverArtLookup.TrackInfo?,
+        title: String,
+        artist: String
+    ): String {
+        val first = lineText(spec.primary, station, now, info, title, artist)
+        // The picker won't offer a second half that repeats the first, but a
+        // stored pair can outlive the version that wrote it - and "Godzina ·
+        // data" next to "Data" printed the date twice, which reads as a fault
+        // rather than a layout. Overlap, not equality: the two entries that did
+        // that were never the same entry.
+        if (spec.secondary.overlaps(spec.primary)) return first
+        val second = lineText(spec.secondary, station, now, info, title, artist)
+        return listOf(first, second).filter { it.isNotBlank() }.joinToString(JOIN)
+    }
+
+    /**
      * The content of a single description line.
      *
      * The track-shaped entries still check [NowPlaying.isRealSong] even though
@@ -229,7 +256,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             }
         LineContent.TRACK_FULL ->
             if (now?.isRealSong == true) {
-                listOf(artist, title).filter { it.isNotBlank() }.joinToString(" — ")
+                listOf(artist, title).filter { it.isNotBlank() }.joinToString(JOIN)
             } else {
                 // Outside of a track there's nothing to join - show the same thing as the title line
                 titleLine(now, title)
@@ -400,6 +427,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
         private val DATE_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("EEE d.MM", Locale.forLanguageTag("pl"))
+
+        /** The separator between two halves of a line, and inside a track line. */
+        const val JOIN = " · "
 
         /** An empty line as a value the head unit can draw - see [drawable]. */
         private const val BLANK = "\u00A0"

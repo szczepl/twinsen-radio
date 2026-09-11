@@ -73,15 +73,15 @@ class Prefs(context: Context) {
      * the AID and the head unit screen.
      */
     var lineTop: Int
-        get() = sp.getInt(KEY_LINE_TOP, Presentation.DEFAULT_PLAYING.top.ordinal)
+        get() = sp.getInt(KEY_LINE_TOP, Presentation.DEFAULT_PLAYING.top.primary.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_TOP, v) }
 
     var lineMiddle: Int
-        get() = sp.getInt(KEY_LINE_MIDDLE, Presentation.DEFAULT_PLAYING.middle.ordinal)
+        get() = sp.getInt(KEY_LINE_MIDDLE, Presentation.DEFAULT_PLAYING.middle.primary.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_MIDDLE, v) }
 
     var lineBottom: Int
-        get() = sp.getInt(KEY_LINE_BOTTOM, Presentation.DEFAULT_PLAYING.bottom.ordinal)
+        get() = sp.getInt(KEY_LINE_BOTTOM, Presentation.DEFAULT_PLAYING.bottom.primary.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_BOTTOM, v) }
 
     /**
@@ -94,16 +94,47 @@ class Prefs(context: Context) {
      * [Presentation.DEFAULT_IDLE] for the gaps.
      */
     var lineTopIdle: Int
-        get() = sp.getInt(KEY_LINE_TOP_IDLE, Presentation.DEFAULT_IDLE.top.ordinal)
+        get() = sp.getInt(KEY_LINE_TOP_IDLE, Presentation.DEFAULT_IDLE.top.primary.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_TOP_IDLE, v) }
 
     var lineMiddleIdle: Int
-        get() = sp.getInt(KEY_LINE_MIDDLE_IDLE, Presentation.DEFAULT_IDLE.middle.ordinal)
+        get() = sp.getInt(KEY_LINE_MIDDLE_IDLE, Presentation.DEFAULT_IDLE.middle.primary.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_MIDDLE_IDLE, v) }
 
     var lineBottomIdle: Int
-        get() = sp.getInt(KEY_LINE_BOTTOM_IDLE, Presentation.DEFAULT_IDLE.bottom.ordinal)
+        get() = sp.getInt(KEY_LINE_BOTTOM_IDLE, Presentation.DEFAULT_IDLE.bottom.primary.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_BOTTOM_IDLE, v) }
+
+    /**
+     * The second half of each line - see [LineSpec].
+     *
+     * Absent means [LineContent.EMPTY] for every line that had no second half
+     * before, which is all of them: an upgrade therefore changes nothing until
+     * something is actually picked here.
+     */
+    var lineTop2: Int
+        get() = sp.getInt(KEY_LINE_TOP_2, Presentation.DEFAULT_PLAYING.top.secondary.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_TOP_2, v) }
+
+    var lineMiddle2: Int
+        get() = sp.getInt(KEY_LINE_MIDDLE_2, Presentation.DEFAULT_PLAYING.middle.secondary.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_MIDDLE_2, v) }
+
+    var lineBottom2: Int
+        get() = sp.getInt(KEY_LINE_BOTTOM_2, Presentation.DEFAULT_PLAYING.bottom.secondary.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_BOTTOM_2, v) }
+
+    var lineTopIdle2: Int
+        get() = sp.getInt(KEY_LINE_TOP_IDLE_2, Presentation.DEFAULT_IDLE.top.secondary.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_TOP_IDLE_2, v) }
+
+    var lineMiddleIdle2: Int
+        get() = sp.getInt(KEY_LINE_MIDDLE_IDLE_2, Presentation.DEFAULT_IDLE.middle.secondary.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_MIDDLE_IDLE_2, v) }
+
+    var lineBottomIdle2: Int
+        get() = sp.getInt(KEY_LINE_BOTTOM_IDLE_2, Presentation.DEFAULT_IDLE.bottom.secondary.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_BOTTOM_IDLE_2, v) }
 
     /**
      * What fills the picture slot, per state - see [ArtContent].
@@ -144,14 +175,14 @@ class Prefs(context: Context) {
     val presentation: Presentation
         get() = Presentation(
             playing = LineSet(
-                top = LineContent.at(lineTop),
-                middle = LineContent.at(lineMiddle),
-                bottom = LineContent.at(lineBottom)
+                top = LineSpec(LineContent.at(lineTop), LineContent.at(lineTop2)),
+                middle = LineSpec(LineContent.at(lineMiddle), LineContent.at(lineMiddle2)),
+                bottom = LineSpec(LineContent.at(lineBottom), LineContent.at(lineBottom2))
             ),
             idle = LineSet(
-                top = LineContent.at(lineTopIdle),
-                middle = LineContent.at(lineMiddleIdle),
-                bottom = LineContent.at(lineBottomIdle)
+                top = LineSpec(LineContent.at(lineTopIdle), LineContent.at(lineTopIdle2)),
+                middle = LineSpec(LineContent.at(lineMiddleIdle), LineContent.at(lineMiddleIdle2)),
+                bottom = LineSpec(LineContent.at(lineBottomIdle), LineContent.at(lineBottomIdle2))
             ),
             artPlaying = ArtContent.at(artPlaying),
             artIdle = ArtContent.at(artIdle)
@@ -516,6 +547,12 @@ class Prefs(context: Context) {
         const val KEY_LINE_TOP_IDLE = "line_top_idle"
         const val KEY_LINE_MIDDLE_IDLE = "line_middle_idle"
         const val KEY_LINE_BOTTOM_IDLE = "line_bottom_idle"
+        const val KEY_LINE_TOP_2 = "line_top_2"
+        const val KEY_LINE_MIDDLE_2 = "line_middle_2"
+        const val KEY_LINE_BOTTOM_2 = "line_bottom_2"
+        const val KEY_LINE_TOP_IDLE_2 = "line_top_idle_2"
+        const val KEY_LINE_MIDDLE_IDLE_2 = "line_middle_idle_2"
+        const val KEY_LINE_BOTTOM_IDLE_2 = "line_bottom_idle_2"
         const val KEY_CLOCK_FACE = "clock_face"
         const val KEY_CLOCK_ALWAYS = "clock_cover_always"
         const val KEY_ART_PLAYING = "art_playing"

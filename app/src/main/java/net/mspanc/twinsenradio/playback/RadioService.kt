@@ -43,6 +43,8 @@ import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ContentStyle
 import net.mspanc.twinsenradio.data.Prefs
+import net.mspanc.twinsenradio.data.LineContent
+import net.mspanc.twinsenradio.data.LineSpec
 import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StationRepository
 import net.mspanc.twinsenradio.ui.MainActivity
@@ -155,6 +157,12 @@ class RadioService : MediaLibraryService() {
     /** Last station slogan - shown when we don't know what's currently playing. */
     @Volatile
     private var lastSlogan: String? = null
+
+    /**
+     * When the advert now on air finishes, on the monotonic clock; 0 when none
+     * is known to be running. Only stations that state a duration set it.
+     */
+    private var adEndsAtMs = 0L
 
     /**
      * How many head-unit controllers are attached. A count rather than a flag,
@@ -302,18 +310,29 @@ class RadioService : MediaLibraryService() {
      * to "off". Reading that off the phone weeks later is not an option -
      * by then the settings have moved.
      */
+    /**
+     * One line's setting on one line of the trace: "CLOCK+DATE", or just
+     * "CLOCK" when it carries nothing after the dot.
+     */
+    private fun opis(spec: LineSpec): String =
+        if (spec.secondary == LineContent.EMPTY) {
+            spec.primary.name
+        } else {
+            "${spec.primary.name}+${spec.secondary.name}"
+        }
+
     private fun startTrace() {
         Trace.open(this)
         val p = prefs.presentation
         Trace.write("uklad") {
             // Both layouts, because which one a line came from is the first
             // question the trace gets asked once there are two of them.
-            put("gora", p.playing.top.name)
-            put("srodek", p.playing.middle.name)
-            put("dol", p.playing.bottom.name)
-            put("goraBezUtworu", p.idle.top.name)
-            put("srodekBezUtworu", p.idle.middle.name)
-            put("dolBezUtworu", p.idle.bottom.name)
+            put("gora", opis(p.playing.top))
+            put("srodek", opis(p.playing.middle))
+            put("dol", opis(p.playing.bottom))
+            put("goraBezUtworu", opis(p.idle.top))
+            put("srodekBezUtworu", opis(p.idle.middle))
+            put("dolBezUtworu", opis(p.idle.bottom))
             put("grafika", p.artPlaying.name)
             put("grafikaBezUtworu", p.artIdle.name)
             put("okladka", prefs.artworkMode)
@@ -695,6 +714,13 @@ class RadioService : MediaLibraryService() {
     private fun apply(now: NowPlaying?) {
         now?.slogan?.let { lastSlogan = it }
 
+        // An insertion that states its own length tells us when the music can
+        // resume - and a track announced before that moment has not started
+        // yet. See scheduleStaleCheck for what the figure is used for.
+        if (now?.isAd == true && now.adDurationMs > 0) {
+            adEndsAtMs = SystemClock.elapsedRealtime() + now.adDurationMs
+        }
+
         // Some stations re-announce the very same song's ICY metadata mid-track
         // (a periodic StreamTitle repeat, not an actual track change) - the raw
         // block differs just enough to dodge the fingerprint check in
@@ -759,7 +785,19 @@ class RadioService : MediaLibraryService() {
             else -> FALLBACK_TRACK_MS to "bez-dlugosci"
         }
 
-        val timeout = budget + STALE_GRACE_MS
+        // Stations announce a track before they play it: the metadata arrives
+        // while an ad block is still running, and the song itself starts when
+        // the block ends. Counting from the announcement then runs the
+        // description out early by however long the ads had left.
+        //
+        // RMF says how long its insertion is (durationMilliseconds), so for it
+        // this is arithmetic rather than a guess: the track cannot have started
+        // before the ad finished, so neither may its clock. Stations that don't
+        // mark their ads - Smooth FM, Jacaranda - give us nothing to key off,
+        // and for them the drift stays unmeasured. See FINDINGS.md, section 7.
+        val adLeft = (adEndsAtMs - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+
+        val timeout = budget + STALE_GRACE_MS + adLeft
         staleAtMs = SystemClock.elapsedRealtime() + timeout
         staleBasis = basis
         staleForRaw = now.raw
@@ -771,6 +809,9 @@ class RadioService : MediaLibraryService() {
             put("podstawa", basis)
             put("dlugoscKatalog", catalogMs)
             put("zaMs", timeout)
+            // Non-zero means the track was announced over an ad that was still
+            // running, and the clock was pushed out by what remained of it.
+            put("reklamaZostalo", adLeft)
         }
         staleJob = scope.launch {
             delay(timeout)
@@ -854,6 +895,8 @@ class RadioService : MediaLibraryService() {
         // Whatever the new station says first describes a track already in
         // progress, exactly as it did for the one we are leaving.
         positionUnknown = true
+        // An advert belongs to the station we are leaving.
+        adEndsAtMs = 0L
         pendingMarkerJob?.cancel()
         settleJob?.cancel()
         stationAtMs = SystemClock.elapsedRealtime()

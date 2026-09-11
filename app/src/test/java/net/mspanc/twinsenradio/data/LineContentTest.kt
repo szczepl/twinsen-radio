@@ -121,7 +121,7 @@ class ArtContentTest {
      */
     @Test
     fun `a drawn clock alone still asks for the minute tick`() {
-        val still = LineSet(LineContent.TITLE, LineContent.ARTIST, LineContent.STATION)
+        val still = LineSet(LineSpec(LineContent.TITLE), LineSpec(LineContent.ARTIST), LineSpec(LineContent.STATION))
         val noClockAnywhere = Presentation(still, still, ArtContent.COVER, ArtContent.LOGO)
         assertFalse(noClockAnywhere.needsClock)
 
@@ -131,9 +131,101 @@ class ArtContentTest {
 
     @Test
     fun `each state gets its own picture`() {
-        val still = LineSet(LineContent.TITLE, LineContent.ARTIST, LineContent.STATION)
+        val still = LineSet(LineSpec(LineContent.TITLE), LineSpec(LineContent.ARTIST), LineSpec(LineContent.STATION))
         val p = Presentation(still, still, ArtContent.COVER, ArtContent.CLOCK_DIGITAL)
         assertEquals(ArtContent.COVER, p.artFor(trackPlaying = true))
         assertEquals(ArtContent.CLOCK_DIGITAL, p.artFor(trackPlaying = false))
+    }
+}
+
+/**
+ * Two things on one line, joined by a dot. The pairing exists because the head
+ * unit gives us three fields and some of the choices are five characters long.
+ */
+class LineSpecTest {
+
+    @Test
+    fun `a line with nothing after the dot is a plain single line`() {
+        val spec = LineSpec(LineContent.CLOCK)
+        assertEquals(LineContent.EMPTY, spec.secondary)
+    }
+
+    /** needsClock has to see both halves, or a clock in the second one would freeze. */
+    @Test
+    fun `the second half counts towards the minute tick`() {
+        val still = LineSet(
+            LineSpec(LineContent.TITLE),
+            LineSpec(LineContent.ARTIST),
+            LineSpec(LineContent.STATION)
+        )
+        val p = Presentation(still, still, ArtContent.COVER, ArtContent.LOGO)
+        assertFalse(p.needsClock)
+
+        val withDate = still.copy(top = LineSpec(LineContent.TITLE, LineContent.DATE))
+        assertTrue(p.copy(playing = withDate).needsClock)
+        assertTrue(p.copy(idle = withDate).needsClock)
+    }
+
+    @Test
+    fun `all reports both halves of every line`() {
+        val set = LineSet(
+            LineSpec(LineContent.CLOCK, LineContent.DATE),
+            LineSpec(LineContent.STATION),
+            LineSpec(LineContent.SLOGAN)
+        )
+        assertTrue(LineContent.DATE in set.all())
+        assertTrue(LineContent.SLOGAN in set.all())
+        assertEquals(6, set.all().size)
+    }
+}
+
+/**
+ * Two entries can say the same thing without being the same entry, and putting
+ * both on one line prints it twice.
+ */
+class LineOverlapTest {
+
+    @Test
+    fun `a composite overlaps its parts`() {
+        assertTrue(LineContent.CLOCK_DATE.overlaps(LineContent.CLOCK))
+        assertTrue(LineContent.CLOCK_DATE.overlaps(LineContent.DATE))
+        assertTrue(LineContent.DATE.overlaps(LineContent.CLOCK_DATE))
+        assertTrue(LineContent.TRACK_FULL.overlaps(LineContent.ARTIST))
+        assertTrue(LineContent.TRACK_FULL.overlaps(LineContent.TITLE))
+        assertTrue(LineContent.ARTIST_ALBUM.overlaps(LineContent.TITLE_ALBUM))
+    }
+
+    @Test
+    fun `unrelated entries do not overlap`() {
+        assertFalse(LineContent.CLOCK.overlaps(LineContent.DATE))
+        assertFalse(LineContent.STATION.overlaps(LineContent.SLOGAN))
+        assertFalse(LineContent.ARTIST.overlaps(LineContent.TITLE))
+        assertFalse(LineContent.CLOCK_DATE.overlaps(LineContent.STATION))
+    }
+
+    /** Nothing collides with nothing, which is why it is always selectable. */
+    @Test
+    fun `empty never overlaps`() {
+        LineContent.entries.forEach {
+            assertFalse("$it", LineContent.EMPTY.overlaps(it))
+            assertFalse("$it", it.overlaps(LineContent.EMPTY))
+        }
+    }
+
+    /** Everything says something, except the one entry that says nothing. */
+    @Test
+    fun `every entry declares its parts`() {
+        LineContent.entries.filter { it != LineContent.EMPTY }
+            .forEach { assertTrue("$it", it.parts.isNotEmpty()) }
+    }
+
+    /** The default layouts must not be caught by their own rule. */
+    @Test
+    fun `no default line says anything twice`() {
+        listOf(Presentation.DEFAULT_PLAYING, Presentation.DEFAULT_IDLE).forEach { set ->
+            listOf(set.top, set.middle, set.bottom).forEach {
+                assertFalse("$it", it.secondary.overlaps(it.primary))
+            }
+        }
     }
 }

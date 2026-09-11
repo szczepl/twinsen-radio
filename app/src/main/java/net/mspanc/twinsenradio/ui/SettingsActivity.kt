@@ -31,7 +31,7 @@ class SettingsActivity : AppCompatActivity() {
     /** The selected index of each list - MaterialAutoCompleteTextView holds text, not a position. */
     private val chosen = HashMap<Int, Int>()
 
-    /** Which LineContent values each line dropdown offers - see [bindLine]. */
+    /** Which LineContent values each line dropdown offers - see [bindChoices]. */
     private val lineChoices = HashMap<Int, List<LineContent>>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,19 +46,18 @@ class SettingsActivity : AppCompatActivity() {
         // Labels and hints come from the Line enum, so the row descriptions
         // aren't duplicated in two places.
         b.swEnrich.isChecked = prefs.enrichWithYear
-        bindLine(b.tilLineTop, b.ddLineTop, Line.TOP, LineContent.WHEN_PLAYING, prefs.lineTop)
-        bindLine(b.tilLineMiddle, b.ddLineMiddle, Line.MIDDLE, LineContent.WHEN_PLAYING, prefs.lineMiddle)
-        bindLine(b.tilLineBottom, b.ddLineBottom, Line.BOTTOM, LineContent.WHEN_PLAYING, prefs.lineBottom)
-        bindLine(b.tilLineTopIdle, b.ddLineTopIdle, Line.TOP, LineContent.WHEN_IDLE, prefs.lineTopIdle)
-        bindLine(b.tilLineMiddleIdle, b.ddLineMiddleIdle, Line.MIDDLE, LineContent.WHEN_IDLE, prefs.lineMiddleIdle)
-        bindLine(b.tilLineBottomIdle, b.ddLineBottomIdle, Line.BOTTOM, LineContent.WHEN_IDLE, prefs.lineBottomIdle)
+        bindPair(b.tilLineTop, b.ddLineTop, b.ddLineTop2, Line.TOP, LineContent.WHEN_PLAYING, prefs.lineTop, prefs.lineTop2)
+        bindPair(b.tilLineMiddle, b.ddLineMiddle, b.ddLineMiddle2, Line.MIDDLE, LineContent.WHEN_PLAYING, prefs.lineMiddle, prefs.lineMiddle2)
+        bindPair(b.tilLineBottom, b.ddLineBottom, b.ddLineBottom2, Line.BOTTOM, LineContent.WHEN_PLAYING, prefs.lineBottom, prefs.lineBottom2)
+        bindPair(b.tilLineTopIdle, b.ddLineTopIdle, b.ddLineTopIdle2, Line.TOP, LineContent.WHEN_IDLE, prefs.lineTopIdle, prefs.lineTopIdle2)
+        bindPair(b.tilLineMiddleIdle, b.ddLineMiddleIdle, b.ddLineMiddleIdle2, Line.MIDDLE, LineContent.WHEN_IDLE, prefs.lineMiddleIdle, prefs.lineMiddleIdle2)
+        bindPair(b.tilLineBottomIdle, b.ddLineBottomIdle, b.ddLineBottomIdle2, Line.BOTTOM, LineContent.WHEN_IDLE, prefs.lineBottomIdle, prefs.lineBottomIdle2)
         // The "· album" options' labels spell out whether they'll carry a year -
         // keep that in sync with the switch without losing what's already picked.
         // Only the playing set has those entries; the other list is unaffected.
         b.swEnrich.setOnCheckedChangeListener { _, checked ->
-            listOf(b.ddLineTop, b.ddLineMiddle, b.ddLineBottom).forEach {
-                bind(it, LineContent.labels(LineContent.WHEN_PLAYING, checked), pick(it))
-            }
+            listOf(b.ddLineTop, b.ddLineMiddle, b.ddLineBottom, b.ddLineTop2, b.ddLineMiddle2, b.ddLineBottom2)
+                .forEach { bind(it, LineContent.labels(lineChoices[it.id].orEmpty(), checked), pick(it)) }
         }
 
         // --- artwork -------------------------------------------------------
@@ -118,30 +117,55 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * @param choices which contents this line may hold - the playing set offers
-     *   the track, the between-tracks set does not.
-     * @param selected the stored value, which is a [LineContent] ordinal and
-     *   **not** a position in [choices]. The two stopped being the same thing
-     *   once each list became a different subset, so both directions go through
-     *   [lineChoices].
-     */
-    private fun bindLine(
-        layout: TextInputLayout,
+    /** Fills one line dropdown, translating between the stored ordinal and a position. */
+    private fun bindChoices(
         dropdown: MaterialAutoCompleteTextView,
+        choices: List<LineContent>,
+        selected: Int,
+        fallback: LineContent = choices.firstOrNull() ?: LineContent.EMPTY,
+        onPick: (Int) -> Unit = {}
+    ) {
+        lineChoices[dropdown.id] = choices
+        // A value this list doesn't offer - an old setting, one saved by a later
+        // version, or the entry that just stopped being compatible with the
+        // other half of this line - lands on [fallback] rather than on whatever
+        // happens to sit at that index.
+        val position = choices.indexOf(LineContent.at(selected))
+            .takeIf { it >= 0 }
+            ?: choices.indexOf(fallback).coerceAtLeast(0)
+        bind(dropdown, LineContent.labels(choices, b.swEnrich.isChecked), position, onPick)
+    }
+
+    /**
+     * Binds one line: what it carries, and what it carries after the dot.
+     *
+     * The second list never offers what the first one is already showing -
+     * a line reading "18:48 · 18:48" is not a layout anybody wants, and
+     * leaving it selectable would mean explaining why it does nothing. So the
+     * second list is rebuilt whenever the first changes, and if the choice it
+     * was holding is the one that just disappeared, it drops to "Puste".
+     */
+    private fun bindPair(
+        layout: TextInputLayout,
+        primary: MaterialAutoCompleteTextView,
+        secondary: MaterialAutoCompleteTextView,
         line: Line,
         choices: List<LineContent>,
-        selected: Int
+        selectedPrimary: Int,
+        selectedSecondary: Int
     ) {
+        fun rebuildSecondary(keep: Int) {
+            val taken = LineContent.at(pickLine(primary))
+            // A second half that no longer fits drops to "Puste" rather than to
+            // whatever tops the shortened list - silence is the safe default here.
+            bindChoices(secondary, choices.filterNot { it.overlaps(taken) }, keep, LineContent.EMPTY)
+        }
+
         layout.hint = line.label
         layout.helperText = line.hint
         layout.isHelperTextEnabled = true
-        lineChoices[dropdown.id] = choices
-        // A value this list doesn't offer - an old setting, or one saved by a
-        // later version - falls back to the first entry rather than to whatever
-        // happens to sit at that index.
-        val position = choices.indexOf(LineContent.at(selected)).coerceAtLeast(0)
-        bind(dropdown, LineContent.labels(choices, b.swEnrich.isChecked), position)
+        bindChoices(primary, choices, selectedPrimary) { rebuildSecondary(pickLine(secondary)) }
+        rebuildSecondary(selectedSecondary)
     }
 
     /** Turns a dropdown's position back into the ordinal that gets stored. */
@@ -211,6 +235,12 @@ class SettingsActivity : AppCompatActivity() {
         prefs.lineTopIdle = pickLine(b.ddLineTopIdle)
         prefs.lineMiddleIdle = pickLine(b.ddLineMiddleIdle)
         prefs.lineBottomIdle = pickLine(b.ddLineBottomIdle)
+        prefs.lineTop2 = pickLine(b.ddLineTop2)
+        prefs.lineMiddle2 = pickLine(b.ddLineMiddle2)
+        prefs.lineBottom2 = pickLine(b.ddLineBottom2)
+        prefs.lineTopIdle2 = pickLine(b.ddLineTopIdle2)
+        prefs.lineMiddleIdle2 = pickLine(b.ddLineMiddleIdle2)
+        prefs.lineBottomIdle2 = pickLine(b.ddLineBottomIdle2)
         prefs.enrichWithYear = b.swEnrich.isChecked
 
         prefs.artPlaying = pick(b.ddArtPlaying)
