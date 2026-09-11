@@ -662,6 +662,23 @@ data class NowPlaying(
 
             val dash = raw.indexOf(" - ")
             if (dash <= 0) {
+                // Radio Zlote Przeboje separates the two with a slash instead:
+                // "KIM CARNES / BETTE DAVIS EYES" (measured 11.09.2026). Without
+                // this the whole thing became the title, the artist line stayed
+                // empty, and the catalogue was asked a question with no artist
+                // in it - which it answered with something else entirely.
+                //
+                // Only when there is no dash, and only for a single slash. A
+                // slash usually joins artists - "Jonatan / Livka / Pezet" - but
+                // those arrive alongside a dash, so the dash has already split
+                // them off by the time we get here.
+                val slash = raw.indexOf(" / ")
+                if (slash > 0 && raw.indexOf(" / ", slash + 1) < 0) {
+                    val who = raw.substring(0, slash).trim()
+                    val what = raw.substring(slash + 3).trim()
+                    val selfTitled = stationName != null && similar(who, stationName)
+                    return NowPlaying(raw, who, what, selfTitled, isAd, adMs)
+                }
                 val selfTitled = stationName != null && similar(raw, stationName)
                 return NowPlaying(raw, null, raw, selfTitled, isAd, adMs)
             }

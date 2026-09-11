@@ -192,7 +192,7 @@ object CoverArtLookup {
         var result = runCatching { query("$a $t".trim()) }
             .onFailure { Log.w(TAG, "iTunes nie odpowiedzial: ${it.message}") }
             .getOrNull()
-            ?.takeIf { TrackMatch.plausible(a, t, it.artistName, it.trackName) }
+            ?.let { ourTrackOrNull(a, t, it, "iTunes") }
 
         // iTunes has poor coverage of older Polish repertoire - "Czesław
         // Niemen - Lipowa łyżka" isn't there at all, while MusicBrainz knows
@@ -202,12 +202,40 @@ object CoverArtLookup {
             result = runCatching { queryMusicBrainz(a, t) }
                 .onFailure { Log.w(TAG, "MusicBrainz nie odpowiedzial: ${it.message}") }
                 .getOrNull()
-                ?.takeIf { TrackMatch.plausible(a, t, it.artistName, it.trackName) }
+                ?.let { ourTrackOrNull(a, t, it, "MusicBrainz") }
         }
 
         synchronized(cache) { cache[key] = result }
         Log.i(TAG, "'$a - $t' -> okladka=${result?.artworkUrl != null} album='${result?.albumLabel()}'")
         result
+    }
+
+    /**
+     * The answer, if it is about the question - see [TrackMatch].
+     *
+     * A rejection is written to the trace rather than only dropped, because
+     * without it "the catalogue knows nothing about this track" and "the
+     * catalogue answered about a different track" arrive in the file as the
+     * same `znaleziono=false`, and those two call for opposite fixes: one is
+     * the world, the other is us.
+     */
+    private fun ourTrackOrNull(
+        artist: String,
+        title: String,
+        found: TrackInfo,
+        source: String
+    ): TrackInfo? {
+        if (TrackMatch.plausible(artist, title, found.artistName, found.trackName)) return found
+        Log.i(TAG, "$source odpowiedzial o czym innym: '$artist - $title' -> '${found.artistName} - ${found.trackName}'")
+        Trace.write("katalog-odrzucony") {
+            put("zrodlo", source)
+            put("pytanieWykonawca", artist)
+            put("pytanieUtwor", title)
+            put("katalogWykonawca", found.artistName)
+            put("katalogUtwor", found.trackName)
+            put("album", found.album)
+        }
+        return null
     }
 
     /**
