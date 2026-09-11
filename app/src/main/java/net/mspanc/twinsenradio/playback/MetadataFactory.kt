@@ -15,8 +15,10 @@ import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Station
 import java.io.ByteArrayOutputStream
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Builds the metadata that goes into the MediaSession, and from there to Android Auto
@@ -132,14 +134,20 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             val title = now?.let { displayTitle(it, trackInfo) }.orEmpty()
             val artist = now?.let { displayArtist(it, trackInfo) }.orEmpty()
 
-            val top = lineText(p.top, station, now, trackInfo, title, artist, coverArtUrl)
-            val bottom = lineText(p.bottom, station, now, trackInfo, title, artist, coverArtUrl)
+            // Which of the two layouts applies. An ad or a station announcing
+            // itself is "no track": neither has a title or an artist, so the
+            // lines that name one would go blank, and that blankness is exactly
+            // what the second set exists to fill.
+            val lines = p.setFor(now?.isRealSong == true)
+
+            val top = lineText(lines.top, station, now, trackInfo, title, artist)
+            val bottom = lineText(lines.bottom, station, now, trackInfo, title, artist)
 
             // The middle line is only visible on the AID - the one place where a
             // network warning can go without cluttering the central screen too.
             val middle = when (PlaybackStatusBus.status.value) {
                 PlaybackStatusBus.Status.WAITING_FOR_NETWORK -> context.getString(R.string.aid_waiting_network)
-                else -> lineText(p.middle, station, now, trackInfo, title, artist, coverArtUrl)
+                else -> lineText(lines.middle, station, now, trackInfo, title, artist)
             }
 
             // The fields the head unit actually renders. Measured in the Passat
@@ -185,9 +193,11 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     /**
      * The content of a single description line.
      *
-     * Lines containing the artist are intentionally empty when no track is playing -
-     * duplicating the station name across several lines is exactly the flaw seen
-     * in ReplaIO and in the official RNS app.
+     * The track-shaped entries still check [NowPlaying.isRealSong] even though
+     * the picker no longer offers them for the between-tracks layout. A stored
+     * choice outlives the version that wrote it, and a line reading the previous
+     * song's title over an ad break is the exact fault this split was made to
+     * remove - so the guard stays as a floor under the settings.
      */
     private fun lineText(
         content: LineContent,
@@ -195,11 +205,13 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         now: NowPlaying?,
         info: CoverArtLookup.TrackInfo?,
         title: String,
-        artist: String,
-        coverArtUrl: String?
+        artist: String
     ): String = when (content) {
-        LineContent.CLOCK -> clockOrStationName(station, coverArtUrl)
+        LineContent.CLOCK -> clockText()
+        LineContent.DATE -> dateText()
+        LineContent.CLOCK_DATE -> "${clockText()} · ${dateText()}"
         LineContent.STATION -> station.name
+        LineContent.SLOGAN -> stationSaysLine(now)
         LineContent.EMPTY -> ""
         LineContent.TITLE -> titleLine(now, title)
         LineContent.ARTIST -> if (now?.isRealSong == true) artist else ""
@@ -225,20 +237,17 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * What a line set to "Clock" actually shows.
+     * What the station is saying for itself right now.
      *
-     * The graphic clock (drawn in place of the artwork, see [applyArtwork]) and a
-     * text line both saying the time would be redundant - so a text line only
-     * shows the time while the *real* cover art is on screen instead of the
-     * clock graphic. The moment the graphic clock takes over (track's cover art
-     * missing, or "always" mode), the text line switches to the station name,
-     * which is otherwise nowhere to be seen at that point.
+     * Named "slogan" in the picker because that is what it usually is - "Pion i
+     * poziom!" on RNS - but the news and an ad block belong here too. All three
+     * are the same kind of thing: the station's own words standing in for a
+     * track, and whichever of them is true at the moment is what that line
+     * should carry.
      */
-    private fun clockOrStationName(station: Station, coverArtUrl: String?): String {
-        val p = prefs.presentation
-        val clockGraphicShowing = p.clockFace != ClockFace.NONE && carAttached &&
-            (prefs.clockCoverAlways || coverArtUrl == null)
-        return if (clockGraphicShowing) station.name else clockText()
+    private fun stationSaysLine(now: NowPlaying?): String = when {
+        now?.isRealSong == true -> ""
+        else -> titleLine(now, "")
     }
 
     /**
@@ -356,6 +365,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
         private val CLOCK_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+        private val DATE_FORMAT: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("EEE d.MM", Locale.forLanguageTag("pl"))
+
         /** An empty line as a value the head unit can draw - see [drawable]. */
         private const val BLANK = "\u00A0"
 
@@ -438,6 +450,16 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
         /** Always a two-digit hour and minute, e.g. "09:07". */
         fun clockText(): String = LocalTime.now().format(CLOCK_FORMAT)
+
+        /**
+         * Day, month and weekday, e.g. "czw. 11.09".
+         *
+         * The weekday is the half a driver actually wants - the number is easy
+         * to work out from a phone, the day of the week is what you lose track
+         * of. Polish explicitly rather than by system locale: the rest of the
+         * app's text is Polish regardless of how the phone is set.
+         */
+        fun dateText(): String = LocalDate.now().format(DATE_FORMAT)
     }
 }
 

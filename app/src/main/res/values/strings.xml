@@ -82,11 +82,13 @@
 
     <!-- Nagłówki sekcji na ekranie Opcji -->
     <string name="opt_sec_lines">Opis na desce</string>
+    <string name="opt_sec_lines_idle">Opis, gdy nie leci utwór</string>
     <string name="opt_sec_artwork">Grafika</string>
     <string name="opt_sec_diag">Tryb diagnostyczny</string>
     <string name="opt_sec_browse">Listy w Android Auto</string>
     <string name="opt_sec_stream">Strumień i własne stacje</string>
     <string name="opt_lines_intro">Zmierzone w Passacie: Active Info Display pokazuje trzy wiersze, ekran centralny — pierwszy i trzeci. Wiersz środkowy widać wyłącznie na AID. Pola są wspólne, więc tego, co wstawisz w wiersz 1 lub 3, nie da się ukryć przed ekranem centralnym.</string>
+    <string name="opt_lines_idle_intro">Reklama, zapowiedź stacji albo cisza — wtedy nie ma tytułu ani wykonawcy, więc te same trzy wiersze dostają osobny zestaw. Lista zawiera tylko to, co aplikacja w tej chwili wie.</string>
     <string name="opt_clock_face">Zamiast okładki</string>
     <!-- Trafia w środkowy wiersz AID; ekran centralny tego pola nie pokazuje -->
     <string name="aid_waiting_network">Oczekuję na sieć…</string>

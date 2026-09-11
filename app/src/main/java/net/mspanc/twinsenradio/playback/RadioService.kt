@@ -186,6 +186,7 @@ class RadioService : MediaLibraryService() {
             }
             Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK,
             Prefs.KEY_LINE_TOP, Prefs.KEY_LINE_MIDDLE, Prefs.KEY_LINE_BOTTOM,
+            Prefs.KEY_LINE_TOP_IDLE, Prefs.KEY_LINE_MIDDLE_IDLE, Prefs.KEY_LINE_BOTTOM_IDLE,
             Prefs.KEY_CLOCK_FACE, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
             Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM ->
                 refreshCurrentMetadata(force = true, why = "opcje")
@@ -305,9 +306,14 @@ class RadioService : MediaLibraryService() {
         Trace.open(this)
         val p = prefs.presentation
         Trace.write("uklad") {
-            put("gora", p.top.name)
-            put("srodek", p.middle.name)
-            put("dol", p.bottom.name)
+            // Both layouts, because which one a line came from is the first
+            // question the trace gets asked once there are two of them.
+            put("gora", p.playing.top.name)
+            put("srodek", p.playing.middle.name)
+            put("dol", p.playing.bottom.name)
+            put("goraBezUtworu", p.idle.top.name)
+            put("srodekBezUtworu", p.idle.middle.name)
+            put("dolBezUtworu", p.idle.bottom.name)
             put("zegar", p.clockFace.name)
             put("zegarZawsze", prefs.clockCoverAlways)
             put("okladka", prefs.artworkMode)

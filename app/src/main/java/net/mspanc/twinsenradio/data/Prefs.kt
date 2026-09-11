@@ -73,16 +73,37 @@ class Prefs(context: Context) {
      * the AID and the head unit screen.
      */
     var lineTop: Int
-        get() = sp.getInt(KEY_LINE_TOP, Presentation.DEFAULT.top.ordinal)
+        get() = sp.getInt(KEY_LINE_TOP, Presentation.DEFAULT_PLAYING.top.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_TOP, v) }
 
     var lineMiddle: Int
-        get() = sp.getInt(KEY_LINE_MIDDLE, Presentation.DEFAULT.middle.ordinal)
+        get() = sp.getInt(KEY_LINE_MIDDLE, Presentation.DEFAULT_PLAYING.middle.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_MIDDLE, v) }
 
     var lineBottom: Int
-        get() = sp.getInt(KEY_LINE_BOTTOM, Presentation.DEFAULT.bottom.ordinal)
+        get() = sp.getInt(KEY_LINE_BOTTOM, Presentation.DEFAULT_PLAYING.bottom.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_BOTTOM, v) }
+
+    /**
+     * The same three lines for the state where no track is playing.
+     *
+     * Separate keys rather than a migration of the old ones: the two states
+     * want different things, and silently reinterpreting somebody's "Tytuł
+     * utworu" as a between-tracks choice would be a guess about their taste.
+     * An upgrade therefore keeps its playing layout and starts from
+     * [Presentation.DEFAULT_IDLE] for the gaps.
+     */
+    var lineTopIdle: Int
+        get() = sp.getInt(KEY_LINE_TOP_IDLE, Presentation.DEFAULT_IDLE.top.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_TOP_IDLE, v) }
+
+    var lineMiddleIdle: Int
+        get() = sp.getInt(KEY_LINE_MIDDLE_IDLE, Presentation.DEFAULT_IDLE.middle.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_MIDDLE_IDLE, v) }
+
+    var lineBottomIdle: Int
+        get() = sp.getInt(KEY_LINE_BOTTOM_IDLE, Presentation.DEFAULT_IDLE.bottom.ordinal)
+        set(v) = sp.edit { putInt(KEY_LINE_BOTTOM_IDLE, v) }
 
     /** Whether to draw a clock instead of cover art, see [ClockFace]. */
     var clockFace: Int
@@ -92,9 +113,16 @@ class Prefs(context: Context) {
     /** The full set of description settings, assembled from the above. */
     val presentation: Presentation
         get() = Presentation(
-            top = LineContent.at(lineTop),
-            middle = LineContent.at(lineMiddle),
-            bottom = LineContent.at(lineBottom),
+            playing = LineSet(
+                top = LineContent.at(lineTop),
+                middle = LineContent.at(lineMiddle),
+                bottom = LineContent.at(lineBottom)
+            ),
+            idle = LineSet(
+                top = LineContent.at(lineTopIdle),
+                middle = LineContent.at(lineMiddleIdle),
+                bottom = LineContent.at(lineBottomIdle)
+            ),
             clockFace = ClockFace.at(clockFace)
         )
 
@@ -463,6 +491,9 @@ class Prefs(context: Context) {
         const val KEY_LINE_TOP = "line_top"
         const val KEY_LINE_MIDDLE = "line_middle"
         const val KEY_LINE_BOTTOM = "line_bottom"
+        const val KEY_LINE_TOP_IDLE = "line_top_idle"
+        const val KEY_LINE_MIDDLE_IDLE = "line_middle_idle"
+        const val KEY_LINE_BOTTOM_IDLE = "line_bottom_idle"
         const val KEY_CLOCK_FACE = "clock_face"
         const val KEY_CLOCK_ALWAYS = "clock_cover_always"
         const val KEY_CLOCK_BG = "clock_background"

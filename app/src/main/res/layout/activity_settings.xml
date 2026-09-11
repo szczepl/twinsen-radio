@@ -95,6 +95,65 @@
 
                     <View style="@style/SectionDivider" />
 
+                    <!--
+                        Drugi zestaw: te same trzy wiersze, ale na czas, gdy zaden
+                        utwor nie leci - reklama, stacja mowiaca o sobie, cisza.
+                    -->
+                    <TextView
+                        style="@style/SectionHeader"
+                        android:text="@string/opt_sec_lines_idle" />
+
+                    <TextView
+                        style="@style/SectionNote"
+                        android:text="@string/opt_lines_idle_intro" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilLineTopIdle"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp">
+
+                        <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                            android:id="@+id/ddLineTopIdle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:editable="false"
+                            android:inputType="none" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilLineMiddleIdle"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp">
+
+                        <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                            android:id="@+id/ddLineMiddleIdle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:editable="false"
+                            android:inputType="none" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilLineBottomIdle"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp">
+
+                        <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                            android:id="@+id/ddLineBottomIdle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:editable="false"
+                            android:inputType="none" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <View style="@style/SectionDivider" />
+
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/swEnrich"
                         style="@style/SettingSwitch"
