@@ -56,6 +56,39 @@ object StationNames {
     private val LOOSE_EDGES = Regex("""^[\s\-–—|,]+|[\s\-–—|,]+$""")
 
     /**
+     * The shortest form that still names the station - for the second half of a
+     * line, where the first half is what was actually asked for.
+     *
+     * [shorten] is deliberately timid because its result is the station's name
+     * everywhere: on the list, in the browse tree, on the playback screen. Here
+     * the job is different. The line already carries something else, the head
+     * unit will cut whatever doesn't fit, and a name that eats the line is worse
+     * than a name missing its city: "Smooth FM 91.5 - Melbourne" alongside a
+     * title leaves no title.
+     *
+     * So this takes the first segment and nothing more - "Smooth FM 91.5". A
+     * name with no segments to drop comes back as [shorten] left it.
+     */
+    fun shortest(raw: String): String {
+        val short = shorten(raw)
+        val head = short.split(SEGMENT, limit = 2).first().trim()
+        return if (namesSomething(head)) head else short
+    }
+
+    /**
+     * Whether a fragment could be read as a station's name.
+     *
+     * Length alone doesn't decide it: "RMF" and "ZET" are three characters and
+     * perfectly real, while the first segment of "- 0 N - Smooth Jazz on Radio"
+     * is "0 N" and names nothing. Two letters is what separates them.
+     */
+    private fun namesSomething(head: String): Boolean =
+        head.count { it.isLetter() } >= 2 && head.count { it.isLetterOrDigit() } >= 3
+
+    /** Where a catalogue name breaks into "name - place - band". */
+    private val SEGMENT = Regex("""\s+[-–—|]\s+""")
+
+    /**
      * The name as it should be displayed. Returns [raw] unchanged whenever it
      * has nothing safe to remove - which is the common case.
      */

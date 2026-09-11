@@ -15,6 +15,7 @@ import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.LineSpec
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Station
+import net.mspanc.twinsenradio.data.StationNames
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
 import java.time.LocalTime
@@ -213,8 +214,39 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         // rather than a layout. Overlap, not equality: the two entries that did
         // that were never the same entry.
         if (spec.secondary.overlaps(spec.primary)) return first
-        val second = lineText(spec.secondary, station, now, info, title, artist)
+        val second = shortenSecond(spec.secondary, lineText(spec.secondary, station, now, info, title, artist))
         return listOf(first, second).filter { it.isNotBlank() }.joinToString(JOIN)
+    }
+
+    /**
+     * Trims the second half of a line so it doesn't crowd out the first.
+     *
+     * The head unit cuts whatever doesn't fit, and it cuts from the end - so an
+     * over-long second half doesn't lose itself, it loses the line. A station
+     * called "Smooth FM 91.5 - Melbourne" put next to a track title takes the
+     * title's room and gives back a city nobody needed.
+     *
+     * How much actually fits cannot be worked out from a character count: the
+     * cluster draws a proportional font, so "IIII" and "mmmm" are different
+     * widths at the same length. The budget below is therefore a judgement, not
+     * a measurement - see FINDINGS.md, section 7.
+     */
+    private fun shortenSecond(content: LineContent, text: String): String {
+        if (text.length <= SECOND_BUDGET) return text
+        // A station has a shorter form that is still its name; everything else
+        // can only be cut, and is cut on a word so the remnant stays readable.
+        if (content == LineContent.STATION) {
+            val short = StationNames.shortest(text)
+            if (short.length <= SECOND_BUDGET) return short
+            return clip(short)
+        }
+        return clip(text)
+    }
+
+    private fun clip(text: String): String {
+        if (text.length <= SECOND_BUDGET) return text
+        val cut = text.take(SECOND_BUDGET).substringBeforeLast(' ', "")
+        return (cut.ifBlank { text.take(SECOND_BUDGET) }).trimEnd(' ', ',', '-', '·') + "…"
     }
 
     /**
@@ -433,6 +465,16 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
         private val DATE_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("EEE d.MM", Locale.forLanguageTag("pl"))
+
+        /**
+         * How much of a line the second half may take.
+         *
+         * A judgement rather than a measurement - the cluster font is
+         * proportional, so no character count maps to a width. Chosen to clear
+         * every ordinary station name ("Radio Nowy Swiat" is 16, "Jacaranda FM"
+         * 12) while cutting the ones that are really a description.
+         */
+        private const val SECOND_BUDGET = 22
 
         /** The separator between two halves of a line, and inside a track line. */
         const val JOIN = " · "

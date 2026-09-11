@@ -67,3 +67,41 @@ class StationNamesTest {
         assertUnchanged("(AAC+ 320k)")
     }
 }
+
+/**
+ * The shortest form, for the second half of a line. Longer than this and the
+ * station's name takes the room of whatever the line was actually for.
+ */
+class StationNamesShortestTest {
+
+    @Test
+    fun `only the first segment survives`() {
+        assertEquals(
+            "Smooth FM 91.5",
+            StationNames.shortest("Smooth FM 91.5 - Melbourne - 91.5 FM (AAC+ 320k)")
+        )
+    }
+
+    @Test
+    fun `a name with no segments is left as the ordinary rule left it`() {
+        assertEquals("Jacaranda FM", StationNames.shortest("Jacaranda FM"))
+        assertEquals("Radio Nowy Swiat", StationNames.shortest("Radio Nowy Swiat"))
+        assertEquals("Skyrock", StationNames.shortest("Skyrock"))
+        assertEquals("101.9 The Fox Melbourne", StationNames.shortest("101.9 The Fox Melbourne"))
+    }
+
+    /**
+     * The name that punishes a confident rule, again: taking the first segment
+     * would leave "0 N", which names nothing.
+     */
+    @Test
+    fun `a stub is not a name`() {
+        assertEquals("0 N - Smooth Jazz on Radio", StationNames.shortest("- 0 N - Smooth Jazz on Radio"))
+    }
+
+    /** A hyphen inside a word is not a segment break. */
+    @Test
+    fun `a hyphenated name stays whole`() {
+        assertEquals("Radio Wanda-Kraków", StationNames.shortest("Radio Wanda-Kraków"))
+    }
+}
