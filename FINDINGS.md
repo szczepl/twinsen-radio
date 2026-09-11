@@ -422,3 +422,39 @@ share a line, the second one is kept short — see `MetadataFactory.shortenSecon
 — because the cut falls at the end, so an over-long second half doesn't lose
 itself, it loses whatever the line was for. The budget there is a judgement
 made against ordinary station names, and it is labelled as one.
+
+### A census of what stations actually send (11.09.2026)
+
+Every station on the list was tuned in turn until it produced an ICY block or
+ran out of patience (100 s). The point was to find the formats rather than to
+listen, so the sweep moved on the moment a real track appeared.
+
+**Artist and title are separated four different ways.**
+
+| Form | Stations |
+|---|---|
+| `Artist - Title` | RMF FM, Radio 357, Smooth FM, Smooth Jazz Lounge, "- 0 N -" |
+| `Title - Artist` — **reversed** | RMF 80s, RMF Ballady, RMF Polskie Przeboje, Jacaranda FM, Jazz Radio Soul |
+| `Artist / Title` | Radio Złote Przeboje, Kiss FM |
+| the station's own name and slogan | RMF MAXXX, RMF24, Eska, Eska ROCK, VOX FM, Radio Wnet, Skyrock, RMF Classic |
+
+The reversed group is the surprise: RMF FM sends `Artist - Title`, but its own
+thematic sisters send it the other way round. Nothing needed doing — the
+catalogue-based swap detection already catches all of them, and the census
+confirmed it on four separate stations in one pass (`zamiana=true`), with no
+false rejections from the new plausibility check.
+
+**Silence is common and comes in two kinds.** A station that sends
+`StreamTitle=''` and nothing else — Chilli ZET, Radio ZET, Meloradio, TOK FM,
+Radio Plus, Kiss FM Australia — and a station that sends no ICY at all:
+the whole Polskie Radio HLS plant (Jedynka, Dwójka, Czwórka, PR24, Kierowcy),
+Triple J, Triple M Melbourne, ABC Lounge Jazz, 101.9 The Fox. For the second
+kind there is nothing to wait for, ever.
+
+**Two formats are beyond the catalogue rather than beyond the parser.**
+Rockserwis sends a talk-show episode where a track goes
+(`LEPSZY PUNKT SLYSZENIA - Jakub 'Bizon' Michalski - #566 11/09/26`), and
+RMF Classic sends Polish spellings of composers with descriptive titles
+(`Sergiusz Prokofiew - Symfonia Klasyczna 2`, which iTunes files under
+Prokofiev). Both parse correctly and simply aren't in the catalogue; neither
+is a fault to fix in the app.
