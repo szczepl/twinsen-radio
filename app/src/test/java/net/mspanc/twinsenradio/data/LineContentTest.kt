@@ -46,9 +46,14 @@ class LineContentTest {
         assertFalse(LineContent.SLOGAN in LineContent.WHEN_PLAYING)
     }
 
+    /**
+     * The two together are what "Godzina · data" used to be - see
+     * [RetiredCompositeTest]. Pairing them is now the user's job, which is why
+     * both have to be on both lists.
+     */
     @Test
     fun `both lists offer the time, the date and an empty line`() {
-        listOf(LineContent.CLOCK, LineContent.DATE, LineContent.CLOCK_DATE, LineContent.EMPTY)
+        listOf(LineContent.CLOCK, LineContent.DATE, LineContent.EMPTY)
             .forEach {
                 assertTrue("$it gra", it in LineContent.WHEN_PLAYING)
                 assertTrue("$it bez utworu", it in LineContent.WHEN_IDLE)
@@ -227,5 +232,73 @@ class LineOverlapTest {
                 assertFalse("$it", it.secondary.overlaps(it.primary))
             }
         }
+    }
+}
+
+/**
+ * Two entries were two things joined by a dot, from before a line could hold
+ * two things. They are gone from the pickers and unfold into their halves.
+ */
+class RetiredCompositeTest {
+
+    @Test
+    fun `neither composite is offered any more`() {
+        listOf(LineContent.CLOCK_DATE, LineContent.TRACK_FULL).forEach {
+            assertFalse("$it gra", it in LineContent.WHEN_PLAYING)
+            assertFalse("$it bez utworu", it in LineContent.WHEN_IDLE)
+        }
+    }
+
+    /** The stored order still has them, because stored choices must keep parsing. */
+    @Test
+    fun `they stay in the enum`() {
+        assertEquals(
+            listOf(
+                "TITLE", "ARTIST", "ARTIST_ALBUM", "TITLE_ALBUM", "TRACK_FULL",
+                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE"
+            ),
+            LineContent.entries.map { it.name }
+        )
+    }
+
+    @Test
+    fun `a stored composite unfolds into its halves`() {
+        assertEquals(
+            LineSpec(LineContent.CLOCK, LineContent.DATE),
+            LineContent.expandedBy(LineContent.CLOCK_DATE, LineContent.EMPTY)
+        )
+        assertEquals(
+            LineSpec(LineContent.ARTIST, LineContent.TITLE),
+            LineContent.expandedBy(LineContent.TRACK_FULL, LineContent.EMPTY)
+        )
+    }
+
+    /** Unfolding wins over whatever second half was stored - the halves are the whole line. */
+    @Test
+    fun `unfolding replaces a stored second half`() {
+        assertEquals(
+            LineSpec(LineContent.CLOCK, LineContent.DATE),
+            LineContent.expandedBy(LineContent.CLOCK_DATE, LineContent.STATION)
+        )
+    }
+
+    @Test
+    fun `an ordinary pair is left alone`() {
+        assertEquals(
+            LineSpec(LineContent.STATION, LineContent.SLOGAN),
+            LineContent.expandedBy(LineContent.STATION, LineContent.SLOGAN)
+        )
+    }
+
+    /**
+     * The overlap rule is not left without work: the album entries collide with
+     * their own halves and cannot be split, because there is no entry for the
+     * album on its own.
+     */
+    @Test
+    fun `collisions that cannot be split still exist`() {
+        assertTrue(LineContent.ARTIST_ALBUM in LineContent.WHEN_PLAYING)
+        assertTrue(LineContent.ARTIST_ALBUM.overlaps(LineContent.ARTIST))
+        assertTrue(LineContent.TITLE_ALBUM.overlaps(LineContent.ARTIST_ALBUM))
     }
 }

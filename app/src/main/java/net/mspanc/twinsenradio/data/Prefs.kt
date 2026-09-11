@@ -171,18 +171,22 @@ class Prefs(context: Context) {
         return if (idle || always) clock else ArtContent.COVER
     }
 
+    /** One stored line, with a retired composite unfolded - see LineContent.RETIRED. */
+    private fun spec(primary: Int, secondary: Int): LineSpec =
+        LineContent.expandedBy(LineContent.at(primary), LineContent.at(secondary))
+
     /** The full set of description settings, assembled from the above. */
     val presentation: Presentation
         get() = Presentation(
             playing = LineSet(
-                top = LineSpec(LineContent.at(lineTop), LineContent.at(lineTop2)),
-                middle = LineSpec(LineContent.at(lineMiddle), LineContent.at(lineMiddle2)),
-                bottom = LineSpec(LineContent.at(lineBottom), LineContent.at(lineBottom2))
+                top = spec(lineTop, lineTop2),
+                middle = spec(lineMiddle, lineMiddle2),
+                bottom = spec(lineBottom, lineBottom2)
             ),
             idle = LineSet(
-                top = LineSpec(LineContent.at(lineTopIdle), LineContent.at(lineTopIdle2)),
-                middle = LineSpec(LineContent.at(lineMiddleIdle), LineContent.at(lineMiddleIdle2)),
-                bottom = LineSpec(LineContent.at(lineBottomIdle), LineContent.at(lineBottomIdle2))
+                top = spec(lineTopIdle, lineTopIdle2),
+                middle = spec(lineMiddleIdle, lineMiddleIdle2),
+                bottom = spec(lineBottomIdle, lineBottomIdle2)
             ),
             artPlaying = ArtContent.at(artPlaying),
             artIdle = ArtContent.at(artIdle)

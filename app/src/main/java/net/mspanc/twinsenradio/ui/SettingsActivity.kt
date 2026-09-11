@@ -164,8 +164,16 @@ class SettingsActivity : AppCompatActivity() {
         layout.hint = line.label
         layout.helperText = line.hint
         layout.isHelperTextEnabled = true
-        bindChoices(primary, choices, selectedPrimary) { rebuildSecondary(pickLine(secondary)) }
-        rebuildSecondary(selectedSecondary)
+        // A retired composite is unfolded here exactly as it is when the
+        // service reads it, so the screen shows what the car shows. Without
+        // this the picker would fail to find it, quietly fall back to the first
+        // entry, and the next save would write that instead.
+        val spec = LineContent.expandedBy(
+            LineContent.at(selectedPrimary),
+            LineContent.at(selectedSecondary)
+        )
+        bindChoices(primary, choices, spec.primary.ordinal) { rebuildSecondary(pickLine(secondary)) }
+        rebuildSecondary(spec.secondary.ordinal)
     }
 
     /** Turns a dropdown's position back into the ordinal that gets stored. */

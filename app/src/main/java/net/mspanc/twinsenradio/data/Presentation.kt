@@ -77,8 +77,8 @@ enum class LineContent(val label: String) {
          * playing song would be stale by definition.
          */
         val WHEN_PLAYING = listOf(
-            TITLE, ARTIST, ARTIST_ALBUM, TITLE_ALBUM, TRACK_FULL,
-            STATION, CLOCK, DATE, CLOCK_DATE, EMPTY
+            TITLE, ARTIST, ARTIST_ALBUM, TITLE_ALBUM,
+            STATION, CLOCK, DATE, EMPTY
         )
 
         /**
@@ -88,7 +88,35 @@ enum class LineContent(val label: String) {
          * the choice would only promise an empty line. What remains is what the
          * app still knows at that moment.
          */
-        val WHEN_IDLE = listOf(CLOCK, DATE, CLOCK_DATE, STATION, SLOGAN, EMPTY)
+        val WHEN_IDLE = listOf(CLOCK, DATE, STATION, SLOGAN, EMPTY)
+
+        /**
+         * Entries that are no longer offered, because a line can now hold two
+         * things and these were two things in a trenchcoat.
+         *
+         * They stay in the enum: the order is frozen, and a stored choice has
+         * to keep parsing. [expandedBy] is what they become on the way out.
+         * "Wykonawca · tytuł" is reproducible exactly now that the separator is
+         * the dot; "Godzina · data" always was.
+         *
+         * Their own redundancy is what forced [overlaps] into existence - they
+         * collided with their halves without equalling them. That machinery
+         * still earns its keep, though: "Wykonawca · płyta" and "Wykonawca" are
+         * a collision nobody can remove, because there is no standalone entry
+         * for the album to split it into.
+         */
+        val RETIRED = mapOf(
+            CLOCK_DATE to (CLOCK to DATE),
+            TRACK_FULL to (ARTIST to TITLE)
+        )
+
+        /**
+         * A stored pair, with a retired composite unfolded into the two halves
+         * it always was. Read-only: nothing is written back, so a downgrade
+         * still finds the file it left.
+         */
+        fun expandedBy(primary: LineContent, secondary: LineContent): LineSpec =
+            RETIRED[primary]?.let { (a, b) -> LineSpec(a, b) } ?: LineSpec(primary, secondary)
 
         /**
          * Labels for a picker over [choices]. [ARTIST_ALBUM] and [TITLE_ALBUM]
