@@ -77,6 +77,44 @@ enum class LineContent(val label: String) {
 }
 
 /**
+ * What fills the picture slot - the square the head unit draws next to the
+ * description, and the phone puts on the playback screen.
+ *
+ * This used to be three settings pulling against each other: a clock face, a
+ * switch deciding whether that clock appeared always or only when no cover art
+ * was found, and a delivery mode whose "no artwork" value was really a fourth
+ * kind of content. Which of them won, in which state, was something you worked
+ * out by trying it. Now it is one choice per state, alongside the lines.
+ */
+enum class ArtContent(val label: String) {
+    /**
+     * The track's cover art, and the station's logo when the catalogue found
+     * none. The fallback is part of the choice rather than another setting:
+     * a blank square where a cover was expected reads as a fault, and the logo
+     * is the only other picture that is certainly about what is playing.
+     */
+    COVER("Okładka płyty, inaczej logo"),
+    LOGO("Logo stacji"),
+    CLOCK_DIGITAL("Zegar cyfrowy"),
+    CLOCK_ANALOG("Zegar analogowy"),
+    EMPTY("Puste");
+
+    /** The face to draw, or null when this choice isn't a clock at all. */
+    val clockFace: ClockFace?
+        get() = when (this) {
+            CLOCK_DIGITAL -> ClockFace.DIGITAL
+            CLOCK_ANALOG -> ClockFace.ANALOG
+            else -> null
+        }
+
+    companion object {
+        val LABELS get() = entries.map { it.label }
+
+        fun at(index: Int) = entries.getOrElse(index) { COVER }
+    }
+}
+
+/**
  * What goes on the three lines, in one of the two states the player can be in.
  *
  * There are two of these because the two states have nothing in common: with a
@@ -118,14 +156,19 @@ enum class Line(val label: String, val hint: String) {
     )
 }
 
-/** Whether a clock replaces the artwork, and if so, in what form. */
-enum class ClockFace(val label: String) {
-    NONE("Okładka płyty / logo stacji"),
-    DIGITAL("Zegar cyfrowy"),
-    ANALOG("Zegar analogowy");
+/**
+ * Which face [net.mspanc.twinsenradio.playback.ClockArt] draws.
+ *
+ * No longer a setting of its own - [ArtContent] is what the user picks, and
+ * this is the drawing parameter it resolves to. [NONE] survives only because
+ * the old stored key still has to be read, once, to translate it.
+ */
+enum class ClockFace {
+    NONE,
+    DIGITAL,
+    ANALOG;
 
     companion object {
-        val LABELS get() = entries.map { it.label }
         fun at(index: Int) = entries.getOrElse(index) { NONE }
     }
 }
@@ -178,8 +221,12 @@ data class Presentation(
     val playing: LineSet,
     /** Lines used when it isn't - an ad, the station talking, or silence. */
     val idle: LineSet,
-    val clockFace: ClockFace
+    /** The picture slot, chosen per state just like the lines. */
+    val artPlaying: ArtContent,
+    val artIdle: ArtContent
 ) {
+    fun artFor(trackPlaying: Boolean): ArtContent = if (trackPlaying) artPlaying else artIdle
+
     /**
      * @param trackPlaying whether a real track is on air right now - an ad or a
      *   station announcing itself counts as no track, because neither has a
@@ -195,7 +242,7 @@ data class Presentation(
      * the next track is worse than a redundant refresh.
      */
     val needsClock: Boolean
-        get() = clockFace != ClockFace.NONE ||
+        get() = listOf(artPlaying, artIdle).any { it.clockFace != null } ||
             (playing.all() + idle.all()).any {
                 it == LineContent.CLOCK || it == LineContent.DATE || it == LineContent.CLOCK_DATE
             }
@@ -229,7 +276,9 @@ data class Presentation(
         val DEFAULT = Presentation(
             playing = DEFAULT_PLAYING,
             idle = DEFAULT_IDLE,
-            clockFace = ClockFace.NONE
+            // A record's cover while it plays, the station's own mark otherwise.
+            artPlaying = ArtContent.COVER,
+            artIdle = ArtContent.LOGO
         )
     }
 }

@@ -8,9 +8,9 @@ import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaMetadata
 import net.mspanc.twinsenradio.R
+import net.mspanc.twinsenradio.data.ArtContent
 import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.ClockColors
-import net.mspanc.twinsenradio.data.ClockFace
 import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Station
@@ -166,7 +166,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 .setGenre(station.genre)
         }
 
-        applyArtwork(b, station, coverArtUrl)
+        applyArtwork(b, station, coverArtUrl, now?.isRealSong == true)
         return b.build()
     }
 
@@ -267,28 +267,61 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         return if (seconds > 0) "$AD_LABEL · ${seconds}s" else AD_LABEL
     }
 
-    private fun applyArtwork(b: MediaMetadata.Builder, station: Station, coverArtUrl: String?) {
-        // Clock instead of cover art - drawn on the fly, so there's no URI and it
-        // has to travel as bytes.
-        val p = prefs.presentation
-        if (p.clockFace != ClockFace.NONE && carAttached) {
-            val useClock = prefs.clockCoverAlways || coverArtUrl == null
-            if (useClock) {
+    /**
+     * Fills the picture slot according to the layout for the current state.
+     *
+     * One branch per choice, which is the whole point of [ArtContent]: this used
+     * to be a clock face, an "always" switch and a delivery mode interacting,
+     * and working out what would actually appear meant running it.
+     *
+     * Deliberately independent of diagnostic mode - that only swaps the text
+     * fields for labels, and the picture should behave the same either way.
+     */
+    private fun applyArtwork(
+        b: MediaMetadata.Builder,
+        station: Station,
+        coverArtUrl: String?,
+        trackPlaying: Boolean
+    ) {
+        // A clock belongs to the dashboard - see [carAttached]. With no head
+        // unit listening it would only put a drawn clock in the phone's own
+        // notification, so those two choices fall back to what the phone wants.
+        val chosen = prefs.presentation.artFor(trackPlaying)
+        val art = if (chosen.clockFace != null && !carAttached) ArtContent.COVER else chosen
+
+        when (art) {
+            ArtContent.EMPTY -> Unit
+
+            ArtContent.CLOCK_DIGITAL, ArtContent.CLOCK_ANALOG -> {
+                // Drawn on the fly, so there is no URI and it travels as bytes.
                 val bg = ClockColors.background(prefs.clockBackground)
                 val fg = ClockColors.foreground(prefs.clockForeground, bg)
-                ClockArt.pngBytes(p.clockFace, bg, fg)?.let {
+                val face = art.clockFace ?: return
+                ClockArt.pngBytes(face, bg, fg)?.let {
                     b.setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-                    return
                 }
             }
+
+            ArtContent.COVER -> {
+                if (coverArtUrl != null) {
+                    b.setArtworkUri(Uri.parse(coverArtUrl))
+                } else {
+                    applyLogo(b, station)
+                }
+            }
+
+            ArtContent.LOGO -> applyLogo(b, station)
         }
-        // A found track cover art takes priority over the station logo.
-        // Deliberately independent of diagnostic mode: that mode only swaps out
-        // the text fields for labels, the artwork should always behave the same way.
-        if (coverArtUrl != null) {
-            b.setArtworkUri(Uri.parse(coverArtUrl))
-            return
-        }
+    }
+
+    /**
+     * The station's logo, delivered the way [Prefs.artworkMode] asks for.
+     *
+     * That setting is about transport rather than content - some head units
+     * refuse a URI and want the bytes - which is why it sits apart from
+     * [ArtContent] and applies to whichever of them ends up here.
+     */
+    private fun applyLogo(b: MediaMetadata.Builder, station: Station) {
         when (prefs.artworkMode) {
             ArtworkMode.NONE -> Unit
             ArtworkMode.EMBEDDED_BYTES -> {

@@ -182,30 +182,41 @@
                         style="@style/SectionHeader"
                         android:text="@string/opt_sec_artwork" />
 
+                    <TextView
+                        style="@style/SectionNote"
+                        android:text="@string/opt_art_intro" />
+
                     <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilClockFace"
+                        android:id="@+id/tilArtPlaying"
                         style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:hint="@string/opt_clock_face">
+                        android:layout_marginTop="12dp"
+                        android:hint="@string/opt_art_playing">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                            android:id="@+id/ddClockFace"
+                            android:id="@+id/ddArtPlaying"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:editable="false"
                             android:inputType="none" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/swClockAlways"
-                        style="@style/SettingSwitch"
-                        android:text="@string/opt_clock_always" />
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilArtIdle"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:hint="@string/opt_art_idle">
 
-                    <TextView
-                        style="@style/SettingNote"
-                        android:text="@string/opt_clock_always_sub" />
+                        <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                            android:id="@+id/ddArtIdle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:editable="false"
+                            android:inputType="none" />
+                    </com.google.android.material.textfield.TextInputLayout>
 
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/tilClockBg"

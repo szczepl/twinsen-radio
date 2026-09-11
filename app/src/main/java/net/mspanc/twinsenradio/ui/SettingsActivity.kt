@@ -10,10 +10,10 @@ import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.R
+import net.mspanc.twinsenradio.data.ArtContent
 import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ClockColors
-import net.mspanc.twinsenradio.data.ClockFace
 import net.mspanc.twinsenradio.data.ContentStyle
 import net.mspanc.twinsenradio.data.Line
 import net.mspanc.twinsenradio.data.LineContent
@@ -62,15 +62,13 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         // --- artwork -------------------------------------------------------
-        bind(b.ddClockFace, ClockFace.LABELS, prefs.clockFace) { updateClockOptionsEnabled(it) }
-        b.swClockAlways.isChecked = prefs.clockCoverAlways
-        b.swClockAlways.setOnCheckedChangeListener { _, _ ->
-            updateClockOptionsEnabled(pick(b.ddClockFace))
-        }
+        // One choice per state, exactly like the lines above it.
+        bind(b.ddArtPlaying, ArtContent.LABELS, prefs.artPlaying) { updateClockOptionsEnabled() }
+        bind(b.ddArtIdle, ArtContent.LABELS, prefs.artIdle) { updateClockOptionsEnabled() }
         bind(b.ddClockBg, ClockColors.BACKGROUND_LABELS, prefs.clockBackground)
         bind(b.ddClockFg, ClockColors.FOREGROUND_LABELS, prefs.clockForeground)
         bind(b.ddArtwork, ArtworkMode.LABELS, prefs.artworkMode)
-        updateClockOptionsEnabled(prefs.clockFace)
+        updateClockOptionsEnabled()
 
         // --- diagnostics -----------------------------------------------------
         b.swDiag.isChecked = prefs.diagnosticMode
@@ -154,10 +152,11 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun pick(dropdown: MaterialAutoCompleteTextView): Int = chosen[dropdown.id] ?: 0
 
-    /** Clock colors only make sense when the clock actually replaces the cover art. */
-    private fun updateClockOptionsEnabled(clockFaceIndex: Int) {
-        val usesClock = ClockFace.at(clockFaceIndex) != ClockFace.NONE
-        listOf(b.swClockAlways, b.tilClockBg, b.tilClockFg).forEach {
+    /** Clock colours matter only if at least one of the two states draws a clock. */
+    private fun updateClockOptionsEnabled() {
+        val usesClock = listOf(b.ddArtPlaying, b.ddArtIdle)
+            .any { ArtContent.at(pick(it)).clockFace != null }
+        listOf(b.tilClockBg, b.tilClockFg).forEach {
             it.isEnabled = usesClock
             it.alpha = if (usesClock) 1f else 0.4f
         }
@@ -214,8 +213,8 @@ class SettingsActivity : AppCompatActivity() {
         prefs.lineBottomIdle = pickLine(b.ddLineBottomIdle)
         prefs.enrichWithYear = b.swEnrich.isChecked
 
-        prefs.clockFace = pick(b.ddClockFace)
-        prefs.clockCoverAlways = b.swClockAlways.isChecked
+        prefs.artPlaying = pick(b.ddArtPlaying)
+        prefs.artIdle = pick(b.ddArtIdle)
         prefs.clockBackground = pick(b.ddClockBg)
         prefs.clockForeground = pick(b.ddClockFg)
         prefs.artworkMode = pick(b.ddArtwork)

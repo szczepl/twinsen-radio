@@ -187,7 +187,7 @@ class RadioService : MediaLibraryService() {
             Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK,
             Prefs.KEY_LINE_TOP, Prefs.KEY_LINE_MIDDLE, Prefs.KEY_LINE_BOTTOM,
             Prefs.KEY_LINE_TOP_IDLE, Prefs.KEY_LINE_MIDDLE_IDLE, Prefs.KEY_LINE_BOTTOM_IDLE,
-            Prefs.KEY_CLOCK_FACE, Prefs.KEY_CLOCK_ALWAYS, Prefs.KEY_CLOCK_BG,
+            Prefs.KEY_ART_PLAYING, Prefs.KEY_ART_IDLE, Prefs.KEY_CLOCK_BG,
             Prefs.KEY_CLOCK_FG, Prefs.KEY_ENRICH_ALBUM ->
                 refreshCurrentMetadata(force = true, why = "opcje")
             Prefs.KEY_BUFFER -> Log.i(TAG, "Zmieniono bufor - zadziala po restarcie odtwarzania")
@@ -314,8 +314,8 @@ class RadioService : MediaLibraryService() {
             put("goraBezUtworu", p.idle.top.name)
             put("srodekBezUtworu", p.idle.middle.name)
             put("dolBezUtworu", p.idle.bottom.name)
-            put("zegar", p.clockFace.name)
-            put("zegarZawsze", prefs.clockCoverAlways)
+            put("grafika", p.artPlaying.name)
+            put("grafikaBezUtworu", p.artIdle.name)
             put("okladka", prefs.artworkMode)
             put("album", prefs.enrichWithYear)
             put("diag", prefs.diagnosticMode)

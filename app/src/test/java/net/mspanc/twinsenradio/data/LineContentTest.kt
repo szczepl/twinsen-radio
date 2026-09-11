@@ -2,6 +2,7 @@ package net.mspanc.twinsenradio.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -75,5 +76,64 @@ class LineContentTest {
     fun `an unknown stored value does not crash`() {
         assertEquals(LineContent.TITLE, LineContent.at(999))
         assertEquals(LineContent.TITLE, LineContent.at(-1))
+    }
+}
+
+/**
+ * The picture slot. Like the lines, it is stored as an ordinal and chosen per
+ * state, so it carries the same hazard and gets the same guard.
+ */
+class ArtContentTest {
+
+    @Test
+    fun `the stored order never moves`() {
+        assertEquals(
+            listOf("COVER", "LOGO", "CLOCK_DIGITAL", "CLOCK_ANALOG", "EMPTY"),
+            ArtContent.entries.map { it.name }
+        )
+    }
+
+    /** Every state can be told to show nothing at all. */
+    @Test
+    fun `an empty picture is always on offer`() {
+        assertTrue(ArtContent.EMPTY in ArtContent.entries)
+        assertEquals(ArtContent.entries.size, ArtContent.LABELS.size)
+    }
+
+    @Test
+    fun `only the clocks resolve to a face`() {
+        assertEquals(ClockFace.DIGITAL, ArtContent.CLOCK_DIGITAL.clockFace)
+        assertEquals(ClockFace.ANALOG, ArtContent.CLOCK_ANALOG.clockFace)
+        listOf(ArtContent.COVER, ArtContent.LOGO, ArtContent.EMPTY)
+            .forEach { assertNull("$it", it.clockFace) }
+    }
+
+    @Test
+    fun `an unknown stored value falls back to the cover`() {
+        assertEquals(ArtContent.COVER, ArtContent.at(99))
+        assertEquals(ArtContent.COVER, ArtContent.at(-1))
+    }
+
+    /**
+     * A layout needs the minute tick if anything on it tells the time - a line
+     * or the picture. Missing the picture here would leave a drawn clock frozen
+     * at whatever minute the track started.
+     */
+    @Test
+    fun `a drawn clock alone still asks for the minute tick`() {
+        val still = LineSet(LineContent.TITLE, LineContent.ARTIST, LineContent.STATION)
+        val noClockAnywhere = Presentation(still, still, ArtContent.COVER, ArtContent.LOGO)
+        assertFalse(noClockAnywhere.needsClock)
+
+        assertTrue(noClockAnywhere.copy(artIdle = ArtContent.CLOCK_ANALOG).needsClock)
+        assertTrue(noClockAnywhere.copy(artPlaying = ArtContent.CLOCK_DIGITAL).needsClock)
+    }
+
+    @Test
+    fun `each state gets its own picture`() {
+        val still = LineSet(LineContent.TITLE, LineContent.ARTIST, LineContent.STATION)
+        val p = Presentation(still, still, ArtContent.COVER, ArtContent.CLOCK_DIGITAL)
+        assertEquals(ArtContent.COVER, p.artFor(trackPlaying = true))
+        assertEquals(ArtContent.CLOCK_DIGITAL, p.artFor(trackPlaying = false))
     }
 }

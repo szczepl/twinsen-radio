@@ -105,10 +105,40 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_LINE_BOTTOM_IDLE, Presentation.DEFAULT_IDLE.bottom.ordinal)
         set(v) = sp.edit { putInt(KEY_LINE_BOTTOM_IDLE, v) }
 
-    /** Whether to draw a clock instead of cover art, see [ClockFace]. */
-    var clockFace: Int
-        get() = sp.getInt(KEY_CLOCK_FACE, Presentation.DEFAULT.clockFace.ordinal)
-        set(v) = sp.edit { putInt(KEY_CLOCK_FACE, v) }
+    /**
+     * What fills the picture slot, per state - see [ArtContent].
+     *
+     * The defaults translate the three settings this replaced, so an upgrade
+     * keeps looking the way it looked. Read-only translation, never written
+     * back: the old keys stay where they are until the first save, and a
+     * half-migrated file is worse than none.
+     */
+    var artPlaying: Int
+        get() = sp.getInt(KEY_ART_PLAYING, legacyArt(idle = false).ordinal)
+        set(v) = sp.edit { putInt(KEY_ART_PLAYING, v) }
+
+    var artIdle: Int
+        get() = sp.getInt(KEY_ART_IDLE, legacyArt(idle = true).ordinal)
+        set(v) = sp.edit { putInt(KEY_ART_IDLE, v) }
+
+    /**
+     * The old clock face plus the old "always" switch, expressed as the new
+     * per-state choice.
+     *
+     * The switch meant "clock even when a cover was found". So with it on, both
+     * states were a clock; with it off, only the state without a cover was -
+     * which in practice is the one between tracks.
+     */
+    private fun legacyArt(idle: Boolean): ArtContent {
+        val face = ClockFace.at(sp.getInt(KEY_CLOCK_FACE, ClockFace.NONE.ordinal))
+        val clock = when (face) {
+            ClockFace.DIGITAL -> ArtContent.CLOCK_DIGITAL
+            ClockFace.ANALOG -> ArtContent.CLOCK_ANALOG
+            ClockFace.NONE -> null
+        } ?: return if (idle) ArtContent.LOGO else ArtContent.COVER
+        val always = sp.getBoolean(KEY_CLOCK_ALWAYS, false)
+        return if (idle || always) clock else ArtContent.COVER
+    }
 
     /** The full set of description settings, assembled from the above. */
     val presentation: Presentation
@@ -123,17 +153,9 @@ class Prefs(context: Context) {
                 middle = LineContent.at(lineMiddleIdle),
                 bottom = LineContent.at(lineBottomIdle)
             ),
-            clockFace = ClockFace.at(clockFace)
+            artPlaying = ArtContent.at(artPlaying),
+            artIdle = ArtContent.at(artIdle)
         )
-
-    /**
-     * With a clock instead of cover art: whether it should always be visible
-     * (true), or only when we'd have shown the station logo anyway because no
-     * cover art was found.
-     */
-    var clockCoverAlways: Boolean
-        get() = sp.getBoolean(KEY_CLOCK_ALWAYS, false)
-        set(v) = sp.edit { putBoolean(KEY_CLOCK_ALWAYS, v) }
 
     /** Background color of the clock drawn instead of cover art. */
     var clockBackground: Int
@@ -496,6 +518,8 @@ class Prefs(context: Context) {
         const val KEY_LINE_BOTTOM_IDLE = "line_bottom_idle"
         const val KEY_CLOCK_FACE = "clock_face"
         const val KEY_CLOCK_ALWAYS = "clock_cover_always"
+        const val KEY_ART_PLAYING = "art_playing"
+        const val KEY_ART_IDLE = "art_idle"
         const val KEY_CLOCK_BG = "clock_background"
         const val KEY_CLOCK_FG = "clock_foreground"
         const val KEY_ENRICH_ALBUM = "enrich_with_album"

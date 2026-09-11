@@ -89,7 +89,9 @@
     <string name="opt_sec_stream">Strumień i własne stacje</string>
     <string name="opt_lines_intro">Zmierzone w Passacie: Active Info Display pokazuje trzy wiersze, ekran centralny — pierwszy i trzeci. Wiersz środkowy widać wyłącznie na AID. Pola są wspólne, więc tego, co wstawisz w wiersz 1 lub 3, nie da się ukryć przed ekranem centralnym.</string>
     <string name="opt_lines_idle_intro">Reklama, zapowiedź stacji albo cisza — wtedy nie ma tytułu ani wykonawcy, więc te same trzy wiersze dostają osobny zestaw. Lista zawiera tylko to, co aplikacja w tej chwili wie.</string>
-    <string name="opt_clock_face">Zamiast okładki</string>
+    <string name="opt_art_intro">Kwadrat obok opisu — na AID i na ekranie centralnym. Tak jak wiersze, ustawiany osobno dla grającego utworu i dla przerwy. Zegar trafia tam wyłącznie przy podłączonej głowicy; na samym telefonie zostaje okładka lub logo.</string>
+    <string name="opt_art_playing">Gdy leci utwór</string>
+    <string name="opt_art_idle">Gdy nie leci utwór</string>
     <!-- Trafia w środkowy wiersz AID; ekran centralny tego pola nie pokazuje -->
     <string name="aid_waiting_network">Oczekuję na sieć…</string>
     <string name="opt_m3u_sub">Jeden adres na linię. Parser czyta #EXTINF razem z tvg-logo i group-title.</string>
@@ -101,8 +103,6 @@
     <string name="ad">Reklama</string>
     <string name="ad_with_length">Reklama · %1$d s</string>
     <string name="opt_presentation">Układ opisu utworu</string>
-    <string name="opt_clock_always">Zegar zamiast okładki zawsze</string>
-    <string name="opt_clock_always_sub">Gdy wyłączone, zegar pojawia się tylko wtedy, gdy nie znaleziono okładki utworu — w miejscu logo stacji.</string>
     <string name="prev_station">Poprzednia stacja</string>
     <string name="next_station">Następna stacja</string>
 
