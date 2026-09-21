@@ -262,7 +262,28 @@ drive), `st` (station id) and `e`, the kind of event:
 | `wstrzymanie` | the first description held back after a switch, and for how long |
 | `wyslano` | the complete set pushed to the session, with `powod` — what prompted it |
 | `katalog` | the iTunes/MusicBrainz answer, and the swap decision taken on it |
-| `jakosc`, `stan`, `net`, `blad` | codec, playback state, network, player errors |
+| `jakosc`, `net`, `blad` | codec, network, player errors |
+| `stan` | the whole playback state in one line — see below |
+| `srodowisko` | once per run: app standby bucket, battery-optimisation exemption, available audio outputs |
+| `dogonienie` | a resume that dropped a stream gone stale during the pause, with `pauzaMs` — how long it had been away |
+
+A `stan` line is a snapshot, not a single field, because four callbacks can
+move the state and each sees only its own part:
+
+| field | what it says |
+|---|---|
+| `powod` | which callback fired: `stan`, `gra`, `slychac`, `tlumienie` |
+| `skad` | why `playWhenReady` moved — `uzytkownik`, `utrata-focusu`, `odlaczono-wyjscie`, `zdalnie`, `tlumione-za-dlugo` |
+| `stan` | `idle` / `buforuje` / `gotowy` / `koniec` |
+| `gra` | `playWhenReady` — what we *want* |
+| `slychac` | `isPlaying` — whether sound is actually coming out |
+| `tlumienie` | `brak` / `utrata-focusu` / `zle-wyjscie` |
+| `wyjscia` | output devices the system offers, e.g. `usb+glosnik` |
+
+**`gra: true, slychac: false` is the head unit going quiet** with everything
+apparently running; `tlumienie` and `wyjscia` on the same line say which of the
+two it was — no audio focus, or the car not being an available output at all.
+Consecutive identical snapshots are dropped, except ones carrying `skad`.
 | `cfg` | a setting changed mid-drive |
 
 Read it with UTF-8 named explicitly — the blank line the app sends is U+00A0,

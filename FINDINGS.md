@@ -458,3 +458,176 @@ RMF Classic sends Polish spellings of composers with descriptive titles
 (`Sergiusz Prokofiew - Symfonia Klasyczna 2`, which iTunes files under
 Prokofiev). Both parse correctly and simply aren't in the catalogue; neither
 is a fault to fix in the app.
+
+---
+
+## 8. What the dashboard says while it is not playing (21.09.2026)
+
+### Radio Nowy Świat's 256 kb/s stream — they changed nothing
+
+Reported as dead on the morning of 21.09. It is not. `stations.json` holds
+`https://stream.rcs.revma.com/4md4m0a0fs8uv`, and that is character for
+character what RNŚ publishes on `nowyswiat.online/jak-nas-sluchac` — under
+**"Streaming w wysokiej jakości dla Patronów"**, a section the page only shows
+to a logged-in patron, which is why an anonymous fetch of that page finds the
+128 and the AAC and nothing else. The mount is alive and honest: `icy-name`
+`Radio Nowy Swiat - MP3 256`, `icy-metaint` 16000, and the frames decode as
+MPEG-1 Layer III 256 kb/s, 44.1 kHz, joint stereo. All 20 CDN nodes the
+redirector handed out answered 200.
+
+What actually happened is in the trace, three times in half an hour:
+
+```
+07:28:25  stacja rns  url=…/4md4m0a0fs8uv
+07:28:25  stan  buforuje
+07:28:29  net   RECONNECTING
+07:28:34  net   STATION_UNREACHABLE      (then ERROR_CODE_TIMEOUT, twice)
+07:55:05  cfg   stream_choice_rns         ← switched to the 128 by hand
+07:55:52  stan  gotowy
+```
+
+and again at 07:53 and 08:00. The same address played for an hour without a
+break on 19.09, and it played on the phone at 12:57 and 12:59 the same day —
+on Wi-Fi in 1.2 s, on LTE in 1.7 s. So: a temporary outage of the patron
+mount, not a change on their side. **Not reproduced**, so the cause is not
+established; a listener cap on the high-bitrate mount during the morning peak
+fits the timing but is a guess, not a measurement. Nothing to change in the
+catalogue.
+
+### A station that never answers used to hang in silence
+
+Found while testing the above. `ReconnectController.scheduleStuckCheck()`
+returned early when `playWhenReady` was false — and a station change reaches
+`STATE_BUFFERING` *before* `playWhenReady` is set, which is the one moment the
+check gets armed. Nothing was armed, no further state change followed, and
+nothing rearmed it.
+
+Measured on an address that accepts TCP and never sends data: **100 s of
+buffering, not one event in the trace** — no reconnect, no error, no status.
+The condition now lives in the runnable, where it is asked at the moment it
+matters. The same test afterwards:
+
+```
+t+0.0 s   stacja / buforuje
+t+12 s    net RECONNECTING
+t+27 s    net STATION_UNREACHABLE
+```
+
+### The connection state now reaches the middle line
+
+It used to live only on the phone's own screen, which is the one screen nobody
+is looking at while driving — the head unit went on showing the last track it
+had been told about, and a station that had stopped answering looked exactly
+like a station playing something quiet. Only "no network" ever made it across.
+
+It goes in `description` — the middle AID line, the only one the cluster has to
+itself (section 1), so a warning there costs the central screen nothing.
+Measured end to end on the phone, black-holed address, medium buffer profile:
+
+| on the line | when |
+|---|---|
+| *Łączę ze stacją…* | t+4.1 s |
+| *Wznawiam połączenie…* | t+12 s |
+| *Stacja nie odpowiada…* | t+27 s |
+| the layout's own content again | as soon as the station answers |
+
+**Plain buffering is deliberately silent.** A second of refilling happens on
+any road, and a line that flashes a warning and takes it back reads worse than
+a line that says nothing. The grace before buffering counts as connecting is
+the chosen profile's own `forPlaybackMs` plus 2 s — 4 s on the default — so it
+scales with what the user asked for rather than being guessed at once. A
+station that answers normally (RNŚ, 1 s) never puts anything on the line:
+verified, the trace goes straight from the station name to the track.
+
+**Two writers, one status.** The player and `ReconnectController` were both
+writing `PlaybackStatusBus.setStatus`, and a reconnect drives the player into
+BUFFERING — which arrived *after* RECONNECTING and erased it. They are separate
+fields now, and trouble outranks: while the network has a complaint, that is
+what gets shown.
+
+### A pause leaves you behind for good, not for a bufferful (21.09.2026)
+
+Reported from the car: park, shop, come back, and the radio picks up *where it
+was* — then jumps to live "after a while". The obvious explanation is the
+buffer draining. It is not that.
+
+Measured on RMF FM, with a probe reading `StreamTitle` live from a desk at the
+same time:
+
+```
+13:33:05  phone plays   Armin van Buuren / SACHA - Everlasting
+13:33:17  PAUSE
+13:33:26  live is       DJ Snake / Justin Bieber - Let Me Love You
+          (no ICY block reaches the phone for the whole pause -
+           metadata is delivered at playback time, not load time)
+13:35:54  RESUME
+13:35:56  phone plays   DJ Snake / Justin Bieber - Let Me Love You   ← 2.5 min old
+13:39:16  phone plays   Wiktor Dyduła - Tam słońce gdzie my
+13:40:33  live is       (advert break)                               ← still behind
+```
+
+**The lag equals the length of the pause and does not close by itself.** Four
+minutes after resuming, the phone was still exactly that far back, with no
+error and no reconnect. Icecast holds the socket; TCP back-pressure stalls the
+sender while the client is not reading; on resume the server simply carries on
+from where it got to. What clears it eventually is the connection breaking for
+some unrelated reason — which is what "jumps to live after a while" actually
+is. A bigger buffer profile does not change this; the buffer is not what is
+holding the delay.
+
+So resuming has to rejoin rather than continue: `resetStationState()`,
+`stop()`, `prepare()`. The same test afterwards:
+
+```
+13:43:44  PAUSE
+13:45:40  RESUME        live is  Pitbull / Christina Aguilera - Feel this moment
+13:45:41  "pauza 116318ms - porzucam opozniony strumien i lacze sie od nowa"
+13:45:43  phone plays   Pitbull / Christina Aguilera - Feel this moment   ← live
+```
+
+3.9 s from resume to live audio. The threshold is 10 s of pause: verified that
+a 5 s pause resumes seamlessly with no reconnect, and a 20 s one rejoins. It is
+a judgement rather than a measurement — below it the lag is shorter than the
+1–2 s of silence that removing it costs.
+
+### What the trace could not see, and what it can now (21.09.2026)
+
+Three faults reported from the car had never left an answer in the trace. Going
+through them one at a time:
+
+**"The app is sometimes not in the Android Auto list."** This one cannot be
+logged and never will be. Android Auto builds that list from a package-manager
+query for the media-browser intent filter — **our process is never started**, so
+there is nothing running to write anything down. What can be done is to record,
+the next time we *do* run, the state that would have caused it. Hence
+`srodowisko`, written once per run: the app standby bucket and whether we are
+exempt from battery optimisation. At `ograniczony` (RESTRICTED) Android holds
+back exactly the kind of binding Android Auto needs. First reading from the test
+phone: `kubelek=aktywny`, `bezOszczedzania=false`. The second of those is worth
+changing before blaming the head unit.
+
+The other half of the answer is negative evidence that already exists: a drive
+with no trace file at all means we never started, and a run whose file has no
+closing `end` line means the process was killed.
+
+**"The head unit goes quiet with Android Auto up and the app apparently
+playing."** Nothing recorded whether sound was actually coming out. `gra`
+(`playWhenReady`) is a wish and `stan: gotowy` is a readiness; neither promises
+audio, and this fault lives precisely in the gap between them. A `stan` line is
+now a full snapshot — `slychac` (`isPlaying`), `tlumienie` (the playback
+suppression reason), `wyjscia` (available audio outputs) and `skad` (why
+`playWhenReady` moved). **`gra: true, slychac: false` is the signature**, and
+the same line says which of the two it was.
+
+**Verified on the phone:** the snapshot fires from all three of
+`onPlaybackStateChanged`, `onPlayWhenReadyChanged` and `onIsPlayingChanged`;
+`slychac` tracks playback correctly across play, pause and buffering; `wyjscia`
+lists real devices; `srodowisko` is written at start.
+
+**Not verified:** no non-`brak` value of `tlumienie` was produced on the bench.
+Audio-focus suppression could not be provoked from adb — the voice recorder, a
+second media app and the speech recogniser all declined to take focus. The
+override itself compiles against Media3 1.11's `Player.Listener`, so the
+callback exists and is wired, and both reason mappings are plain constant
+lookups; but the interesting branch will first run in the car. Treat the first
+`tlumienie` line from a real drive as the measurement.

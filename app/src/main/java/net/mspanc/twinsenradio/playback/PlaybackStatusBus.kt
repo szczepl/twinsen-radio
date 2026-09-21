@@ -61,6 +61,19 @@ object PlaybackStatusBus {
     private val _status = MutableStateFlow(Status.IDLE)
     val status: StateFlow<Status> = _status
 
+    /**
+     * Two things have an opinion about the status, and they answer different
+     * questions: the player says what it is doing, [ReconnectController] says
+     * whether there is a network to do it over. They are kept apart because one
+     * field had them overwriting each other - a reconnect drives the player into
+     * BUFFERING, and that arrived after RECONNECTING and erased it, so the only
+     * state worth reporting was the one that never got shown.
+     */
+    private var fromPlayer = Status.IDLE
+
+    /** null when the network has no complaint. */
+    private var fromNetwork: Status? = null
+
     enum class Status {
         IDLE, CONNECTING, BUFFERING, PLAYING, RECONNECTING, WAITING_FOR_NETWORK,
 
@@ -86,7 +99,21 @@ object PlaybackStatusBus {
         _nowPlaying.value = np
     }
 
-    fun setStatus(s: Status) {
-        _status.value = s
+    fun setPlayerStatus(s: Status) {
+        fromPlayer = s
+        publish()
+    }
+
+    fun setNetworkStatus(s: Status?) {
+        fromNetwork = s
+        publish()
+    }
+
+    /**
+     * Trouble outranks. Buffering during a reconnect is the symptom, not the
+     * news - what the driver needs to read is why the music stopped.
+     */
+    private fun publish() {
+        _status.value = fromNetwork ?: fromPlayer
     }
 }

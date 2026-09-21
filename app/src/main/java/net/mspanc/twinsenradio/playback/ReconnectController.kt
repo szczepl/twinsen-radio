@@ -172,7 +172,12 @@ class ReconnectController(
 
     private fun scheduleStuckCheck() {
         cancelStuckCheck()
-        if (!player.playWhenReady) return
+        // Deliberately not tested here, only when it fires. A station change
+        // reaches BUFFERING before playWhenReady is set, and that is the one
+        // moment this gets armed - refusing then meant a station that never
+        // answered from the start armed nothing at all, and the app sat
+        // buffering in silence with no reconnect and nothing to show for it.
+        // Measured 21.09.2026: 100 s on a black-holed address, not one event.
         val runnable = Runnable {
             if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@Runnable
             status = currentStatus()

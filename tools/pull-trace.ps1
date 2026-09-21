@@ -19,8 +19,15 @@ if (-not $listing) {
     exit 1
 }
 
+# adb pisze postep pobierania na stderr, a przy 'Stop' PowerShell robi z tego
+# blad przerywajacy - skrypt ginal tuz przed podsumowaniem, mimo ze wszystkie
+# pliki byly juz sciagniete. Kod wyjscia mowi prawde, stderr nie.
+$prev = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 & $adb pull $remote $OutDir
-if ($LASTEXITCODE -ne 0) { throw "adb pull sie nie powiodl" }
+$code = $LASTEXITCODE
+$ErrorActionPreference = $prev
+if ($code -ne 0) { throw "adb pull sie nie powiodl" }
 
 # Podsumowanie: ile czego jest w kazdym pliku. Zdarzenia sa w polu "e".
 Get-ChildItem (Join-Path $OutDir 'trace') -Filter *.jsonl | ForEach-Object {

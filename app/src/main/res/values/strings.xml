@@ -93,8 +93,13 @@
     <string name="opt_art_intro">Kwadrat obok opisu — na AID i na ekranie centralnym. Tak jak wiersze, ustawiany osobno dla grającego utworu i dla przerwy. Zegar trafia tam wyłącznie przy podłączonej głowicy; na samym telefonie zostaje okładka lub logo.</string>
     <string name="opt_art_playing">Gdy leci utwór</string>
     <string name="opt_art_idle">Gdy nie leci utwór</string>
-    <!-- Trafia w środkowy wiersz AID; ekran centralny tego pola nie pokazuje -->
+    <!-- Trafiają w środkowy wiersz AID; ekran centralny tego pola nie pokazuje.
+         Krótko, bo deska ucina od końca, a szerokości wiersza nie da się policzyć
+         w znakach - patrz FINDINGS.md, sekcja 7. -->
     <string name="aid_waiting_network">Oczekuję na sieć…</string>
+    <string name="aid_connecting">Łączę ze stacją…</string>
+    <string name="aid_reconnecting">Wznawiam połączenie…</string>
+    <string name="aid_unreachable">Stacja nie odpowiada…</string>
     <string name="opt_m3u_sub">Jeden adres na linię. Parser czyta #EXTINF razem z tvg-logo i group-title.</string>
     <string name="opt_hidden_label">Usunięte z listy: %1$s</string>
     <string name="opt_restore_hidden">Przywróć wszystkie</string>

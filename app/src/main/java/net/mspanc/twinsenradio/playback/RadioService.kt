@@ -1,11 +1,16 @@
 package net.mspanc.twinsenradio.playback
 
 import android.app.PendingIntent
+import android.app.usage.UsageStatsManager
 import android.content.Intent
 import android.content.SharedPreferences
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -71,6 +76,15 @@ class RadioService : MediaLibraryService() {
 
     private val clockHandler = Handler(Looper.getMainLooper())
     private var clockTick: Runnable? = null
+
+    /** Armed while buffering; fires if the wait turns into a real connection attempt. */
+    private var connectingAnnounce: Runnable? = null
+
+    /**
+     * When playback was paused, on the monotonic clock; 0 when it is not paused,
+     * or when whatever comes next will be a fresh connection anyway.
+     */
+    private var pausedAtMs = 0L
     private var lastIcyAtMs = 0L
 
     /** Cover art found for the current track; null = we show the station logo. */
@@ -150,6 +164,9 @@ class RadioService : MediaLibraryService() {
 
     /** Fingerprint of the last metadata dump - filters out repeats in the log. */
     private var lastDump: String? = null
+
+    /** Fingerprint of the last playback-state snapshot - see [traceState]. */
+    private var lastStateTrace: String? = null
 
     /** Address we're playing from - used to detect a quality variant change. */
     private var currentStreamUrl: String? = null
@@ -240,24 +257,38 @@ class RadioService : MediaLibraryService() {
             // of whatever is playing by then - mid-track again, just as at a
             // station change.
             if (status == ReconnectController.Status.RECONNECTING) positionUnknown = true
-            PlaybackStatusBus.setStatus(
+            PlaybackStatusBus.setNetworkStatus(
                 when (status) {
                     ReconnectController.Status.RECONNECTING -> PlaybackStatusBus.Status.RECONNECTING
                     ReconnectController.Status.WAITING_FOR_NETWORK -> PlaybackStatusBus.Status.WAITING_FOR_NETWORK
                     ReconnectController.Status.STATION_UNREACHABLE -> PlaybackStatusBus.Status.STATION_UNREACHABLE
-                    ReconnectController.Status.OK -> PlaybackStatusBus.Status.PLAYING
+                    // Not PLAYING - the network is simply out of complaints, and
+                    // what is actually happening is the player's to say.
+                    ReconnectController.Status.OK -> null
                 }
             )
-            // No network hits the middle line on the dashboard, so the metadata
-            // must be pushed again - otherwise the message would only appear at
-            // the next track, which in practice means never.
-            refreshCurrentMetadata(force = true, why = "siec")
         }
         reconnect.start()
         prefs.registerListener(prefsListener)
         scheduleClockTick()
 
         scope.launch { repo.refreshUserLists() }
+
+        // The dashboard learns nothing on its own - it only ever sees what we
+        // push into the session, so a connection message that is not pushed
+        // would first appear with the next track, which in practice means never.
+        // We watch the message rather than the status: the states that say
+        // nothing, and the ones that happen to say the same thing, then cost no
+        // refresh at all.
+        scope.launch {
+            var last: String? = null
+            PlaybackStatusBus.status.collect { status ->
+                val line = StatusLine.textFor(this@RadioService, status)
+                if (line == last) return@collect
+                last = line
+                refreshCurrentMetadata(force = true, why = "polaczenie")
+            }
+        }
 
         // A favourites change - wherever it came from - must immediately translate
         // into the star next to the player and into the lists that show it.
@@ -285,6 +316,7 @@ class RadioService : MediaLibraryService() {
 
     override fun onDestroy() {
         clockTick?.let { clockHandler.removeCallbacks(it) }
+        cancelConnecting()
         prefs.unregisterListener(prefsListener)
         reconnect.stop()
         session.release()
@@ -323,6 +355,7 @@ class RadioService : MediaLibraryService() {
 
     private fun startTrace() {
         Trace.open(this)
+        traceEnvironment()
         val p = prefs.presentation
         Trace.write("uklad") {
             // Both layouts, because which one a line came from is the first
@@ -435,19 +468,8 @@ class RadioService : MediaLibraryService() {
         }
 
         override fun onPlaybackStateChanged(state: Int) {
-            Trace.write("stan") {
-                put(
-                    "stan",
-                    when (state) {
-                        Player.STATE_IDLE -> "idle"
-                        Player.STATE_BUFFERING -> "buforuje"
-                        Player.STATE_READY -> "gotowy"
-                        else -> "koniec"
-                    }
-                )
-                put("gra", player.playWhenReady)
-            }
-            PlaybackStatusBus.setStatus(
+            traceState("stan")
+            PlaybackStatusBus.setPlayerStatus(
                 when (state) {
                     Player.STATE_BUFFERING -> PlaybackStatusBus.Status.BUFFERING
                     Player.STATE_READY -> if (player.playWhenReady) {
@@ -458,6 +480,79 @@ class RadioService : MediaLibraryService() {
                     else -> PlaybackStatusBus.Status.IDLE
                 }
             )
+            if (state == Player.STATE_BUFFERING) armConnecting() else cancelConnecting()
+        }
+
+        /**
+         * On live radio a pause is not a pause - it is falling behind, and
+         * staying there.
+         *
+         * Measured 21.09.2026 on RMF FM: paused for 2 min 37 s, resumed, and two
+         * seconds later the app announced a track that had been on air two and a
+         * half minutes earlier. Four minutes after that it was still exactly that
+         * far behind, with no error and no catching up. The lag is not the buffer
+         * draining - Icecast holds the socket, TCP back-pressure stalls the
+         * sender while nobody is reading, and on resume the server simply carries
+         * on from where it had got to. **The lag equals the length of the pause
+         * and it never closes by itself**; what eventually clears it is the
+         * connection breaking for some unrelated reason, which is why it looks
+         * like it "jumps to live after a while".
+         *
+         * In the car this is the trip-to-the-shop case: the power goes, the head
+         * unit drops, `handleAudioBecomingNoisy` pauses us, and twenty minutes
+         * later we resume twenty minutes behind - the wrong news, the wrong
+         * traffic report, and a dashboard describing a track that ended long ago.
+         *
+         * So a resume that has been away long enough drops the stream and joins
+         * the live one instead. [STALE_RESUME_MS] is a judgement, not a
+         * measurement: under it the lag is shorter than the silence a reconnect
+         * costs, so carrying on is the better of the two.
+         */
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            traceState("gra", playWhenReadyReason(reason))
+            if (!playWhenReady) {
+                pausedAtMs = SystemClock.elapsedRealtime()
+                return
+            }
+            val away = if (pausedAtMs == 0L) 0L else SystemClock.elapsedRealtime() - pausedAtMs
+            pausedAtMs = 0L
+            if (away < STALE_RESUME_MS || player.currentMediaItem == null) return
+
+            Trace.write("dogonienie") { put("pauzaMs", away) }
+            Log.i(TAG, "pauza ${away}ms - porzucam opozniony strumien i lacze sie od nowa")
+            // The same reset a station change does. What was queued up to play is
+            // minutes old, and so is everything we had worked out about it - the
+            // description, the cover art, the deadline it was to expire at.
+            resetStationState()
+            player.stop()
+            player.prepare()
+            // Without this the dashboard would keep the track from before the
+            // pause until the station happens to announce the next one.
+            refreshCurrentMetadata(force = true, now = null, why = "dogonienie")
+        }
+
+        /**
+         * The only callback that means "sound is actually coming out".
+         *
+         * `playWhenReady` is a wish and `STATE_READY` is a readiness; neither of
+         * them promises audio. The combination that produces the head unit going
+         * quiet with everything apparently running is exactly the one these two
+         * hide: ready, wanting to play, and suppressed.
+         */
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            traceState("slychac")
+        }
+
+        /**
+         * Why the player is not making a sound although it wants to - no audio
+         * focus, or an output the player will not play to.
+         *
+         * This is the first thing to look at when the Passat goes silent with
+         * Android Auto up and the app apparently playing. Nothing recorded it
+         * before, which is why that fault has never had an answer.
+         */
+        override fun onPlaybackSuppressionReasonChanged(reason: Int) {
+            traceState("tlumienie")
         }
 
         /**
@@ -680,6 +775,144 @@ class RadioService : MediaLibraryService() {
         }
     }
 
+    /**
+     * What the system currently thinks of this app, written once per run.
+     *
+     * This is the nearest thing there is to an answer for "sometimes the app is
+     * not in the Android Auto list at all". We cannot log that directly - the
+     * list is built from the package manager without ever starting us, so when
+     * we are missing there is no process to write anything down. What we can do
+     * is record, the next time we do run, the state that would have caused it.
+     *
+     * `kubelek` is the app standby bucket: at RESTRICTED Android holds back
+     * background work and bindings, which is exactly what Android Auto needs to
+     * do to reach us. `bezOszczedzania` says whether we are exempt from battery
+     * optimisation. Either one being wrong is a cause; both being fine moves the
+     * suspicion off the phone and onto Android Auto or the head unit.
+     */
+    private fun traceEnvironment() {
+        Trace.write("srodowisko") {
+            put(
+                "kubelek",
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    runCatching {
+                        when (val b = getSystemService(UsageStatsManager::class.java).appStandbyBucket) {
+                            UsageStatsManager.STANDBY_BUCKET_ACTIVE -> "aktywny"
+                            UsageStatsManager.STANDBY_BUCKET_WORKING_SET -> "roboczy"
+                            UsageStatsManager.STANDBY_BUCKET_FREQUENT -> "czesty"
+                            UsageStatsManager.STANDBY_BUCKET_RARE -> "rzadki"
+                            45 -> "ograniczony" // STANDBY_BUCKET_RESTRICTED, API 30+
+                            else -> "inny($b)"
+                        }
+                    }.getOrDefault("?")
+                } else {
+                    "n/d"
+                }
+            )
+            put(
+                "bezOszczedzania",
+                runCatching {
+                    getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+                }.getOrNull()
+            )
+            put("wyjscia", audioOutputs())
+        }
+    }
+
+    /**
+     * The whole playback state in one line, whichever part of it just moved.
+     *
+     * Four callbacks can change it and each one sees only its own field, so
+     * writing what each reports separately gave a trace where no single line
+     * ever said whether sound was coming out. A snapshot instead: `powod` names
+     * the callback that fired, the rest is the full picture at that instant.
+     *
+     * `slychac` is the one that matters. `gra` is a wish and `stan` is a
+     * readiness - neither promises audio, and the fault where the Passat goes
+     * quiet with everything apparently running lives precisely in the gap
+     * between them.
+     */
+    private fun traceState(why: String, detail: String? = null) {
+        val stan = when (player.playbackState) {
+            Player.STATE_IDLE -> "idle"
+            Player.STATE_BUFFERING -> "buforuje"
+            Player.STATE_READY -> "gotowy"
+            else -> "koniec"
+        }
+        val gra = player.playWhenReady
+        val slychac = player.isPlaying
+        val tlumienie = suppressionName(player.playbackSuppressionReason)
+        // Which outputs the system is offering. When the car is silent, the
+        // question "was the car even an available output" comes first, and it
+        // cannot be answered after the fact from anywhere else.
+        val wyjscia = audioOutputs()
+
+        // One move usually trips two callbacks - play() reaches here as both
+        // "gra" and "slychac" - and the second line would repeat the first down
+        // to the last field. Which callback fired is not the interesting part;
+        // the state is. A line carrying `skad` is never dropped, though: that is
+        // the only place the reason for a pause is written down.
+        val fingerprint = "$stan|$gra|$slychac|$tlumienie|$wyjscia"
+        if (detail == null && fingerprint == lastStateTrace) return
+        lastStateTrace = fingerprint
+
+        Trace.write("stan") {
+            put("powod", why)
+            detail?.let { put("skad", it) }
+            put("stan", stan)
+            put("gra", gra)
+            put("slychac", slychac)
+            put("tlumienie", tlumienie)
+            put("wyjscia", wyjscia)
+        }
+    }
+
+    private fun suppressionName(reason: Int): String = when (reason) {
+        Player.PLAYBACK_SUPPRESSION_REASON_NONE -> "brak"
+        Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS -> "utrata-focusu"
+        Player.PLAYBACK_SUPPRESSION_REASON_UNSUITABLE_AUDIO_ROUTE -> "zle-wyjscie"
+        else -> "inne($reason)"
+    }
+
+    /** Why `playWhenReady` moved - who paused us, in other words. */
+    private fun playWhenReadyReason(reason: Int): String = when (reason) {
+        Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST -> "uzytkownik"
+        Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS -> "utrata-focusu"
+        Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY -> "odlaczono-wyjscie"
+        Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE -> "zdalnie"
+        Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM -> "koniec-utworu"
+        Player.PLAY_WHEN_READY_CHANGE_REASON_SUPPRESSED_TOO_LONG -> "tlumione-za-dlugo"
+        else -> "inne($reason)"
+    }
+
+    /**
+     * Output devices the system currently offers, by type, deduplicated. Short
+     * names on purpose - this rides along on every state line.
+     */
+    private fun audioOutputs(): String = runCatching {
+        val am = getSystemService(AudioManager::class.java) ?: return@runCatching "?"
+        am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .map { d ->
+                when (d.type) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "glosnik"
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "sluchawka"
+                    AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "jack"
+                    AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET,
+                    AudioDeviceInfo.TYPE_USB_ACCESSORY -> "usb"
+                    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "bt-a2dp"
+                    AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "bt-sco"
+                    AudioDeviceInfo.TYPE_BUS -> "bus"
+                    AudioDeviceInfo.TYPE_TELEPHONY -> "telefonia"
+                    AudioDeviceInfo.TYPE_HDMI -> "hdmi"
+                    AudioDeviceInfo.TYPE_DOCK -> "dok"
+                    AudioDeviceInfo.TYPE_REMOTE_SUBMIX -> "submix"
+                    else -> "typ${d.type}"
+                }
+            }
+            .distinct()
+            .joinToString("+")
+    }.getOrDefault("?")
+
     /** How long the current station has been playing, for the trace. */
     private fun sinceStationMs(): Long? =
         if (stationAtMs == 0L) null else SystemClock.elapsedRealtime() - stationAtMs
@@ -887,6 +1120,9 @@ class RadioService : MediaLibraryService() {
      */
     private fun resetStationState() {
         coverGeneration++
+        // Whatever we are about to open is a fresh connection, so the pause
+        // before it has nothing left to say about how far behind we are.
+        pausedAtMs = 0L
         coverRevertJob?.cancel()
         staleJob?.cancel()
         staleAtMs = 0L
@@ -912,6 +1148,9 @@ class RadioService : MediaLibraryService() {
         // to read the same as the one we just left (two stations, both showing
         // just the clock).
         lastDump = null
+        // A new station gets its opening state written out even if it happens to
+        // read the same as the state the previous one ended in.
+        lastStateTrace = null
         audioFormat = null
         icyBitrateKbps = 0
         PlaybackStatusBus.setCoverArt(null)
@@ -1048,6 +1287,40 @@ class RadioService : MediaLibraryService() {
         }
         clockTick = runnable
         clockHandler.postDelayed(runnable, delayToNextMinute + 100)
+    }
+
+    /**
+     * Arms the "connecting" message for the dashboard.
+     *
+     * Buffering by itself is not worth announcing - a second of refilling
+     * happens on any road, and a line that flashes a warning and takes it back
+     * reads worse than a line that says nothing. Buffering that outlasts the
+     * startup its own profile asks for is a different thing: at that point we
+     * are not filling a buffer, we are waiting on a station that has not
+     * answered. That is what the driver is owed an explanation for.
+     *
+     * The grace is read from the chosen [BufferProfile] rather than fixed,
+     * because "too long" means something different at a 1 s start than at a 4 s
+     * one. It stays well inside [ReconnectController]'s own 12 s patience, so
+     * the dashboard says "connecting" before anything says "reconnecting".
+     */
+    private fun armConnecting() {
+        cancelConnecting()
+        val runnable = Runnable {
+            connectingAnnounce = null
+            // Both conditions have to hold at the moment it fires, not when it
+            // was armed: a station starts buffering before playWhenReady is set,
+            // so testing it up front would skip the very case this is for.
+            if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return@Runnable
+            PlaybackStatusBus.setPlayerStatus(PlaybackStatusBus.Status.CONNECTING)
+        }
+        connectingAnnounce = runnable
+        clockHandler.postDelayed(runnable, BufferProfile.at(prefs.bufferProfile).forPlaybackMs + CONNECTING_MARGIN_MS)
+    }
+
+    private fun cancelConnecting() {
+        connectingAnnounce?.let { clockHandler.removeCallbacks(it) }
+        connectingAnnounce = null
     }
 
     /**
@@ -1738,6 +2011,27 @@ class RadioService : MediaLibraryService() {
          * at the same moment.
          */
         private const val STATION_SETTLE_MS = 1_500L
+
+        /**
+         * Margin on top of the buffer profile's own startup before buffering
+         * counts as connecting - see [armConnecting]. It covers a slow DNS
+         * lookup and TLS handshake, which the profile knows nothing about.
+         */
+        private const val CONNECTING_MARGIN_MS = 2_000L
+
+        /**
+         * How long a pause has to last before resuming means rejoining the live
+         * stream rather than carrying on from where we stopped - see
+         * [PlayerEvents.onPlayWhenReadyChanged].
+         *
+         * A judgement, not a measurement. The lag after a pause is exactly the
+         * length of that pause, and undoing it costs the 1-2 s a reconnect takes
+         * (measured the same day: RNS 1.2 s, RMF ~2 s). Ten seconds is where the
+         * lag stops being cheaper than the silence that would remove it; below
+         * that, nobody can tell they are behind, and a red light should not cost
+         * a gap.
+         */
+        private const val STALE_RESUME_MS = 10_000L
 
         /** Android Auto, and the Desktop Head Unit that stands in for it. */
         private const val PKG_ANDROID_AUTO = "com.google.android.projection.gearhead"

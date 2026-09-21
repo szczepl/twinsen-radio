@@ -146,11 +146,11 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             val bottom = lineOf(lines.bottom, station, now, trackInfo, title, artist)
 
             // The middle line is only visible on the AID - the one place where a
-            // network warning can go without cluttering the central screen too.
-            val middle = when (PlaybackStatusBus.status.value) {
-                PlaybackStatusBus.Status.WAITING_FOR_NETWORK -> context.getString(R.string.aid_waiting_network)
-                else -> lineOf(lines.middle, station, now, trackInfo, title, artist)
-            }
+            // warning can go without cluttering the central screen too. What the
+            // state of the connection has to say there, and when it says nothing,
+            // is [StatusLine]'s to decide.
+            val middle = StatusLine.textFor(context, PlaybackStatusBus.status.value)
+                ?: lineOf(lines.middle, station, now, trackInfo, title, artist)
 
             // The fields the head unit actually renders. Measured in the Passat
             // (FINDINGS.md): the AID reads subtitle / description / displayTitle,

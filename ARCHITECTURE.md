@@ -305,6 +305,24 @@ on the dashboard, so the central screen stays clean.
 playing — without this, tapping a currently-playing station from the list
 would drop the connection and you'd hear a gap.
 
+### A pause is not a pause on live radio
+
+Resuming an Icecast stream does **not** resume live — it resumes where it
+stopped, and stays that far behind for good. The server keeps the socket, TCP
+back-pressure stalls it while nobody is reading, and on resume it carries on
+from where it got to. The lag equals the length of the pause and never closes
+by itself (measured 21.09.2026 — FINDINGS.md, section 8).
+
+That matters because the car pauses us for real: power goes when you park,
+the head unit drops, `handleAudioBecomingNoisy` pauses playback, and the trip
+to the shop turns into twenty minutes of lag — the wrong news, the wrong
+traffic report, and a dashboard describing a track that ended long ago.
+
+So a resume after more than `STALE_RESUME_MS` drops the stream and joins the
+live one: `resetStationState()`, `stop()`, `prepare()`. Below that threshold
+the lag is shorter than the silence a reconnect would cost, so we carry on —
+a pause at a red light should not buy a gap.
+
 ---
 
 ## 9. Stations beyond the built-in list

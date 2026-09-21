@@ -74,6 +74,25 @@ coordinates you read off the image by the factor the tool states.
   screenshot and read the rows before tapping by coordinate — or use the
   `play_station` extra above, which does not care.
 
+## Editing the app's settings from adb
+
+`SettingsActivity` is not exported, so the way to set something without a
+finger is `run-as`:
+
+```bash
+adb shell "run-as net.mspanc.twinsenradio sed -i 's|name=\"trace_enabled\">[^<]*<|name=\"trace_enabled\">true<|' shared_prefs/twinsen_radio.xml"
+```
+
+Force-stop first, or the running process writes its in-memory copy back over
+the edit.
+
+**Do not make a `.bak` copy of `twinsen_radio.xml` next to it.**
+`SharedPreferences` owns that exact name: on the next start it finds
+`<name>.xml.bak`, restores from it and deletes the file you edited. A backup
+taken "to be safe" silently undoes the change, and the app comes up with the
+old value while `cat` a second earlier showed the new one. Copy it somewhere
+else, or not at all - `adb pull` already has it.
+
 ## Options is not reachable from adb
 
 `SettingsActivity` is not exported, so `am start` on it is a
@@ -85,6 +104,21 @@ SecurityException. Overflow menu (three dots, top right) → *Opcje*.
 unit's server process and it cannot be restarted from adb — the user has to
 tap it back to life by hand. Unplugging and replugging the cable reloads the
 session.
+
+## Making a station hang on purpose
+
+To see what the app does when a station does not answer, point it at an
+address that accepts the connection and never sends anything - a filtered port
+on a host that is up:
+
+```bash
+adb shell "run-as net.mspanc.twinsenradio sed -i 's|</map>|<string name=\"stream_custom_rns\">https://stream.rcs.revma.com:81/4md4m0a0fs8uv</string></map>|' shared_prefs/twinsen_radio.xml"
+```
+
+`stream_custom_` beats everything, including the variant list, so any address
+goes. `stream_choice_` does not - it is matched against the station's own
+variants and silently falls back to the best one if it matches none. **Put the
+user's value back afterwards**; it is their setting, and the app shows it.
 
 ## Evidence
 
