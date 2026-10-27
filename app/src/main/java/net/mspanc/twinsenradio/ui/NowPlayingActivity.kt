@@ -13,6 +13,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.R
+import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StationRepository
@@ -151,7 +152,14 @@ class NowPlayingActivity : AppCompatActivity() {
                 val info = PlaybackStatusBus.trackInfo.value
                 // Artist only - the album goes separately, on its own line below
                 b.songArtist.text = MetadataFactory.composeArtistOnly(now, info)
-                val album = info?.albumLabel(prefs.enrichWithYear).orEmpty()
+                // The phone follows the dashboard: a record switched off in the
+                // line settings is switched off here too, or the two screens
+                // describe the same track differently.
+                val album = if (prefs.presentation.playing.shows(LineContent.Part.ALBUM)) {
+                    info?.albumLabel(prefs.enrichWithYear).orEmpty()
+                } else {
+                    ""
+                }
                 b.songAlbum.text = album
                 b.songAlbum.visibility = if (album.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
                 // Same processing as in the car: corrected order and spelling.

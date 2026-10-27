@@ -319,4 +319,22 @@ class RetiredCompositeTest {
             LineContent.expandedBy(LineContent.TITLE_ALBUM, LineContent.EMPTY)
         )
     }
+
+    /**
+     * The phone's now-playing screen shows the record only when the dashboard
+     * does - the layout below is the one on the phone on 27.10.2026, with the
+     * record switched off, while the phone still printed it.
+     */
+    @Test
+    fun `the record is shown only where a line asks for it`() {
+        val noRecord = LineSet(
+            top = LineSpec(LineContent.CLOCK, LineContent.DATE),
+            middle = LineSpec(LineContent.ARTIST),
+            bottom = LineSpec(LineContent.TITLE)
+        )
+        assertFalse(noRecord.shows(LineContent.Part.ALBUM))
+        assertTrue(Presentation.DEFAULT_PLAYING.shows(LineContent.Part.ALBUM))
+        // A retired composite still counts - it carries the record as one of its halves.
+        assertTrue(noRecord.copy(top = LineSpec(LineContent.ARTIST_ALBUM)).shows(LineContent.Part.ALBUM))
+    }
 }

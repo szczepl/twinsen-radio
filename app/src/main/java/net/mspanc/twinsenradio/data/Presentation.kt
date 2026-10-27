@@ -198,6 +198,9 @@ data class LineSet(
     }
 
     fun all(): List<LineContent> = listOf(top, middle, bottom).flatMap { it.all() }
+
+    /** Whether any line puts [part] on the dashboard. */
+    fun shows(part: LineContent.Part): Boolean = all().any { part in it.parts }
 }
 
 /**
