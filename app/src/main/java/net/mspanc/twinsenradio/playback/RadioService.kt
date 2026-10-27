@@ -44,6 +44,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ContentStyle
@@ -86,6 +87,21 @@ class RadioService : MediaLibraryService() {
      */
     private var pausedAtMs = 0L
     private var lastIcyAtMs = 0L
+
+    /** Polls [StationTitleApi] while a station that has one is playing. */
+    private var titlePollJob: Job? = null
+
+    /** The last StreamTitle the API gave - it only goes on when it changes. */
+    private var lastApiTitle: String? = null
+
+    /** Stream or API, for a station that has both - see [arbitrate]. */
+    private val titleArbiter = TitleArbiter()
+
+    /** Whether the API's current title was kept off screen because the stream had the say. */
+    private var apiHeldBack = false
+
+    /** The field names of the API's last answer - see [traceApiFields]. */
+    private var lastApiFields: String? = null
 
     /** Cover art found for the current track; null = we show the station logo. */
     @Volatile
@@ -450,6 +466,7 @@ class RadioService : MediaLibraryService() {
             // and a station that says nothing at all leaves this standing, which
             // is exactly what it should show.
             refreshCurrentMetadata(force = true, now = null, why = "zmiana-stacji")
+            syncTitlePolling()
 
             id?.let {
                 prefs.pushRecent(it)
@@ -512,11 +529,15 @@ class RadioService : MediaLibraryService() {
             traceState("gra", playWhenReadyReason(reason))
             if (!playWhenReady) {
                 pausedAtMs = SystemClock.elapsedRealtime()
+                syncTitlePolling()
                 return
             }
             val away = if (pausedAtMs == 0L) 0L else SystemClock.elapsedRealtime() - pausedAtMs
             pausedAtMs = 0L
-            if (away < STALE_RESUME_MS || player.currentMediaItem == null) return
+            if (away < STALE_RESUME_MS || player.currentMediaItem == null) {
+                syncTitlePolling()
+                return
+            }
 
             Trace.write("dogonienie") { put("pauzaMs", away) }
             Log.i(TAG, "pauza ${away}ms - porzucam opozniony strumien i lacze sie od nowa")
@@ -529,6 +550,7 @@ class RadioService : MediaLibraryService() {
             // Without this the dashboard would keep the track from before the
             // pause until the station happens to announce the next one.
             refreshCurrentMetadata(force = true, now = null, why = "dogonienie")
+            syncTitlePolling()
         }
 
         /**
@@ -573,7 +595,9 @@ class RadioService : MediaLibraryService() {
                     is IcyHeaders -> logIcyHeaders(entry)
                     is IcyInfo -> {
                         val raw = logIcyInfo(entry)
-                        handleIcyTitle(entry.title, raw)
+                        if (titleApiSource() == null || arbitrate(TitleArbiter.Source.ICY, entry.title, raw)) {
+                            handleIcyTitle(entry.title, raw)
+                        }
                     }
                     else -> Log.i(TAG_ICY, "inny typ metadanych: ${entry.javaClass.simpleName} | $entry")
                 }
@@ -714,6 +738,108 @@ class RadioService : MediaLibraryService() {
             return
         }
         publish(now)
+    }
+
+    private fun titleApiSource(): StationTitleApi.Source? =
+        StationTitleApi.forStation(player.currentMediaItem?.mediaId?.let { Station.idFromMediaId(it) })
+
+    /**
+     * Starts or stops the title poll to match what the player is doing: on
+     * while it wants to play a station that has an API, off otherwise - a
+     * paused radio has nothing to describe.
+     *
+     * Only a change is considered, and then [arbitrate] decides whether it goes
+     * on - the stream has the say while it is talking. What does go on passes
+     * through [handleIcyTitle] as if the stream had sent it, so its first
+     * answer counts as joining mid-track and every later one as a change we
+     * saw happen - the same as ICY.
+     */
+    private fun syncTitlePolling() {
+        val source = titleApiSource()
+        if (source == null || !player.playWhenReady) {
+            titlePollJob?.cancel()
+            titlePollJob = null
+            return
+        }
+        if (titlePollJob?.isActive == true) return
+        titlePollJob = scope.launch {
+            while (isActive) {
+                val body = StationTitleApi.fetch(source)
+                val title = body?.let(source.toStreamTitle)
+                body?.let(::traceApiFields)
+                if (body == null) {
+                    Log.i(TAG_ICY, "API tytulow nie odpowiedzialo")
+                } else if (title != null && (title != lastApiTitle || heldBackAndStreamGone())) {
+                    lastApiTitle = title
+                    Log.i(TAG_ICY, "API tytulow: $body")
+                    val raw = "api: $body"
+                    if (arbitrate(TitleArbiter.Source.API, title, raw)) handleIcyTitle(title, raw)
+                }
+                delay(StationTitleApi.POLL_MS)
+            }
+        }
+    }
+
+    /**
+     * Whether a title from [source] should go on, for a station that has both
+     * a stream and an API - see [TitleArbiter]. Either way the comparison goes
+     * into the trace, because whether the two agree, and how far apart they
+     * are, is something only a live station can tell us.
+     */
+    private fun arbitrate(source: TitleArbiter.Source, title: String?, rawBlock: String): Boolean {
+        val stationName = player.currentMediaItem?.mediaId?.let { repo.byMediaId(it)?.name }
+        val now = NowPlaying.parse(title, stationName, rawBlock)
+        val atMs = SystemClock.elapsedRealtime()
+        val result = when (source) {
+            TitleArbiter.Source.ICY -> titleArbiter.fromIcy(now, NowPlaying.isPlaceholder(title), atMs)
+            // The poll hands over only what parsed - an API answer that says
+            // nothing never reaches here.
+            TitleArbiter.Source.API -> now?.let { titleArbiter.fromApi(it, atMs) } ?: return false
+        }
+        if (now != null) {
+            Log.i(TAG_ICY, "zrodla: $source '$title' -> ${result.verdict} zgodne=${result.agrees}")
+            Trace.write("zgodnosc") {
+                put("zrodlo", source.name)
+                put("tytul", title)
+                put("werdykt", result.verdict.name)
+                put("zgodne", result.agrees)
+                put("roznicaMs", result.apartMs)
+                put("icyZaufane", titleArbiter.streamTrusted)
+                put("blok", rawBlock)
+            }
+        }
+        if (source == TitleArbiter.Source.API) apiHeldBack = result.verdict == TitleArbiter.Verdict.STREAM_RULES
+        return result.verdict == TitleArbiter.Verdict.PUBLISH
+    }
+
+    /**
+     * The API's current title was held back while the stream had the say, and
+     * the stream has since lost it - stopped following the API, or sent its
+     * placeholder. The poll only acts on a change, so without this the
+     * held-back title would wait for the next track while the screen kept the
+     * stream's last word.
+     */
+    private fun heldBackAndStreamGone(): Boolean =
+        apiHeldBack && !titleArbiter.streamRules(SystemClock.elapsedRealtime())
+
+    /**
+     * Records the API's fields whenever their set changes. Their web player
+     * reads a `schedule_img` from the same answer, which looks like what it
+     * sends while a programme rather than a track is on - the one signal of
+     * "talking heads" in sight. Not seen yet (27.10.2026), so for now it is
+     * only written down, to be measured before anything relies on it.
+     */
+    private fun traceApiFields(body: String) {
+        val keys = runCatching {
+            org.json.JSONObject(body).optJSONObject("data")?.keys()?.asSequence()?.sorted()?.joinToString(",")
+        }.getOrNull() ?: return
+        if (keys == lastApiFields) return
+        lastApiFields = keys
+        Log.i(TAG_ICY, "API tytulow - pola: $keys")
+        Trace.write("api-pola") {
+            put("pola", keys)
+            put("blok", body)
+        }
     }
 
     /**
@@ -1140,6 +1266,13 @@ class RadioService : MediaLibraryService() {
         coverArtUrl = null
         trackInfo = null
         lastRawIcyTitle = null
+        // The poll that was running asked about the station we are leaving, and
+        // whatever the new connection is told first must go on screen again.
+        titlePollJob?.cancel()
+        titlePollJob = null
+        lastApiTitle = null
+        titleArbiter.reset()
+        apiHeldBack = false
         lastSlogan = null
         // The gap between ICY blocks is measured within one station; carried
         // across a change it would report the time since the previous one.

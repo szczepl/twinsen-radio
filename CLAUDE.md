@@ -133,8 +133,9 @@ default.
    exercises it — no `gearhead` connects.
 4. **`tools/pull-log.ps1` with the car connected** — capture `CarInfoInternal`
    from a real MIB3.
-5. Optional: find a "now playing" endpoint for RNŚ and Radio 357, so that
-   joining the stream doesn't require waiting for the first ICY block.
+5. Optional: find a "now playing" endpoint for Radio 357. RNŚ's was found
+   on 27.10.2026 out of necessity — its stream stopped carrying titles — and
+   is now its only source of them, see FINDINGS.md section 3.
 
 **Settled on 2026-09-10** — see [FINDINGS.md](FINDINGS.md), section 7.
 `STALE_GRACE_MS` and `MARKER_GRACE_MS` no longer need guessing at: over

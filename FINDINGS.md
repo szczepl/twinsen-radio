@@ -150,9 +150,40 @@ Dead ends not worth repeating:
   `StreamTitle`, a word from a list, or not at all. The news bulletin
   announces itself as `FAKTY`. It also sends control markers
   (`STOP_AD_BREAK`) which **don't** mean the music is back.
-* **Radio Nowy Świat** provides a sensible `StreamTitle`; during talk shows
-  it inserts the slogan "Pion i poziom!" in the format
-  `Radio Nowy Świat - Pion i poziom!`.
+* **Radio Nowy Świat** used to provide a sensible `StreamTitle`; during talk
+  shows it inserts the slogan "Pion i poziom!" in the format
+  `Radio Nowy Świat - Pion i poziom!`. **Since its studio moved to Mińska
+  (October 2026) the stream carries no titles at all.** Measured 27.10.2026
+  on all four mounts: the 128, the backup 128 and the AAC send
+  `StreamTitle='Now Playing info goes here'`, which is Revma's placeholder for
+  a station that feeds it nothing, and the 256 sends empty blocks. The headers
+  are unchanged (`icy-metaint` 16000). Their site and app were never reading
+  ICY: the web player polls `GET /api/oZeta/stat?tsapi=<ms>` every 10 s and
+  gets
+  `{"status":true,"data":{"ts":…,"title":"Ferris & Sylvester","artist":"Dark Side","source":"currenttxt"}}`
+  — **`title` is the artist and `artist` is the track**, and between tracks
+  it is `Radio Nowy Świat` / `Pion i poziom!`. The answer carries
+  `Cache-Control: max-age` of a year and Cloudflare honours it: a repeated
+  `tsapi` came back with a track from days earlier, so it must be unique. The
+  official app (Flutter, `com.thehouseofcode.radio_nowy_swiat`) uses
+  `/api/Mobile/get_current_player_data` and friends, but those answer a plain
+  client with a Cloudflare challenge page.
+
+  The same afternoon (18:12) the 128 and AAC mounts swapped the placeholder
+  for a fixed `Radio Nowy Swiat - Pion i poziom!`, sent once on connect while
+  Albert Hammond played. So a slogan in the stream **cannot** tell talk from
+  a broken feed. `TitleArbiter` therefore makes the stream earn trust: it gets
+  the say only once it names a real track (no fixed encoder string names a
+  new song every few minutes), and loses it when the API moves to a new track
+  the stream doesn't name within 60 s, or on the placeholder. Untrusted, the
+  API decides. Only a *change* in the API is news — the web page can keep a
+  finished track, and the stale deadline takes that down. Verified on the
+  phone with RMF's stream standing in for a repaired RNS feed: trusted after
+  the first track, API held back, trust lost 61 s after the API moved on.
+  Every comparison goes into the trace as `zgodnosc`; `api-pola` records the
+  API's field set whenever it changes, to catch `schedule_img`, which their
+  web player reads and which may mark a programme rather than a track
+  (not seen yet).
 * **Jacaranda FM** breaks two conventions at once. Stream sniff
   (2026-08-11):
 

@@ -637,7 +637,12 @@ data class NowPlaying(
                 return NowPlaying(raw, null, null, isAd = true, adDurationMs = adMs)
             }
 
-            if (raw.isEmpty()) {
+            // A hosting platform's default for a station that feeds it no titles
+            // means exactly what an empty one does. Taken literally it would put
+            // "Now Playing info goes here" on the dashboard and send it to the
+            // catalogue as a track - all of RNS's mounts sent nothing else after
+            // its studio move (27.10.2026).
+            if (raw.isEmpty() || isPlaceholder(raw)) {
                 // An empty title on its own carries nothing, but if it's accompanied
                 // by an ad marker, that's concrete information worth showing.
                 return if (isAd) NowPlaying("", null, null, isAd = true, adDurationMs = adMs) else null
@@ -699,6 +704,15 @@ data class NowPlaying(
         private val NEWS_WORDS = listOf(
             "fakty", "wiadomosci", "wiadomości", "informacje", "serwis", "news"
         )
+
+        /** What a streaming platform sends when the station gave it no title (Revma/RCS). */
+        private val PLACEHOLDERS = listOf("Now Playing info goes here")
+
+        /** Whether the stream is saying, in so many words, that it has no title to give. */
+        fun isPlaceholder(streamTitle: String?): Boolean {
+            val raw = streamTitle?.trim().orEmpty()
+            return PLACEHOLDERS.any { it.equals(raw, ignoreCase = true) }
+        }
 
         /** Titles that actually denote an ad block, not a track. */
         private val AD_WORDS = listOf(
