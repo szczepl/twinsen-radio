@@ -30,7 +30,11 @@ object StationTitleApi {
     class Source(
         val url: String,
         /** The response body as a StreamTitle; null = the answer said nothing usable. */
-        val toStreamTitle: (String) -> String?
+        val toStreamTitle: (String) -> String?,
+        /** How long a title change from the stream waits before it goes on - see [RNS]. */
+        val icyHoldMs: Long = 0,
+        /** The same for a change from the API. */
+        val apiHoldMs: Long = 0
     )
 
     /** Null for stations whose stream carries its own titles. */
@@ -39,7 +43,28 @@ object StationTitleApi {
         else -> null
     }
 
-    private val RNS = Source("https://nowyswiat.online/api/oZeta/stat", ::rnsStreamTitle)
+    /**
+     * Both holds come from the drive of 28.10.2026, when the stream had its
+     * titles back and both sources ran side by side.
+     *
+     * The stream's title is in step with the audio - Media3 hands ICY over at
+     * the playback position it was cut in at - and still it came 2-3 s before
+     * the song itself, or while the song sat on hold at the desk. That is
+     * RNS's playout naming a track when it is cued, not when the fader goes
+     * up, so 3 s covers it.
+     *
+     * The API is ahead of the stream on top of that: over 14 tracks and
+     * slogans the stream named the same thing 4-13 s after we had seen it in
+     * the API, 9 s on average. That gap is the encoder, the CDN and our own
+     * buffer, none of which the website goes through - so on the API alone a
+     * title would land ten seconds before the song.
+     */
+    private val RNS = Source(
+        "https://nowyswiat.online/api/oZeta/stat",
+        ::rnsStreamTitle,
+        icyHoldMs = 3_000,
+        apiHoldMs = 3_000 + 9_000
+    )
 
     /**
      * The fields are named the wrong way round: `title` holds the artist and

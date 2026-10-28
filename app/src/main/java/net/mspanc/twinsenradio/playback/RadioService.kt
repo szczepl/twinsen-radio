@@ -103,6 +103,9 @@ class RadioService : MediaLibraryService() {
     /** The field names of the API's last answer - see [traceApiFields]. */
     private var lastApiFields: String? = null
 
+    /** Title changes waiting out their hold - see [handleIcyTitleHeld]. */
+    private val heldTitles = mutableListOf<Job>()
+
     /** Cover art found for the current track; null = we show the station logo. */
     @Volatile
     private var coverArtUrl: String? = null
@@ -595,8 +598,11 @@ class RadioService : MediaLibraryService() {
                     is IcyHeaders -> logIcyHeaders(entry)
                     is IcyInfo -> {
                         val raw = logIcyInfo(entry)
-                        if (titleApiSource() == null || arbitrate(TitleArbiter.Source.ICY, entry.title, raw)) {
+                        val api = titleApiSource()
+                        if (api == null) {
                             handleIcyTitle(entry.title, raw)
+                        } else if (arbitrate(TitleArbiter.Source.ICY, entry.title, raw)) {
+                            handleIcyTitleHeld(entry.title, raw, api.icyHoldMs)
                         }
                     }
                     else -> Log.i(TAG_ICY, "inny typ metadanych: ${entry.javaClass.simpleName} | $entry")
@@ -773,7 +779,7 @@ class RadioService : MediaLibraryService() {
                     lastApiTitle = title
                     Log.i(TAG_ICY, "API tytulow: $body")
                     val raw = "api: $body"
-                    if (arbitrate(TitleArbiter.Source.API, title, raw)) handleIcyTitle(title, raw)
+                    if (arbitrate(TitleArbiter.Source.API, title, raw)) handleIcyTitleHeld(title, raw, source.apiHoldMs)
                 }
                 delay(StationTitleApi.POLL_MS)
             }
@@ -810,6 +816,37 @@ class RadioService : MediaLibraryService() {
         }
         if (source == TitleArbiter.Source.API) apiHeldBack = result.verdict == TitleArbiter.Verdict.STREAM_RULES
         return result.verdict == TitleArbiter.Verdict.PUBLISH
+    }
+
+    /**
+     * [handleIcyTitle], but a title *change* waits [holdMs] first - see
+     * [StationTitleApi.Source.icyHoldMs] for why a station needs it.
+     *
+     * Nothing in the first [JOIN_UNHELD_MS] of a station is held: whatever
+     * arrives then describes what is already playing, and holding it would only
+     * leave the screen empty for longer. "The first title" is not enough of a
+     * rule, because the stream usually answers first - with an empty block or
+     * a fixed slogan - and the API's track a fraction of a second later would
+     * have counted as a change and waited 12 s behind it. Held titles keep
+     * their order, since one source always holds for the same time and the
+     * arbiter lets only one source through at a time.
+     */
+    private fun handleIcyTitleHeld(title: String?, rawBlock: String, holdMs: Long) {
+        val joining = sinceStationMs()?.let { it < JOIN_UNHELD_MS } != false
+        if (holdMs <= 0 || lastIcyAtMs == 0L || joining) {
+            handleIcyTitle(title, rawBlock)
+            return
+        }
+        Log.i(TAG_ICY, "zmiana tytulu czeka ${holdMs}ms: '$title'")
+        Trace.write("odroczenie") {
+            put("tytul", title)
+            put("ms", holdMs)
+        }
+        heldTitles.removeAll { it.isCompleted }
+        heldTitles += scope.launch {
+            delay(holdMs)
+            handleIcyTitle(title, rawBlock)
+        }
     }
 
     /**
@@ -1273,6 +1310,9 @@ class RadioService : MediaLibraryService() {
         lastApiTitle = null
         titleArbiter.reset()
         apiHeldBack = false
+        // A held title belongs to the station we are leaving.
+        heldTitles.forEach { it.cancel() }
+        heldTitles.clear()
         lastSlogan = null
         // The gap between ICY blocks is measured within one station; carried
         // across a change it would report the time since the previous one.
@@ -2144,6 +2184,14 @@ class RadioService : MediaLibraryService() {
          * at the same moment.
          */
         private const val STATION_SETTLE_MS = 1_500L
+
+        /**
+         * How long after a station change titles go on without their hold -
+         * see [handleIcyTitleHeld]. Both of RNS's sources answer within a
+         * second of connecting (27-28.10.2026); five leaves room for a slow
+         * network without letting a real track change slip through unheld.
+         */
+        private const val JOIN_UNHELD_MS = 5_000L
 
         /**
          * Margin on top of the buffer profile's own startup before buffering

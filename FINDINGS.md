@@ -184,6 +184,23 @@ Dead ends not worth repeating:
   API's field set whenever it changes, to catch `schedule_img`, which their
   web player reads and which may mark a programme rather than a track
   (not seen yet).
+
+  **28.10.2026 the stream had its titles back** — real tracks from 08:24 on
+  the morning drive, slogans between them, UTF-8. The arbiter trusted it from
+  the first track and every one of 13 tracks agreed with the API. The API is
+  kept as the fallback and the cross-check. Two timings from that day:
+  * Over that drive the stream named each change **4–13 s after** we had seen
+    it in the API (9 s on average, API polled every 10 s). On a fresh
+    connection at 16:28 the stream came *first*, the API within 8 s after.
+    So the gap is mostly how far behind live our own playback has drifted —
+    it grows with every rebuffer on the road — not a property of the station.
+  * The user saw titles 2–3 s before the song, or while it sat on hold at the
+    desk. ICY is delivered at the playback position it was cut in at, so this
+    is RNS's playout naming a track when it is cued. A title *change* is now
+    held 3 s from the stream and 3 + 9 s from the API (`StationTitleApi`,
+    trace event `odroczenie`); the first title of a connection is not held.
+    The 9 s is the drive's average, so on a fresh connection an API-only
+    title will now come a few seconds late rather than early.
 * **Jacaranda FM** breaks two conventions at once. Stream sniff
   (2026-08-11):
 
