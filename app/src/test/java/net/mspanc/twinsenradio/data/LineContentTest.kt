@@ -104,11 +104,18 @@ class ArtContentTest {
         )
     }
 
-    /** Every state can be told to show nothing at all. */
+    /**
+     * A playing station is never without a picture (30.10.2026), so "Puste" is
+     * gone from the picker - but not from the enum, or [ArtContent.HOST_PHOTO]
+     * would take its number and a stored photo choice would turn into
+     * something else.
+     */
     @Test
-    fun `an empty picture is always on offer`() {
-        assertTrue(ArtContent.EMPTY in ArtContent.entries)
-        assertEquals(ArtContent.entries.size, ArtContent.LABELS.size)
+    fun `Puste is no longer offered, and a stored one reads as the logo`() {
+        assertFalse(ArtContent.EMPTY in ArtContent.OFFERED)
+        assertEquals(ArtContent.OFFERED.size, ArtContent.LABELS.size)
+        assertEquals(ArtContent.LOGO, ArtContent.at(ArtContent.EMPTY.ordinal))
+        assertEquals(ArtContent.HOST_PHOTO, ArtContent.at(5))
     }
 
     @Test

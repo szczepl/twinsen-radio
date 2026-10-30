@@ -1,5 +1,6 @@
 [
   { "id": "rns",         "name": "Radio Nowy Świat",        "genre": "Muzyka i rozmowa", "logoUrl": "https://nowyswiat.online/userfiles/radio_nowy_swiat_logo.jpg",
+    "standbyArt": "https://nowyswiat.online/userfiles/rbroadcasts/radio-nowy-swiat-placeholder.jpg",
     "streams": [
       { "url": "https://stream.rcs.revma.com/4md4m0a0fs8uv", "label": "MP3 256 kb/s — wysoka jakość", "kbps": 256 },
       { "url": "https://stream.nowyswiat.online/mp3",        "label": "MP3 128 kb/s",                 "kbps": 128 },

@@ -146,7 +146,8 @@ class StationRepository private constructor(private val appContext: Context) {
                 // is the station's remote artwork - we don't distribute stations'
                 // own logos in the repo, we just link to their servers.
                 logo = o.optString("logo").ifBlank { null },
-                logoUrl = o.optString("logoUrl").ifBlank { null }
+                logoUrl = o.optString("logoUrl").ifBlank { null },
+                standbyArtUrl = o.optString("standbyArt").ifBlank { null }
             )
         }
     }.getOrElse {

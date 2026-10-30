@@ -62,8 +62,8 @@ class SettingsActivity : AppCompatActivity() {
 
         // --- artwork -------------------------------------------------------
         // One choice per state, exactly like the lines above it.
-        bind(b.ddArtPlaying, ArtContent.LABELS, prefs.artPlaying) { updateClockOptionsEnabled() }
-        bind(b.ddArtIdle, ArtContent.LABELS, prefs.artIdle) { updateClockOptionsEnabled() }
+        bind(b.ddArtPlaying, ArtContent.LABELS, artPosition(prefs.artPlaying)) { updateClockOptionsEnabled() }
+        bind(b.ddArtIdle, ArtContent.LABELS, artPosition(prefs.artIdle)) { updateClockOptionsEnabled() }
         bind(b.ddClockBg, ClockColors.BACKGROUND_LABELS, prefs.clockBackground)
         bind(b.ddClockFg, ClockColors.FOREGROUND_LABELS, prefs.clockForeground)
         bind(b.ddArtwork, ArtworkMode.LABELS, prefs.artworkMode)
@@ -196,10 +196,17 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun pick(dropdown: MaterialAutoCompleteTextView): Int = chosen[dropdown.id] ?: 0
 
+    // The picture is stored as an ordinal, but the picker no longer offers every
+    // entry ("Puste" is gone), so a position in the list is not an ordinal.
+    private fun artPosition(stored: Int): Int = ArtContent.OFFERED.indexOf(ArtContent.at(stored)).coerceAtLeast(0)
+
+    private fun pickArt(dropdown: MaterialAutoCompleteTextView): ArtContent =
+        ArtContent.OFFERED.getOrElse(pick(dropdown)) { ArtContent.COVER }
+
     /** Clock colours matter only if at least one of the two states draws a clock. */
     private fun updateClockOptionsEnabled() {
         val usesClock = listOf(b.ddArtPlaying, b.ddArtIdle)
-            .any { ArtContent.at(pick(it)).clockFace != null }
+            .any { pickArt(it).clockFace != null }
         listOf(b.tilClockBg, b.tilClockFg).forEach {
             it.isEnabled = usesClock
             it.alpha = if (usesClock) 1f else 0.4f
@@ -263,8 +270,8 @@ class SettingsActivity : AppCompatActivity() {
         prefs.lineBottomIdle2 = pickLine(b.ddLineBottomIdle2)
         prefs.enrichWithYear = b.swEnrich.isChecked
 
-        prefs.artPlaying = pick(b.ddArtPlaying)
-        prefs.artIdle = pick(b.ddArtIdle)
+        prefs.artPlaying = pickArt(b.ddArtPlaying).ordinal
+        prefs.artIdle = pickArt(b.ddArtIdle).ordinal
         prefs.clockBackground = pick(b.ddClockBg)
         prefs.clockForeground = pick(b.ddClockFg)
         prefs.artworkMode = pick(b.ddArtwork)

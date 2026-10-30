@@ -36,10 +36,9 @@ object ArtworkLoader {
     /**
      * @param drawn a picture made on the spot - the clock face - which beats
      *   everything else and needs no loading at all.
-     * @param muted the picture faded back, for a slot with nothing of its own
-     *   to show - before play, or the "Puste" choice. The station's own app does
-     *   the same with its logo before play; an empty square reads as a picture
-     *   that failed to load.
+     * @param muted the picture faded back, which means "not playing" - the
+     *   logo before play, for a station with no picture of its own for that
+     *   moment. Never while something plays.
      */
     fun into(
         scope: LifecycleCoroutineScope,

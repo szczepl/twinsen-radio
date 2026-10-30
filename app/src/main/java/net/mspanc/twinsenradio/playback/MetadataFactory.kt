@@ -319,9 +319,6 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
      * The picture for the phone's own screens, by the same choice the dashboard
      * makes - null meaning the station's logo. A clock is [phoneClock]'s.
      *
-     * One departure: "Puste" gives way to the logo, faded back - see
-     * [phoneArtMuted] - because an empty square in the middle of the playback
-     * screen reads as a picture that failed to load.
      */
     fun phoneArtwork(trackPlaying: Boolean, coverArtUrl: String?, onAir: OnAir?): Uri? =
         when (prefs.presentation.artFor(trackPlaying)) {
@@ -329,10 +326,6 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             ArtContent.HOST_PHOTO -> onAir?.photoUri
             ArtContent.LOGO, ArtContent.EMPTY, ArtContent.CLOCK_DIGITAL, ArtContent.CLOCK_ANALOG -> null
         }
-
-    /** Whether the phone's picture is the faded logo standing in for "Puste". */
-    fun phoneArtMuted(trackPlaying: Boolean): Boolean =
-        prefs.presentation.artFor(trackPlaying) == ArtContent.EMPTY
 
     /**
      * The clock face for the phone's own screens, when the layout asks for one
@@ -373,7 +366,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         val art = if (chosen.clockFace != null && !carAttached) ArtContent.COVER else chosen
 
         when (art) {
-            ArtContent.EMPTY -> Unit
+            // Retired, and read as the logo before it gets here - see ArtContent.EMPTY.
+            ArtContent.EMPTY -> applyLogo(b, station)
 
             ArtContent.CLOCK_DIGITAL, ArtContent.CLOCK_ANALOG -> {
                 // Drawn on the fly, so there is no URI and it travels as bytes.

@@ -239,6 +239,13 @@ Dead ends not worth repeating:
   an hour without a track count as news (setting, default 5) and give the
   slogan and logo back.
 
+  **The picture before play** in their app (white, red corners, a pale
+  "N") is public: `userfiles/rbroadcasts/radio-nowy-swiat-placeholder.jpg`,
+  8000x4500, 1.2 MB, linked from the home page as a 150 px thumbnail. Its
+  middle square is what the app shows; `standbyArt` in `stations.json`
+  points at it. Every other station gets its logo faded to 30 % there —
+  and only there: anything faded means "not playing".
+
   **The 256 kb/s mount is the patrons' one.** The site's stream list for an
   anonymous visitor has the 256 entry with `src: "-"`; `4md4m0a0fs8uv` is that
   stream (frames decode as 256 kb/s) and plays without logging in. Its

@@ -347,18 +347,21 @@ class MainActivity : AppCompatActivity() {
         val station = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
         val now = PlaybackStatusBus.nowPlaying.value
 
-        // Before play: the station play will start with, faded, with what it
-        // last said about itself - as the station's own app does - rather than
-        // "Nic nie gra" next to a stock radio icon.
+        // Before play: the station play will start with, with what it last
+        // said about itself - as the station's own app does - rather than "Nic
+        // nie gra" next to a stock radio icon. Its own picture for this moment
+        // where it publishes one, otherwise its logo faded back: faded means
+        // "not playing", and nothing that plays is ever faded.
         if (station == null) {
             val next = repo.resumeCandidate()
             if (next != null) {
                 b.miniTitle.text = next.name
                 b.miniSubtitle.text = prefs.slogan(next.id) ?: next.genre
                 b.miniStatus.text = getString(R.string.status_idle)
+                val standby = StandbyArt.uri(this, next, lifecycleScope) { renderMiniPlayer() }
                 ArtworkLoader.into(
-                    lifecycleScope, null, metadata.logoDisplayUri(next), metadata.logoResId(next),
-                    b.miniLogo, muted = true
+                    lifecycleScope, null, standby ?: metadata.logoDisplayUri(next), metadata.logoResId(next),
+                    b.miniLogo, muted = standby == null
                 )
                 b.playPause.setImageResource(android.R.drawable.ic_media_play)
                 return
@@ -397,8 +400,7 @@ class MainActivity : AppCompatActivity() {
             station?.let { metadata.logoDisplayUri(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.miniLogo,
-            station?.let { metadata.phoneClock(now?.isRealSong == true) },
-            muted = metadata.phoneArtMuted(now?.isRealSong == true)
+            station?.let { metadata.phoneClock(now?.isRealSong == true) }
         )
         b.playPause.setImageResource(
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause

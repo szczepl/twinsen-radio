@@ -1,8 +1,6 @@
 package net.mspanc.twinsenradio.playback
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
@@ -121,7 +119,7 @@ class OnAirGuide(
      *
      * The guide's own pictures are 150 px thumbnails, soft on a head unit; the
      * originals are up to a couple of megabytes. So the original is fetched
-     * once, scaled down to [PHOTO_SIZE] and kept - presenters come back every
+     * once, scaled down to [SquareArt.SIZE] and kept - presenters come back every
      * week, and so does their photo.
      */
     private fun photoUri(url: String): Uri? {
@@ -142,25 +140,9 @@ class OnAirGuide(
         return File(File(context.filesDir, "onair").apply { mkdirs() }, name.substringBeforeLast('.') + ".jpg")
     }
 
-    private fun savePhoto(url: String, file: File): Boolean = runCatching {
-        val bytes = download(url) ?: return false
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        var sample = 1
-        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= PHOTO_SIZE) sample *= 2
-        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-            ?: return false
-        // The originals are wide banners with the face in the middle (Mikolaj
-        // Tyczynski's is 8:3); the slot on the head unit is square. Cut the
-        // middle square out, as the site's own thumbnail does, or the face
-        // ends up a third of the size between two bands of background.
-        val side = minOf(decoded.width, decoded.height)
-        val square = Bitmap.createBitmap(decoded, (decoded.width - side) / 2, (decoded.height - side) / 2, side, side)
-        val photo = if (side > PHOTO_SIZE) Bitmap.createScaledBitmap(square, PHOTO_SIZE, PHOTO_SIZE, true) else square
-        val tmp = File(file.parentFile, file.name + ".tmp")
-        tmp.outputStream().use { photo.compress(Bitmap.CompressFormat.JPEG, 90, it) }
-        tmp.renameTo(file)
-    }.onFailure { Log.w(TAG, "zdjecie prowadzacego $url: ${it.message}") }.getOrDefault(false)
+    // The originals are wide banners with the face in the middle; the slot on
+    // the head unit is square - see SquareArt.
+    private fun savePhoto(url: String, file: File): Boolean = SquareArt.save(url, file)
 
     private fun download(url: String): ByteArray? = runCatching {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -198,7 +180,6 @@ class OnAirGuide(
     companion object {
         private const val TAG = "OnAirGuide"
         private const val TIMEOUT_MS = 10_000
-        private const val PHOTO_SIZE = 512
 
         /** The guide covers ten days; twice a day is plenty to catch late changes. */
         private const val REFRESH_MS = 12 * 3600_000L

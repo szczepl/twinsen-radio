@@ -167,6 +167,14 @@ enum class ArtContent(val label: String) {
     LOGO("Logo stacji"),
     CLOCK_DIGITAL("Zegar cyfrowy"),
     CLOCK_ANALOG("Zegar analogowy"),
+
+    /**
+     * Retired 30.10.2026: a playing station is never without a picture - an
+     * empty square reads as artwork that failed to load, and a faded logo means
+     * "not playing". No longer offered; [at] reads a stored one as [LOGO]. It
+     * stays in the enum only because the choice is stored as an ordinal, and
+     * [HOST_PHOTO] after it must keep its number.
+     */
     EMPTY("Puste"),
 
     /**
@@ -186,9 +194,12 @@ enum class ArtContent(val label: String) {
         }
 
     companion object {
-        val LABELS get() = entries.map { it.label }
+        /** What the picker offers, in order; a position in it is not an ordinal. */
+        val OFFERED = entries.filter { it != EMPTY }
 
-        fun at(index: Int) = entries.getOrElse(index) { COVER }
+        val LABELS get() = OFFERED.map { it.label }
+
+        fun at(index: Int) = entries.getOrElse(index) { COVER }.let { if (it == EMPTY) LOGO else it }
     }
 }
 

@@ -184,15 +184,22 @@ class NowPlayingActivity : AppCompatActivity() {
         // From our own bus, not from session metadata: with no car attached the
         // session's picture is cut for the notification shade, which gets no
         // clock. This screen follows the layout's choice, clock included.
+        // Before play: the station's own picture for it, or its logo faded -
+        // see renderMiniPlayer in MainActivity.
+        val standby = if (playing == null && station != null) {
+            StandbyArt.uri(this, station, lifecycleScope) { render() }
+        } else {
+            null
+        }
         ArtworkLoader.into(
             lifecycleScope,
             playing?.let { metadata.phoneArtwork(now?.isRealSong == true, PlaybackStatusBus.coverArtUrl.value, onAir) },
-            station?.let { metadata.logoDisplayUri(it) },
+            standby ?: station?.let { metadata.logoDisplayUri(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.art,
             // Nothing playing yet, nothing to put a clock in place of.
             playing?.let { metadata.phoneClock(now?.isRealSong == true) },
-            muted = playing == null || metadata.phoneArtMuted(now?.isRealSong == true)
+            muted = playing == null && standby == null
         )
         val statusText = getString(
             when (PlaybackStatusBus.status.value) {

@@ -48,7 +48,13 @@ data class Station(
      */
     val catalogName: String? = null,
     /** Whether [name] is one the user typed, as opposed to one we shortened. */
-    val renamed: Boolean = false
+    val renamed: Boolean = false,
+    /**
+     * The picture the station's own app shows before play, where it publishes
+     * one (RNS: its placeholder banner). Without it the screen before play
+     * shows the logo faded back.
+     */
+    val standbyArtUrl: String? = null
 ) {
     enum class Source {
         BUILT_IN,
