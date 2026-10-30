@@ -42,6 +42,28 @@ RadioService (MediaLibraryService)
 through `PlaybackStatusBus` (a plain `StateFlow`, since both live in the same
 process), while the car reads it through the media session.
 
+**One set of rules for both.** What a line or the picture shows in a given
+state — a track, the news, the presenter talking, an ad — is decided once, in
+`MetadataFactory`: the car gets it as `MediaMetadata`, the phone's screens
+through `MetadataFactory.forPhone` / `phoneArtwork` / `phoneClock`, fed the
+very `OnAir` the car was sent (it is published on the bus, not asked for
+again). The phone used to keep its own copy of these rules and it drifted —
+bare slogan over the news, no programme, cover instead of a chosen clock.
+Don't add a phone-only rule; the one deliberate difference is the
+notification shade, which gets no clock.
+
+**"Nie gra" has one look** — before play, paused, and silent for over a
+minute without a signal (`RadioService.checkSilence`; the middle line and the
+phone's status say why), on the phone and in the car
+(`MetadataFactory.forStopped`, `PlaybackStatusBus.notPlaying`):
+the station (before play, the one play would start —
+`StationRepository.resumeCandidate`, the same one the car resumes), the
+slogan it last sent, and its own picture for that moment (`standbyArt` in
+`stations.json` — RNŚ only) or its logo at 30 %. Nothing from before the
+pause: a long one resumes on the live stream, by when the track and maybe the
+programme are over, and a presenter's photo over silence would claim they
+are on air. Nothing that plays is ever faded.
+
 ---
 
 ## 3. Metadata: where it comes from and what we do with it

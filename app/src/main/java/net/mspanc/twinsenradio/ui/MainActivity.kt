@@ -27,6 +27,7 @@ import net.mspanc.twinsenradio.data.StationSort
 import net.mspanc.twinsenradio.databinding.ActivityMainBinding
 import net.mspanc.twinsenradio.playback.MetadataFactory
 import net.mspanc.twinsenradio.playback.PlaybackStatusBus
+import net.mspanc.twinsenradio.playback.StandbyArt
 import net.mspanc.twinsenradio.playback.RadioService
 
 @UnstableApi
@@ -297,6 +298,12 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             PlaybackStatusBus.onAir.collect { renderMiniPlayer() }
         }
+        lifecycleScope.launch {
+            PlaybackStatusBus.wantsToPlay.collect { renderMiniPlayer() }
+        }
+        lifecycleScope.launch {
+            PlaybackStatusBus.lostAir.collect { renderMiniPlayer() }
+        }
         // Favourites can change on the playback screen or in the car. The state
         // isn't part of the station model, so DiffUtil won't refresh anything on its own.
         lifecycleScope.launch {
@@ -347,18 +354,22 @@ class MainActivity : AppCompatActivity() {
         val station = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
         val now = PlaybackStatusBus.nowPlaying.value
 
-        // Before play: the station play will start with, with what it last
-        // said about itself - as the station's own app does - rather than "Nic
-        // nie gra" next to a stock radio icon. Its own picture for this moment
-        // where it publishes one, otherwise its logo faded back: faded means
-        // "not playing", and nothing that plays is ever faded.
-        if (station == null) {
-            val next = repo.resumeCandidate()
+        // "Nie gra" - before play, or paused, one look for both: the station
+        // (before play, the one play will start with), with what it last said
+        // about itself - as the station's own app does - rather than "Nic nie
+        // gra" next to a stock radio icon, or a programme that may be over by
+        // the time play is pressed. Its own picture for this moment where it
+        // publishes one, otherwise its logo faded back: faded means "not
+        // playing", and nothing that plays is ever faded. The car gets the
+        // same - see MetadataFactory.forStopped.
+        if (PlaybackStatusBus.notPlaying()) {
+            val next = station ?: repo.resumeCandidate()
             if (next != null) {
                 b.miniTitle.text = next.name
                 b.miniSubtitle.text = prefs.slogan(next.id) ?: next.genre
-                b.miniStatus.text = getString(R.string.status_idle)
-                val standby = StandbyArt.uri(this, next, lifecycleScope) { renderMiniPlayer() }
+                // "Zatrzymane" for a pause, the reason for a long silence
+                b.miniStatus.text = getString(statusLabel())
+                val standby = StandbyArt.phoneUri(this, next, lifecycleScope) { renderMiniPlayer() }
                 ArtworkLoader.into(
                     lifecycleScope, null, standby ?: metadata.logoDisplayUri(next), metadata.logoResId(next),
                     b.miniLogo, muted = standby == null
@@ -383,17 +394,7 @@ class MainActivity : AppCompatActivity() {
             listOf(text.title, text.artist).filter { it.isNotBlank() }.joinToString(MetadataFactory.JOIN)
                 .ifBlank { station?.genre.orEmpty() }
         }
-        b.miniStatus.text = getString(
-            when (PlaybackStatusBus.status.value) {
-                PlaybackStatusBus.Status.CONNECTING -> R.string.status_connecting
-                PlaybackStatusBus.Status.BUFFERING -> R.string.status_buffering
-                PlaybackStatusBus.Status.PLAYING -> R.string.status_playing
-                PlaybackStatusBus.Status.RECONNECTING -> R.string.status_reconnecting
-                PlaybackStatusBus.Status.WAITING_FOR_NETWORK -> R.string.status_waiting_network
-                PlaybackStatusBus.Status.STATION_UNREACHABLE -> R.string.status_unreachable
-                PlaybackStatusBus.Status.IDLE -> R.string.status_idle
-            }
-        )
+        b.miniStatus.text = getString(statusLabel())
         ArtworkLoader.into(
             lifecycleScope,
             metadata.phoneArtwork(now?.isRealSong == true, PlaybackStatusBus.coverArtUrl.value, onAir),
@@ -410,6 +411,16 @@ class MainActivity : AppCompatActivity() {
         // text and a button, and a quality chip in the middle of it took width
         // from the station name for information nobody reads in passing. It
         // lives on the playback screen, where there is space to ask for it.
+    }
+
+    private fun statusLabel(): Int = when (PlaybackStatusBus.status.value) {
+        PlaybackStatusBus.Status.CONNECTING -> R.string.status_connecting
+        PlaybackStatusBus.Status.BUFFERING -> R.string.status_buffering
+        PlaybackStatusBus.Status.PLAYING -> R.string.status_playing
+        PlaybackStatusBus.Status.RECONNECTING -> R.string.status_reconnecting
+        PlaybackStatusBus.Status.WAITING_FOR_NETWORK -> R.string.status_waiting_network
+        PlaybackStatusBus.Status.STATION_UNREACHABLE -> R.string.status_unreachable
+        PlaybackStatusBus.Status.IDLE -> R.string.status_idle
     }
 
     private fun askForNotificationPermission() {

@@ -89,8 +89,11 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         now: NowPlaying?,
         coverArtUrl: String? = null,
         trackInfo: CoverArtLookup.TrackInfo? = null,
-        onAir: OnAir? = null
+        onAir: OnAir? = null,
+        stopped: Boolean = false,
+        standby: java.io.File? = null
     ): MediaMetadata {
+        if (stopped) return forStopped(station, standby)
         val b = MediaMetadata.Builder()
             .setIsBrowsable(false)
             .setIsPlayable(true)
@@ -172,6 +175,43 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
         applyArtwork(b, station, coverArtUrl, now?.isRealSong == true, onAir)
         return b.build()
+    }
+
+    /**
+     * "Nie gra" - before play, or paused: the same state on the phone and in
+     * the car.
+     *
+     * Nothing about what was on: a resume after a while joins the live stream
+     * afresh (see RadioService.onPlayWhenReadyChanged), by when the track is
+     * over and the programme may be another one, and a presenter's photo over
+     * silence claims they are on air. What stays true is the station and what
+     * it says about itself - so the gap layout, fed only the slogan it last
+     * sent, and a picture faded back: the station's own one for this moment
+     * where it publishes one, otherwise its logo at [LogoProvider.MUTED_ALPHA].
+     */
+    private fun forStopped(station: Station, standby: java.io.File?): MediaMetadata {
+        val says = prefs.slogan(station.id)?.let { NowPlaying.standingBy(station.name, it) }
+        val art = when {
+            prefs.artworkMode == ArtworkMode.NONE -> null
+            standby != null -> LogoProvider.fileUri(context, "standby-${station.id}", standby)
+            else -> mutedLogoUri(station)
+        }
+        return forPlayback(station, says).buildUpon()
+            .setArtworkData(null, null)
+            .setArtworkUri(art)
+            .build()
+    }
+
+    /**
+     * The station's logo faded back - see [LogoProvider.mutedUriFor]. Built
+     * from whichever logo the station actually has, in the order [logoUri]
+     * picks it, so the faded one is always the one shown unfaded elsewhere.
+     */
+    fun mutedLogoUri(station: Station): Uri {
+        val source = customLogoFile(station)?.let { Uri.fromFile(it) }
+            ?: station.logoUrl?.let { Uri.parse(it) }
+            ?: Uri.fromParts("res", logoResId(station).toString(), null)
+        return LogoProvider.mutedUriFor(context, station, source)
     }
 
     /**
@@ -690,6 +730,14 @@ data class NowPlaying(
         get() = !isAd && !isStationSelfTitle && !isControlMarker && !songTitle.isNullOrBlank()
 
     companion object {
+        /**
+         * The station saying [slogan] about itself - what [parse] makes of
+         * "Radio Nowy Swiat - Pion i poziom!". For "nie gra", which has no
+         * stream to hear it from and takes the last one remembered.
+         */
+        fun standingBy(stationName: String, slogan: String) =
+            NowPlaying("$stationName - $slogan", stationName, slogan, isStationSelfTitle = true)
+
         /**
          * A typical StreamTitle is "Artist - Title".
          *

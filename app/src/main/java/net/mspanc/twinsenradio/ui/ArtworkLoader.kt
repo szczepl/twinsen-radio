@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.mspanc.twinsenradio.data.StationRepository
+import net.mspanc.twinsenradio.playback.LogoProvider
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -49,7 +50,7 @@ object ArtworkLoader {
         drawn: Bitmap? = null,
         muted: Boolean = false
     ) {
-        target.alpha = if (muted) MUTED_ALPHA else 1f
+        target.alpha = if (muted) LogoProvider.MUTED_ALPHA else 1f
         if (drawn != null) {
             // A cover still on its way must not land on top of the clock.
             target.setTag(TAG_KEY, null)
@@ -126,7 +127,4 @@ object ArtworkLoader {
     }.getOrNull()
 
     private val TAG_KEY = "artwork_url".hashCode()
-
-    /** Faint enough to read as "nothing here yet", clear enough to name the station. */
-    private const val MUTED_ALPHA = 0.3f
 }

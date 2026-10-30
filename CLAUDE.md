@@ -57,12 +57,13 @@ a real stumble.
   adb shell settings put system screen_off_timeout 1800000
   ```
 
-  **Undoing it is part of committing** — both settings, in the same breath as
-  `git commit`. A phone left on `stayon true` lights up whenever it is
-  plugged in, and how somebody's phone behaves is not this project's business.
-  Read the old timeout *before* overwriting it: afterwards it cannot be
-  recovered, and guessing at a person's setting hands back a phone that is
-  subtly not theirs.
+  **Undo it when the user says so** — not at your own commit or push, not
+  when the task looks done; the user is often still testing. Then both
+  settings together: `stayon false` and the timeout back. A phone left on
+  `stayon true` lights up whenever it is plugged in, and how somebody's phone
+  behaves is not this project's business. Read the old timeout *before*
+  overwriting it — and if it is already 1800000, an earlier session left it
+  behind: ask what it should be rather than "restoring" that.
 * **`am start --es play_station <id>` beats tapping by coordinate** for
   driving playback from a script — but only into a *fresh* process. Delivered
   to a running instance it lands in `onNewIntent`, which doesn't handle it,
@@ -136,6 +137,19 @@ default.
 5. Optional: find a "now playing" endpoint for Radio 357. RNŚ's was found
    on 27.10.2026 out of necessity — its stream stopped carrying titles — and
    is now its only source of them, see FINDINGS.md section 3.
+6. **Not yet seen on a HDU (30.10.2026):** RNŚ's programme guide on the
+   dashboard — "Audycja", "Prowadzący", the presenter's photo — and the
+   phone/car parity below. Both were checked on the phone and in what the
+   session sends (`MetaDump`), not on a screen in the car or the DHU. The
+   DHU needs the head unit server started on the phone by hand.
+
+**Done on 2026-10-30:** the phone's screens follow the dashboard's rules
+instead of a copy of them (news named as news, programme and presenters
+between tracks, a chosen clock); the screen before play shows the station
+play would start, with RNŚ's own placeholder picture or a faded logo — and so does a pause, in the car too; the
+picture choice "Puste" is retired. See ARCHITECTURE.md, section 2. A fresh
+`news_minutes` test: set it above the current minute past the hour via
+`run-as` and RNŚ's gap counts as news.
 
 **Settled on 2026-09-10** — see [FINDINGS.md](FINDINGS.md), section 7.
 `STALE_GRACE_MS` and `MARKER_GRACE_MS` no longer need guessing at: over

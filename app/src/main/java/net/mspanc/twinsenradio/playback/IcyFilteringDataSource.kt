@@ -20,7 +20,8 @@ import androidx.media3.datasource.TransferListener
 @UnstableApi
 class IcyFilteringDataSource(
     private val upstream: DataSource,
-    private val stripIcy: Boolean
+    private val stripIcy: Boolean,
+    private val onIcyBitrate: (Int) -> Unit = {}
 ) : DataSource {
 
     override fun addTransferListener(transferListener: TransferListener) {
@@ -28,10 +29,25 @@ class IcyFilteringDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        if (!stripIcy) return upstream.open(dataSpec)
+        if (!stripIcy) return upstream.open(dataSpec).also { reportBitrate() }
         val headers = HashMap(dataSpec.httpRequestHeaders)
         headers.keys.removeAll { it.equals(ICY_REQUEST_HEADER, ignoreCase = true) }
         return upstream.open(dataSpec.buildUpon().setHttpRequestHeaders(headers).build())
+            .also { reportBitrate() }
+    }
+
+    /**
+     * The `icy-br` header, read here because nothing downstream ever saw it:
+     * the IcyHeaders entry the service listened for never arrived (30.10.2026,
+     * no "naglowki ICY" in the log for any station), so a single-stream
+     * station like RMF FM - which sends `icy-br: 128` - showed no bitrate.
+     * Called on the loader's thread.
+     */
+    private fun reportBitrate() {
+        val br = upstream.responseHeaders.entries
+            .firstOrNull { it.key.equals(ICY_BITRATE_HEADER, ignoreCase = true) }
+            ?.value?.firstOrNull()?.substringBefore(',')?.trim()?.toIntOrNull()
+        if (br != null && br > 0) onIcyBitrate(br)
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
@@ -52,13 +68,15 @@ class IcyFilteringDataSource(
     @UnstableApi
     class Factory(
         private val delegate: DataSource.Factory,
+        private val onIcyBitrate: (Int) -> Unit = {},
         private val stripIcy: () -> Boolean
     ) : DataSource.Factory {
         override fun createDataSource(): DataSource =
-            IcyFilteringDataSource(delegate.createDataSource(), stripIcy())
+            IcyFilteringDataSource(delegate.createDataSource(), stripIcy(), onIcyBitrate)
     }
 
     private companion object {
         const val ICY_REQUEST_HEADER = "Icy-MetaData"
+        const val ICY_BITRATE_HEADER = "icy-br"
     }
 }

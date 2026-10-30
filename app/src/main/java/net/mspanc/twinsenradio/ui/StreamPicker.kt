@@ -10,30 +10,18 @@ import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StreamVariant
 
 /**
- * Bitrate alone, without the codec - for the quality button, both on Now Playing
- * and on the mini-player bar. `null` when we don't know it from anywhere - the
- * button should then hide itself rather than show a placeholder.
- *
- * @param liveKbps the actual bitrate from the decoder (see
- *   [net.mspanc.twinsenradio.playback.PlaybackStatusBus.qualityKbps]) - a fallback
- *   for when the station is a "bare" URL with no declared bitrate in the catalog.
- */
-fun StreamVariant.kbpsLabel(liveKbps: Int? = null): String? =
-    (kbps.takeIf { it > 0 } ?: liveKbps?.takeIf { it > 0 })?.let { "$it kbit" }
-
-/**
  * Label for the selection dialog's list: just the codec and bitrate, without
  * suffixes like "— fallback" or "— high quality" - that's a judgment, not a fact about the stream.
  */
 fun StreamVariant.plainLabel(): String = label.substringBefore('—').trim()
 
 /**
- * Dresses the quality chip on the playback screen and on the mini-player bar.
+ * Dresses the quality chip on the playback screen.
  *
  * The arrow is a promise that tapping opens a list of variants. A station with
  * a single stream has no list - [StreamPicker.show] returns without doing
  * anything at all - so on those the arrow pointed at nothing and the tap did
- * nothing. The bitrate itself is still worth reading, so the chip stays and
+ * nothing. What the stream is remains worth reading, so the chip stays and
  * loses only the arrow and the tap.
  */
 fun MaterialButton.showQuality(label: String, variants: List<StreamVariant>, onPick: () -> Unit) {

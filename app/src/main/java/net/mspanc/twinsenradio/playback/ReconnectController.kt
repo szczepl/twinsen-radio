@@ -64,14 +64,26 @@ class ReconnectController(
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            handler.post { if (needsRevive()) retryNow("siec wrocila") }
+            handler.post { if (needsRevive()) networkBack("siec wrocila") }
         }
 
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
             if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return
             if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return
-            handler.post { if (needsRevive()) retryNow("siec zwalidowana") }
+            handler.post { if (needsRevive()) networkBack("siec zwalidowana") }
         }
+    }
+
+    /**
+     * A returning network starts the count of failed attempts afresh. The ones
+     * made without a network say nothing about the station - carried over,
+     * they made the first try after a tunnel read as the station's fifth
+     * failure, and the dashboard said "Stacja nie odpowiada…" for the seconds
+     * it took to connect (measured 30.10.2026, airplane mode).
+     */
+    private fun networkBack(reason: String) {
+        attempt = 0
+        retryNow(reason)
     }
 
     /**

@@ -21,10 +21,12 @@ adb shell svc power stayon true
 adb shell settings put system screen_off_timeout 1800000
 ```
 
-**Undoing it is part of committing** — `svc power stayon false` and the
-timeout back to what it was, in the same breath as `git commit`. Read the old
-value *before* overwriting: afterwards it cannot be recovered, and guessing at
-somebody's phone setting hands back a phone that is subtly not theirs.
+**Undo it when the user says so** — not at your own commit or push; they are
+often still testing. Then `svc power stayon false` and the timeout back, both.
+Read the old value *before* overwriting: afterwards it cannot be recovered,
+and guessing at somebody's phone setting hands back a phone that is subtly not
+theirs. A reading of 1800000 is a previous session's leftover, not theirs —
+ask.
 
 ## Starting a station without touching the screen
 

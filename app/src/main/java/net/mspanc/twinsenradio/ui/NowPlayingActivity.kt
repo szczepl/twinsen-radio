@@ -20,6 +20,7 @@ import net.mspanc.twinsenradio.databinding.ActivityNowPlayingBinding
 import net.mspanc.twinsenradio.playback.MetadataFactory
 import net.mspanc.twinsenradio.playback.PhoneText
 import net.mspanc.twinsenradio.playback.PlaybackStatusBus
+import net.mspanc.twinsenradio.playback.StandbyArt
 import net.mspanc.twinsenradio.playback.RadioService
 import net.mspanc.twinsenradio.playback.TextCase
 
@@ -75,6 +76,8 @@ class NowPlayingActivity : AppCompatActivity() {
             PlaybackStatusBus.coverArtUrl,
             PlaybackStatusBus.trackInfo,
             PlaybackStatusBus.onAir,
+            PlaybackStatusBus.wantsToPlay,
+            PlaybackStatusBus.lostAir,
             PlaybackStatusBus.quality,
             Prefs.favouritesFlow
         ).forEach { flow ->
@@ -113,16 +116,30 @@ class NowPlayingActivity : AppCompatActivity() {
      * a change made here is visible there and vice versa. The service reloads
      * the stream on its own, since it observes this preference.
      *
-     * Only visible when we actually know the bitrate - from the directory or,
-     * for "bare" URLs without that declaration, from the live decoder. Without
-     * it there's nothing to show, so the button disappears instead of showing a placeholder.
+     * Says what is coming through - codec, bitrate, channels, "MP3 · 128 kbit ·
+     * stereo" - for every station. It used to show only a bitrate, and only
+     * where the catalogue declared one, so a single-stream station said nothing
+     * about itself at all. A tap opens the list only where there is one to
+     * choose from (see [showQuality]); elsewhere it is information.
+     *
+     * The bitrate is the chosen variant's declared one where the catalogue has
+     * it - that is what was picked - and otherwise what the stream reports.
+     * Before the first frame is decoded only a declared bitrate is known, and
+     * with none of that either the chip stays hidden rather than show a
+     * placeholder.
      */
     private fun renderBitrate(station: Station?) {
         val variants = station?.variants().orEmpty()
         val chosen = station?.let { prefs.selectedStream(it.id) }
             ?: variants.maxByOrNull { it.kbps }?.url
         val current = variants.firstOrNull { it.url == chosen } ?: variants.firstOrNull()
-        val label = current?.kbpsLabel(PlaybackStatusBus.qualityKbps.value)
+        val declared = current?.kbps?.takeIf { it > 0 }
+        val quality = PlaybackStatusBus.quality.value
+        val label = when {
+            quality != null -> quality.chipLabel(declared ?: quality.bitrateKbps).ifBlank { null }
+            declared != null -> "$declared kbit"
+            else -> null
+        }
         if (station == null || label == null) {
             b.bitrate.visibility = android.view.View.GONE
             return
@@ -150,10 +167,13 @@ class NowPlayingActivity : AppCompatActivity() {
     }
 
     private fun render() {
-        val playing = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
+        val loaded = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
         // Before play: the station play will start with - see renderMiniPlayer.
-        val station = playing ?: repo.resumeCandidate()
+        val station = loaded ?: repo.resumeCandidate()
         shown = station
+        // "Nie gra" - before play, or paused: one look, the car's too (see
+        // renderMiniPlayer, and MetadataFactory.forStopped).
+        val playing = loaded?.takeIf { !PlaybackStatusBus.notPlaying() }
         val now = PlaybackStatusBus.nowPlaying.value
 
         b.stationName.text = station?.name ?: getString(R.string.nothing_playing)
@@ -184,10 +204,10 @@ class NowPlayingActivity : AppCompatActivity() {
         // From our own bus, not from session metadata: with no car attached the
         // session's picture is cut for the notification shade, which gets no
         // clock. This screen follows the layout's choice, clock included.
-        // Before play: the station's own picture for it, or its logo faded -
+        // Not playing: the station's own picture for it, or its logo faded -
         // see renderMiniPlayer in MainActivity.
         val standby = if (playing == null && station != null) {
-            StandbyArt.uri(this, station, lifecycleScope) { render() }
+            StandbyArt.phoneUri(this, station, lifecycleScope) { render() }
         } else {
             null
         }
@@ -212,10 +232,9 @@ class NowPlayingActivity : AppCompatActivity() {
                 PlaybackStatusBus.Status.IDLE -> R.string.status_idle
             }
         )
-        // We only know the quality after the first frame from the decoder, so we
-        // only append it once there's actually something to append.
-        val quality = PlaybackStatusBus.quality.value
-        b.status.text = if (quality.isNullOrBlank()) statusText else "$statusText · $quality"
+        // The codec used to be appended here; it lives in the quality chip now,
+        // with the bitrate, so the status says only what the player is doing.
+        b.status.text = statusText
         renderBitrate(station)
         b.playPause.setImageResource(
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause

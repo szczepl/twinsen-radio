@@ -687,6 +687,51 @@ a 5 s pause resumes seamlessly with no reconnect, and a 20 s one rejoins. It is
 a judgement rather than a measurement — below it the lag is shorter than the
 1–2 s of silence that removing it costs.
 
+### Losing the signal: 8 s of buffer, then a minute of grace (30.10.2026)
+
+Measured on RNŚ with airplane mode switched on from adb (USB keeps adb alive):
+
+```
++0 s    network gone          sound goes on, from the buffer
++8 s    silence               middle line "Łączę ze stacją…", then "Oczekuję na sieć…"
+...     still silent          before: the programme / track and its photo stayed up
+                              for as long as it lasted (2.5 min in the test)
+back    network               middle line read "Stacja nie odpowiada…" for ~10 s
+```
+
+**The buffer is about 8 s, not the profile's 45.** A live stream arrives as
+fast as it plays, so all the buffer ever holds is what the server sends on
+connect. Anything timed against a loss of signal has to count from the
+silence, not from the network.
+
+"Stacja nie odpowiada…" on the way back was the attempts made *without* a
+network counted against the station: the fifth try, the first one with a
+network, read as a station that keeps refusing. A returning network now
+resets the count.
+
+Now (`RadioService.checkSilence`, `SILENCE_GRACE_MS`): the first minute of
+silence changes nothing — a tunnel is over before anyone reads the
+dashboard. Past it the station's state is reset as on a station change, and
+the dashboard shows "nie gra" (the station's picture or faded logo, its
+slogan) with the reason still in the middle line. Verified end to end, twice:
+
+```
+13:05:43  airplane ON       "Zasypiasz sama", cover, "Oczekuję na sieć…"
+13:06:51  60 s of silence   "Pion i poziom!", RNŚ placeholder, "Oczekuję na sieć…"
+13:07:19  airplane OFF      "Wznawiam połączenie…"
+13:07:31  sound             "W środku dnia", presenters' photo — the API had moved
+                            on to "Pion i poziom!" at 13:07:29 (Ucho's record)
+
+13:10:27  60 s of silence   "nie gra", as above
+13:10:46  airplane OFF
+13:10:57  first API answer  "Youth's Fountain" — still on air since 13:08:11,
+                            so back on screen as fresh news, cover and
+                            "MP3 · stereo" included
+```
+
+A 30 s outage changes nothing but the middle line, and comes back to the
+station name without the false "Stacja nie odpowiada…".
+
 ### What the trace could not see, and what it can now (21.09.2026)
 
 Three faults reported from the car had never left an answer in the trace. Going

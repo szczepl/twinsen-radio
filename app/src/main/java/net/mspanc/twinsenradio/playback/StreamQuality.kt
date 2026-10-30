@@ -17,21 +17,24 @@ import androidx.media3.common.util.UnstableApi
  * own to write it into, and appending it to the title would corrupt the
  * metadata.
  */
-@UnstableApi
 data class StreamQuality(
     val codec: String,
     val bitrateKbps: Int,
     val sampleRateHz: Int,
     val channels: Int
 ) {
-    /** e.g. "AAC+ · 48 kb/s · 44.1 kHz · stereo". */
     /**
-     * Without the sample rate - it doesn't say much, and the user now picks
-     * the bitrate themselves from the list alongside. What's left is the
-     * codec and channel count.
+     * What the playback screen's quality chip says, e.g. "MP3 · 128 kbit ·
+     * stereo" - for every station, not only the ones with a choice of streams:
+     * without it, a single-stream station never said what it was sending.
+     * Without the sample rate - it doesn't say much to a listener.
+     *
+     * @param kbps the bitrate to show - the chosen variant's declared one where
+     *   the catalogue has it, else what the stream itself reports; 0 leaves it out.
      */
-    fun label(): String = buildList {
+    fun chipLabel(kbps: Int = bitrateKbps): String = buildList {
         if (codec.isNotBlank()) add(codec)
+        if (kbps > 0) add("$kbps kbit")
         when (channels) {
             1 -> add("mono")
             2 -> add("stereo")
@@ -39,11 +42,15 @@ data class StreamQuality(
         }
     }.joinToString(" · ")
 
+    /** The same without the bitrate, for the trace. */
+    fun label(): String = chipLabel(kbps = 0)
+
     private fun khz(hz: Int): String {
         val tenths = (hz + 50) / 100
         return if (tenths % 10 == 0) "${tenths / 10} kHz" else "${tenths / 10},${tenths % 10} kHz"
     }
 
+    @UnstableApi
     companion object {
         /**
          * @param icyBitrateKbps bitrate from the icy-br header; used only

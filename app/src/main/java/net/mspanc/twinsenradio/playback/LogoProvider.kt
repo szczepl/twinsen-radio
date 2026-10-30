@@ -6,7 +6,9 @@ import android.content.Context
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.ParcelFileDescriptor
@@ -15,7 +17,10 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.Station
+import net.mspanc.twinsenradio.data.StationRepository
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Serves station logos under a **stable** `content://.../logo/<id>` address.
@@ -92,29 +97,108 @@ class LogoProvider : ContentProvider() {
             val path = uri.getQueryParameter(PARAM_PATH) ?: return@runCatching null
             return@runCatching File(path).takeIf { it.exists() }
         }
+        if (uri.pathSegments.firstOrNull() == "muted") return@runCatching renderMuted(context, uri)
         val resId = uri.getQueryParameter(PARAM_VERSION)?.toIntOrNull()
             ?: R.drawable.logo_placeholder
         val dir = File(context.cacheDir, "logo").apply { mkdirs() }
         val file = File(dir, "${uri.lastPathSegment}-$resId.png")
         if (file.exists() && file.length() > 0) return@runCatching file
 
-        val drawable = ContextCompat.getDrawable(context, resId) ?: return@runCatching null
-        val bitmap = (drawable as? BitmapDrawable)?.bitmap ?: run {
-            Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888).also { bmp ->
-                drawable.setBounds(0, 0, SIZE, SIZE)
-                drawable.draw(Canvas(bmp))
-            }
-        }
+        val bitmap = resourceBitmap(context, resId) ?: return@runCatching null
         file.outputStream().use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
         file
     }.onFailure { Log.w(TAG, "nie udalo sie przygotowac logo dla $uri: ${it.message}") }
         .getOrNull()
 
+    private fun resourceBitmap(context: Context, resId: Int): Bitmap? {
+        val drawable = ContextCompat.getDrawable(context, resId) ?: return null
+        return (drawable as? BitmapDrawable)?.bitmap ?: run {
+            Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888).also { bmp ->
+                drawable.setBounds(0, 0, SIZE, SIZE)
+                drawable.draw(Canvas(bmp))
+            }
+        }
+    }
+
+    /**
+     * The station's logo faded back, for the head unit - see [mutedUriFor].
+     *
+     * Faded by alpha rather than towards a colour: the phone's screens fade the
+     * view, over a background that is dark or light with the system theme, and
+     * a transparent picture lands on the head unit's background the same way.
+     *
+     * A remote logo is fetched here, once - the head unit reads this on a
+     * binder thread, and the result is kept on disk under its source.
+     */
+    private fun renderMuted(context: Context, uri: Uri): File? {
+        val src = uri.getQueryParameter(PARAM_SRC) ?: return null
+        val dir = File(context.cacheDir, "logo").apply { mkdirs() }
+        val file = File(dir, "muted-${Integer.toHexString(src.hashCode())}.png")
+        if (file.exists() && file.length() > 0) return file
+
+        val source = Uri.parse(src)
+        val own = when (source.scheme) {
+            "file" -> BitmapFactory.decodeFile(source.path)
+            "http", "https" -> download(src)?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+            else -> resourceBitmap(context, source.schemeSpecificPart.toIntOrNull() ?: R.drawable.logo_placeholder)
+        }
+        // An unreadable logo - a favicon.ico, which Android can't decode - is
+        // shown as the placeholder unfaded too, so the faded one follows suit.
+        if (own == null) Log.w(TAG, "wyblakle logo: nie da sie odczytac $src, zastepcze")
+        val logo = own ?: resourceBitmap(context, R.drawable.logo_placeholder) ?: return null
+
+        val faded = Bitmap.createBitmap(logo.width, logo.height, Bitmap.Config.ARGB_8888)
+        Canvas(faded).drawBitmap(logo, 0f, 0f, Paint().apply { alpha = (MUTED_ALPHA * 255).toInt() })
+        val tmp = File(dir, file.name + ".tmp")
+        tmp.outputStream().use { faded.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        tmp.renameTo(file)
+        return file
+    }
+
+    private fun download(url: String): ByteArray? = runCatching {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 8_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", StationRepository.USER_AGENT)
+        }
+        try {
+            if (conn.responseCode !in 200..299) null else conn.inputStream.use { it.readBytes() }
+        } finally {
+            conn.disconnect()
+        }
+    }.getOrNull()
+
     companion object {
         private const val TAG = "LogoProvider"
         private const val PARAM_VERSION = "v"
         private const val PARAM_PATH = "p"
+        private const val PARAM_SRC = "src"
         private const val SIZE = 512
+
+        /**
+         * How far a logo is faded when nothing plays - the same on the phone's
+         * screens, which fade the view by it, and on the head unit, which gets
+         * [mutedUriFor].
+         */
+        const val MUTED_ALPHA = 0.3f
+
+        /**
+         * The station's logo faded back, as a picture the head unit can fetch.
+         *
+         * @param source where the logo itself is: a `file://` custom logo, an
+         *   http(s) one from the catalogue, or `res:<id>` for a bundled one. It
+         *   is the whole cache key - a new logo is a new address, and the head
+         *   unit's cache lets go of the old one.
+         */
+        fun mutedUriFor(context: Context, station: Station, source: Uri): Uri =
+            Uri.Builder()
+                .scheme("content")
+                .authority(authority(context))
+                .appendPath("muted")
+                .appendPath(station.id)
+                .appendQueryParameter(PARAM_SRC, source.toString())
+                .build()
 
         /** Must match android:authorities in the manifest. */
         fun authority(context: Context): String = "${context.packageName}.logos"

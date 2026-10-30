@@ -86,6 +86,13 @@ class RadioService : MediaLibraryService() {
      * or when whatever comes next will be a fresh connection anyway.
      */
     private var pausedAtMs = 0L
+
+    /** Since when we have wanted to play and heard nothing; 0 when we hear something. */
+    private var silentSinceMs = 0L
+
+    /** Silent past [SILENCE_GRACE_MS] - "nie gra" until sound comes back. */
+    private var lostAir = false
+    private var silenceCheck: Runnable? = null
     private var lastIcyAtMs = 0L
 
     /** Polls [StationTitleApi] while a station that has one is playing. */
@@ -424,7 +431,16 @@ class RadioService : MediaLibraryService() {
             .setKeepPostFor302Redirects(false)
 
         val filtered = IcyFilteringDataSource.Factory(
-            DefaultDataSource.Factory(this, httpFactory)
+            DefaultDataSource.Factory(this, httpFactory),
+            onIcyBitrate = { br ->
+                // Loader thread; the quality is the main thread's.
+                clockHandler.post {
+                    if (br != icyBitrateKbps) {
+                        icyBitrateKbps = br
+                        publishQuality()
+                    }
+                }
+            }
         ) { prefs.diagnosticMode && prefs.stripIcyInDiagnostic }
 
         val mediaSourceFactory = DefaultMediaSourceFactory(filtered)
@@ -495,8 +511,19 @@ class RadioService : MediaLibraryService() {
 
         override fun onPlaybackStateChanged(state: Int) {
             traceState("stan")
+            publishPlayerStatus()
+            if (state == Player.STATE_BUFFERING) armConnecting() else cancelConnecting()
+            updateSilence()
+        }
+
+        /**
+         * Both the state and the wish feed this. A pause leaves the player READY,
+         * so reading only the state kept "Odtwarzanie" on screen over a paused
+         * player (seen 30.10.2026).
+         */
+        private fun publishPlayerStatus() {
             PlaybackStatusBus.setPlayerStatus(
-                when (state) {
+                when (player.playbackState) {
                     Player.STATE_BUFFERING -> PlaybackStatusBus.Status.BUFFERING
                     Player.STATE_READY -> if (player.playWhenReady) {
                         PlaybackStatusBus.Status.PLAYING
@@ -506,7 +533,6 @@ class RadioService : MediaLibraryService() {
                     else -> PlaybackStatusBus.Status.IDLE
                 }
             )
-            if (state == Player.STATE_BUFFERING) armConnecting() else cancelConnecting()
         }
 
         /**
@@ -536,15 +562,21 @@ class RadioService : MediaLibraryService() {
          */
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             traceState("gra", playWhenReadyReason(reason))
+            PlaybackStatusBus.setWantsToPlay(playWhenReady)
+            publishPlayerStatus()
+            updateSilence()
             if (!playWhenReady) {
                 pausedAtMs = SystemClock.elapsedRealtime()
                 syncTitlePolling()
+                // "Nie gra" has a look of its own - see MetadataFactory.forStopped
+                refreshCurrentMetadata(force = true, why = "pauza")
                 return
             }
             val away = if (pausedAtMs == 0L) 0L else SystemClock.elapsedRealtime() - pausedAtMs
             pausedAtMs = 0L
             if (away < STALE_RESUME_MS || player.currentMediaItem == null) {
                 syncTitlePolling()
+                refreshCurrentMetadata(force = true, why = "wznowienie")
                 return
             }
 
@@ -1211,6 +1243,82 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
+     * Keeps the silence clock in step with the player: started when we want to
+     * play and the player isn't ready, stopped the moment it is.
+     *
+     * Counted from the silence, not from the signal: a live stream arrives as
+     * fast as it plays, so the buffer holds only what the server sent on
+     * connect - measured 30.10.2026 in airplane mode, RNS went quiet 8 s after
+     * the network did, not 45.
+     */
+    private fun updateSilence() {
+        val silent = player.playWhenReady && player.playbackState != Player.STATE_READY &&
+            player.currentMediaItem != null
+        if (!silent) {
+            silenceCheck?.let { clockHandler.removeCallbacks(it) }
+            silenceCheck = null
+            silentSinceMs = 0L
+            if (lostAir && player.playbackState == Player.STATE_READY) {
+                lostAir = false
+                PlaybackStatusBus.setLostAir(false)
+                Trace.write("cisza-koniec") {}
+                refreshCurrentMetadata(force = true, why = "powrot-dzwieku")
+            } else if (lostAir) {
+                // Paused while silent: that is "nie gra" for a reason of its
+                // own now, and play starts a fresh count.
+                lostAir = false
+                PlaybackStatusBus.setLostAir(false)
+            }
+            return
+        }
+        if (silentSinceMs != 0L) return
+        silentSinceMs = SystemClock.elapsedRealtime()
+        val check = Runnable { checkSilence("licznik") }
+        silenceCheck = check
+        clockHandler.postDelayed(check, SILENCE_GRACE_MS)
+    }
+
+    /**
+     * Turns a long silence into "nie gra", if it is time.
+     *
+     * The first [SILENCE_GRACE_MS] change nothing: a tunnel or a garage is
+     * over before anyone reads the dashboard, and flipping it back and forth
+     * would be the louder fault. Past that, what is on screen is a guess about a
+     * broadcast we haven't heard for a minute - the track ended, the programme
+     * may have - so the station's state goes, exactly as on a station change,
+     * and the layout shows the station and its slogan, faded, with the reason in
+     * the status line. Whatever arrives first after the sound returns (ICY, the
+     * API) describes the broadcast as it is then; nothing from before comes back.
+     *
+     * @return whether it fired - the caller's description has just been replaced.
+     */
+    private fun checkSilence(trigger: String): Boolean {
+        if (lostAir || silentSinceMs == 0L) return false
+        val silentFor = SystemClock.elapsedRealtime() - silentSinceMs
+        if (silentFor < SILENCE_GRACE_MS) return false
+        Log.i(TAG, "cisza ${silentFor}ms - pokazuje 'nie gra' ($trigger)")
+        Trace.write("cisza") {
+            put("ms", silentFor)
+            put("wyzwalacz", trigger)
+        }
+        lostAir = true
+        PlaybackStatusBus.setLostAir(true)
+        // The stream is the same one, and the decoder won't announce its format
+        // again when it resumes - kept, or "MP3 · stereo" vanished for good
+        // after the first tunnel (seen 30.10.2026).
+        val format = audioFormat
+        val bitrate = icyBitrateKbps
+        resetStationState()
+        audioFormat = format
+        icyBitrateKbps = bitrate
+        publishQuality()
+        // the reset stopped the poll; it has to be running when the network is back
+        syncTitlePolling()
+        refreshCurrentMetadata(force = true, now = null, why = "cisza")
+        return true
+    }
+
+    /**
      * Drops a description whose track must be over by now, if it is time.
      *
      * Called from [refreshCurrentMetadata] - that is, from every point where
@@ -1433,10 +1541,7 @@ class RadioService : MediaLibraryService() {
             put("hz", format.sampleRate.takeIf { it > 0 })
             put("poStacji", sinceStationMs())
         }
-        PlaybackStatusBus.setQuality(
-            quality.label().ifBlank { null },
-            quality.bitrateKbps.takeIf { it > 0 }
-        )
+        PlaybackStatusBus.setQuality(quality)
     }
 
     /**
@@ -1505,13 +1610,22 @@ class RadioService : MediaLibraryService() {
         // optimisation: `now` was captured before this line, so carrying on
         // would push the description checkStale has just retired.
         if (checkStale(why)) return
+        // Same reasoning as checkStale: on a sleeping phone the silence timer
+        // runs late, and this is the moment something is about to read us.
+        if (checkSilence(why)) return
 
         val index = player.currentMediaItemIndex
         val item = player.currentMediaItem ?: return
         val station = repo.byMediaId(item.mediaId) ?: return
         if (!force && prefs.diagnosticMode) return
-        val onAir = onAirFor(station, now)
-        val fresh = metadata.forPlayback(station, now, coverArtUrl, trackInfo, onAir)
+        val stopped = !player.playWhenReady || lostAir
+        val onAir = if (stopped) null else onAirFor(station, now)
+        val standby = if (stopped) {
+            StandbyArt.file(this, station, scope) { refreshCurrentMetadata(force = true, why = "grafika-postoju") }
+        } else {
+            null
+        }
+        val fresh = metadata.forPlayback(station, now, coverArtUrl, trackInfo, onAir, stopped, standby)
         PlaybackStatusBus.setOnAir(onAir)
         player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(fresh).build())
         traceMetadata(station, fresh, why)
@@ -2243,6 +2357,14 @@ class RadioService : MediaLibraryService() {
          * leaving a stale title on screen for too long.
          */
         private const val STALE_GRACE_MS = 30_000L
+
+        /**
+         * How long silence (no signal, a station not answering) may last before
+         * the dashboard stops describing what we last heard. The user's pick,
+         * 30.10.2026: long enough for a tunnel, short enough that a description
+         * nobody is hearing doesn't stay up.
+         */
+        private const val SILENCE_GRACE_MS = 60_000L
 
         const val NODE_ROOT = "/"
         const val NODE_FAVOURITES = "/fav"

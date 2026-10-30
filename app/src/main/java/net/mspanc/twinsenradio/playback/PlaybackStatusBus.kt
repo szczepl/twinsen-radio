@@ -50,25 +50,43 @@ object PlaybackStatusBus {
     }
 
     /**
-     * A description of the current stream's quality - codec, bitrate, sample
-     * rate. For the phone only; in the car there's no field to display it in.
+     * What is actually coming through the stream - codec, bitrate, channels,
+     * from the decoder. For the phone only; in the car there's no field to
+     * display it in. Null until the first frame is decoded.
      */
-    private val _quality = MutableStateFlow<String?>(null)
-    val quality: StateFlow<String?> = _quality
+    private val _quality = MutableStateFlow<StreamQuality?>(null)
+    val quality: StateFlow<StreamQuality?> = _quality
+
+    fun setQuality(value: StreamQuality?) {
+        _quality.value = value
+    }
 
     /**
-     * The actual bitrate from the decoder, in kb/s - for stations that don't
-     * declare it in the catalog (a single, "bare" stream URL with no
-     * variants). In that case the quality button shows this number instead
-     * of a placeholder.
+     * Whether the player is meant to be playing - `playWhenReady`. False is
+     * "nie gra": before play, or paused. Buffering and reconnecting are still
+     * true; they are trying to play, and the dashboard says so in its own line.
      */
-    private val _qualityKbps = MutableStateFlow<Int?>(null)
-    val qualityKbps: StateFlow<Int?> = _qualityKbps
+    private val _wantsToPlay = MutableStateFlow(false)
+    val wantsToPlay: StateFlow<Boolean> = _wantsToPlay
 
-    fun setQuality(text: String?, kbps: Int? = null) {
-        _quality.value = text
-        _qualityKbps.value = kbps
+    fun setWantsToPlay(value: Boolean) {
+        _wantsToPlay.value = value
     }
+
+    /**
+     * Silent for longer than the grace a tunnel gets, although we want to play -
+     * no signal, or a station that won't answer. Shown as "nie gra" too, with
+     * the reason in the status; see RadioService.checkSilence.
+     */
+    private val _lostAir = MutableStateFlow(false)
+    val lostAir: StateFlow<Boolean> = _lostAir
+
+    fun setLostAir(value: Boolean) {
+        _lostAir.value = value
+    }
+
+    /** "Nie gra", the one look: before play, paused, or silent past the grace. */
+    fun notPlaying(): Boolean = stationId.value == null || !wantsToPlay.value || lostAir.value
 
     private val _status = MutableStateFlow(Status.IDLE)
     val status: StateFlow<Status> = _status
@@ -104,7 +122,6 @@ object PlaybackStatusBus {
             // valid immediately, and we'll only learn the new one after the
             // first frame from the decoder.
             _quality.value = null
-            _qualityKbps.value = null
         }
     }
 
