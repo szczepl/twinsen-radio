@@ -36,14 +36,33 @@ object StationTitleApi {
          * (RNS), or the other way round (Radio 357). Whichever source is the
          * better one on a station decides there; the other is written down.
          */
-        val decides: Boolean = true
+        val decides: Boolean = true,
+        /**
+         * Triton's "now playing" (see [TritonNowPlaying]): the stream decides
+         * the titles, and this fills what it leaves unsaid - ads, and a track
+         * the stream hasn't named yet.
+         */
+        val triton: Boolean = false
     )
 
-    /** Null for stations whose stream carries its own titles. */
-    fun forStation(stationId: String?): Source? = when (stationId) {
+    /**
+     * Null for stations whose stream carries all they say.
+     *
+     * @param streamUrl the station's stream: any station streamed through
+     *   StreamTheWorld has Triton's "now playing", one added from the directory
+     *   as much as one in the catalogue.
+     */
+    fun forStation(stationId: String?, streamUrl: String? = null): Source? = when (stationId) {
         "rns" -> RNS
         "r357" -> R357
-        else -> null
+        else -> TritonNowPlaying.mountOf(streamUrl)?.takeIf { TRITON_FILLS }?.let { mount ->
+            Source(
+                TritonNowPlaying.url(mount),
+                { body -> (TritonNowPlaying.latest(body) as? TritonNowPlaying.Event.Track)?.streamTitle },
+                decides = false,
+                triton = true
+            )
+        }
     }
 
     /**
@@ -116,7 +135,7 @@ object StationTitleApi {
         // The answer comes with Cache-Control max-age of a year, and Cloudflare
         // honours it: a repeated address got a Massive Attack track from days
         // earlier. Their own player busts it with a timestamp, and so do we.
-        val url = "${source.url}?tsapi=${System.currentTimeMillis()}"
+        val url = source.url + (if ('?' in source.url) "&" else "?") + "tsapi=${System.currentTimeMillis()}"
         runCatching {
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = TIMEOUT_MS
@@ -132,6 +151,13 @@ object StationTitleApi {
             }
         }.getOrNull()
     }
+
+    /**
+     * Triton's fill-in: on since an hour of Smooth FM was measured against
+     * Ucho (30.10.2026) - ads as "Reklama" with the logo, the station's own
+     * "(Link)" spots skipped, events shown once our sound reaches them.
+     */
+    private const val TRITON_FILLS = true
 
     /** Their own player asks every 10 s, so the station has already sized for that. */
     const val POLL_MS = 10_000L

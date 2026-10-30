@@ -391,7 +391,8 @@ class MainActivity : AppCompatActivity() {
         // Only the genre is the bar's own, for a gap the layout says nothing about.
         val onAir = if (joining) null else PlaybackStatusBus.onAir.value
         val text = MetadataFactory.forPhone(
-            now, PlaybackStatusBus.trackInfo.value, onAir, prefs.presentation, prefs.enrichWithYear
+            now, PlaybackStatusBus.trackInfo.value, onAir, prefs.presentation, prefs.enrichWithYear,
+            station?.slashMayBeAlbum == true
         )
         b.miniSubtitle.text = if (now?.isRealSong == true) {
             listOf(text.artist, text.title).filter { it.isNotBlank() }.joinToString(" — ")

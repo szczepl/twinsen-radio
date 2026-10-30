@@ -61,7 +61,15 @@ data class Station(
      * kept. Decides which iTunes store is asked first for a cover: see
      * [isPolish].
      */
-    val country: String? = null
+    val country: String? = null,
+    /**
+     * Whether " / " in this station's artist may be the record rather than a
+     * second artist - RMF sends both "Wiktoria Kida / Ksiega" (artist / album)
+     * and "Sean Paul / Alexis Jordan" (two artists). Only the catalogue can
+     * tell them apart, so without it the slash is left as it came; anywhere
+     * else " / " joins artists and is shown as "&".
+     */
+    val slashMayBeAlbum: Boolean = false
 ) {
     /** Polish repertoire is looked up in the Polish iTunes store first. */
     val isPolish: Boolean get() = country.equals("PL", ignoreCase = true)

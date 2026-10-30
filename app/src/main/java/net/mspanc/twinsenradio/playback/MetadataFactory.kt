@@ -360,7 +360,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         // Without the album RMF tacks onto the artist ("Wiktoria Kida / Ksiega"):
         // that has a line of its own now, and next to it the record was named
         // twice. The phone has always cut it the same way.
-        LineContent.ARTIST -> if (now != null && now.isRealSong) composeArtistOnly(now, info) else ""
+        LineContent.ARTIST ->
+            if (now != null && now.isRealSong) composeArtistOnly(now, info, station.slashMayBeAlbum) else ""
         LineContent.ALBUM ->
             if (now?.isRealSong == true) {
                 info?.albumLabel(prefs.enrichWithYear).orEmpty()
@@ -595,13 +596,14 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             info: CoverArtLookup.TrackInfo?,
             onAir: OnAir?,
             p: Presentation,
-            includeYear: Boolean
+            includeYear: Boolean,
+            slashMayBeAlbum: Boolean = false
         ): PhoneText {
             if (now != null && now.isRealSong) {
                 val lines = p.playing
                 return PhoneText(
                     title = if (lines.shows(LineContent.Part.TITLE)) displayTitle(now, info) else "",
-                    artist = if (lines.shows(LineContent.Part.ARTIST)) composeArtistOnly(now, info) else "",
+                    artist = if (lines.shows(LineContent.Part.ARTIST)) composeArtistOnly(now, info, slashMayBeAlbum) else "",
                     album = if (lines.shows(LineContent.Part.ALBUM)) info?.albumLabel(includeYear).orEmpty() else ""
                 )
             }
@@ -678,19 +680,43 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
          * The artist alone, without the album - for use where the album should go
          * on a separate line (the phone's playback screen), not after a dot.
          */
-        fun composeArtistOnly(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
+        /**
+         * @param slashMayBeAlbum see [Station.slashMayBeAlbum]: without the
+         *   catalogue to say which it is, such a station's slash is left alone.
+         */
+        fun composeArtistOnly(
+            now: NowPlaying,
+            info: CoverArtLookup.TrackInfo?,
+            slashMayBeAlbum: Boolean = false
+        ): String {
             val artist = displayArtist(now, info)
-            if (artist.isBlank() || info == null) return artist
+            if (artist.isBlank()) return artist
+            if (info == null) return if (slashMayBeAlbum) artist else joinedArtists(artist)
 
             // Only trim the tail when the catalog confirms it's an album
             // name. Otherwise "Shimza / AR/CO / Kasango" would lose its third artist.
             val parts = artist.split(Regex("\\s+[/,]\\s+"))
-            return if (parts.size > 1 && info.tailIsAlbum(parts.last())) {
-                parts.dropLast(1).joinToString(" / ")
-            } else {
-                artist
-            }
+            return joinedArtists(
+                if (parts.size > 1 && info.tailIsAlbum(parts.last())) {
+                    parts.dropLast(1).joinToString(" / ")
+                } else {
+                    artist
+                }
+            )
         }
+
+        /**
+         * Smooth FM and RMF join artists with " / " - "Bryan Adams / Mel C";
+         * shown as "&", the way Jacaranda's "[+]" is (see [joinedNames]).
+         *
+         * Only after RMF's album has come off the end, which is found by that
+         * same slash: "Wiktoria Kida / Ksiega" is an artist and a record, and
+         * swapped first it would read as two artists. A slash without spaces
+         * is part of a name and stays - "AC/DC", "AR/CO".
+         */
+        fun joinedArtists(text: String): String = text.replace(ARTIST_SLASH, " & ")
+
+        private val ARTIST_SLASH = Regex("""\s+/\s+""")
 
         /**
          * @param includeYear whether the album gets its year appended, when the

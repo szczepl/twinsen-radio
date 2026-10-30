@@ -185,7 +185,8 @@ class StationRepository private constructor(private val appContext: Context) {
                 standbyArtUrl = o.optString("standbyArt").ifBlank { null },
                 // The catalogue is Polish radio with a few Australian guests,
                 // which say so; everything that doesn't is Polish.
-                country = o.optString("country").ifBlank { "PL" }
+                country = o.optString("country").ifBlank { "PL" },
+                slashMayBeAlbum = o.optBoolean("slashMayBeAlbum", false)
             )
         }
     }.getOrElse {

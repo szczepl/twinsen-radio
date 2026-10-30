@@ -159,6 +159,13 @@ class RadioService : MediaLibraryService() {
     /** Waits after a control marker for whatever the station inserts next. */
     private var pendingMarkerJob: Job? = null
 
+    /** Triton's events wait for the sound to reach them - see [handleTriton]. */
+    private var tritonJob: Job? = null
+    private var tritonLagMs = TRITON_DEFAULT_LAG_MS
+    private val tritonLagSamples = ArrayDeque<Long>()
+    private var lastTritonTrack: TritonNowPlaying.Event.Track? = null
+    private var tritonLaggedStart = 0L
+
     /** A new song waiting for its cover before it goes up - see [publishNow]. */
     private var pendingSongJob: Job? = null
 
@@ -656,6 +663,7 @@ class RadioService : MediaLibraryService() {
                         if (api == null || !api.decides) {
                             // the comparison is still worth keeping where the API only witnesses
                             if (api != null) witness(StreamWitness.Source.ICY, entry.title, raw)
+                            if (api?.triton == true) calibrateTriton(entry.title)
                             handleIcyTitle(entry.title, raw)
                         } else {
                             witness(StreamWitness.Source.ICY, entry.title, raw)
@@ -803,7 +811,9 @@ class RadioService : MediaLibraryService() {
     }
 
     private fun titleApiSource(): StationTitleApi.Source? =
-        StationTitleApi.forStation(player.currentMediaItem?.mediaId?.let { Station.idFromMediaId(it) })
+        player.currentMediaItem?.mediaId?.let { mediaId ->
+            StationTitleApi.forStation(Station.idFromMediaId(mediaId), repo.byMediaId(mediaId)?.stream)
+        }
 
     /**
      * Starts or stops the title poll to match what the player is doing: on
@@ -827,6 +837,14 @@ class RadioService : MediaLibraryService() {
         titlePollJob = scope.launch {
             while (isActive) {
                 val body = StationTitleApi.fetch(source)
+                if (source.triton) {
+                    body?.let(::handleTriton)
+                    val wait = body?.let {
+                        TritonNowPlaying.nextAskInMs(it, System.currentTimeMillis(), StationTitleApi.POLL_MS)
+                    } ?: StationTitleApi.POLL_MS
+                    delay(wait)
+                    continue
+                }
                 val title = body?.let(source.toStreamTitle)
                 body?.let(::traceApiFields)
                 if (body == null) {
@@ -841,6 +859,82 @@ class RadioService : MediaLibraryService() {
                 }
                 delay(StationTitleApi.POLL_MS)
             }
+        }
+    }
+
+    /**
+     * Triton's answer, for a station whose stream decides the titles - it
+     * fills in what the stream leaves unsaid (see [TritonNowPlaying]):
+     *
+     * - an ad goes up as one, with what is left of it, the way RMF's marked
+     *   spots do - the stream says nothing during a break;
+     * - a track goes up only while no track is on screen - joining mid-song
+     *   before the stream has spoken, or the first song after a break; a
+     *   track the stream already named stays the stream's;
+     * - nothing on (the last event over, nothing logged since) takes a
+     *   finished ad off, so "Reklama" doesn't outlive the break.
+     *
+     * Asked again just after the current event's end, so a break and its end
+     * show up when they happen rather than up to a poll later.
+     */
+    private fun handleTriton(body: String) {
+        val nowMs = System.currentTimeMillis()
+        val event = TritonNowPlaying.current(body, nowMs, tritonLagMs)
+        // The station's own links are skipped outright - see Event.Ad.isLink.
+        if (event is TritonNowPlaying.Event.Ad && event.isLink) return
+        if (event is TritonNowPlaying.Event.Track) lastTritonTrack = event
+        val key = when (event) {
+            null -> "nic"
+            else -> "${event.javaClass.simpleName}|${event.startMs}"
+        }
+        if (key == lastApiTitle) return
+        lastApiTitle = key
+        Log.i(TAG_ICY, "Triton: $event (opoznienie ${tritonLagMs}ms)")
+        if (event is TritonNowPlaying.Event.Track) {
+            witness(StreamWitness.Source.API, event.streamTitle, "triton: ${event.startMs}")
+        }
+
+        // Triton's times are the broadcast's; we hear it [tritonLagMs] later.
+        // Shown on Triton's clock, "Reklama" took the last seconds of the song
+        // before it - so each event waits until its start reaches our speakers.
+        tritonJob?.cancel()
+        val wait = event?.let { it.startMs + tritonLagMs - nowMs } ?: 0
+        tritonJob = scope.launch {
+            if (wait > 0) delay(wait)
+            val shown = PlaybackStatusBus.nowPlaying.value
+            when (event) {
+                is TritonNowPlaying.Event.Ad -> {
+                    val left = event.endMs + tritonLagMs - System.currentTimeMillis()
+                    handleIcyTitle("", event.icyBlock(left))
+                }
+                is TritonNowPlaying.Event.Track ->
+                    if (shown?.isRealSong != true) handleIcyTitle(event.streamTitle, "triton='${event.startMs}';")
+                null -> if (shown?.isAd == true) publish(null)
+            }
+        }
+    }
+
+    /**
+     * Measures [tritonLagMs] from the stream: a title arriving in ICY is heard
+     * as it plays, so its arrival less Triton's start of the same track is how
+     * far behind the broadcast we listen. Smooth FM over an hour: +4.6..+5.3 s
+     * on Ucho's clock (30.10.2026); the phone adds its own buffer, so it is
+     * measured here, per connection, as a median of the last few.
+     */
+    private fun calibrateTriton(icyTitle: String?) {
+        val track = lastTritonTrack ?: return
+        if (icyTitle.isNullOrBlank() || !icyTitle.trim().equals(track.streamTitle, ignoreCase = true)) return
+        if (track.startMs == tritonLaggedStart) return
+        tritonLaggedStart = track.startMs
+        val sample = System.currentTimeMillis() - track.startMs
+        if (sample !in 0..TRITON_MAX_LAG_MS) return
+        tritonLagSamples.addLast(sample)
+        while (tritonLagSamples.size > 5) tritonLagSamples.removeFirst()
+        tritonLagMs = tritonLagSamples.sorted()[tritonLagSamples.size / 2]
+        Log.i(TAG_ICY, "Triton: opoznienie ${sample}ms, mediana ${tritonLagMs}ms")
+        Trace.write("triton-opoznienie") {
+            put("ms", sample)
+            put("mediana", tritonLagMs)
         }
     }
 
@@ -1487,6 +1581,21 @@ class RadioService : MediaLibraryService() {
             return false
         }
 
+        // Over by the clock is not over on screen yet: the station gets a
+        // moment to say what comes next, and if it does, the next song goes up
+        // straight after this one - no logo in between. Clearing at once put
+        // the logo up for the 2 s Smooth FM took to name the next song
+        // (16:55:08 -> 16:55:10, 30.10.2026), and the picture changed twice.
+        // A deadline long past - a phone that slept through it - waits no more.
+        if (late < STALE_DECIDE_MS) {
+            staleJob?.cancel()
+            staleJob = scope.launch {
+                delay(STALE_DECIDE_MS - late)
+                checkStale("decyzja")
+            }
+            return false
+        }
+
         Log.i(TAG_ICY, "utwor '$expired' powinien byc juz po - czyszcze opis ($trigger)")
         Trace.write("przeterminowanie") {
             put("utwor", expired)
@@ -1546,6 +1655,12 @@ class RadioService : MediaLibraryService() {
         adEndsAtMs = 0L
         pendingMarkerJob?.cancel()
         pendingSongJob?.cancel()
+        // Triton's lag is our connection's, measured again on the next one.
+        tritonJob?.cancel()
+        lastTritonTrack = null
+        tritonLaggedStart = 0L
+        tritonLagSamples.clear()
+        tritonLagMs = TRITON_DEFAULT_LAG_MS
         stationAtMs = SystemClock.elapsedRealtime()
         coverTrackKey = null
         coverArtUrl = null
@@ -2496,6 +2611,12 @@ class RadioService : MediaLibraryService() {
         /** How long a song found on joining waits for its cover, to go up whole. */
         private const val JOIN_COVER_WAIT_MS = 1_000L
 
+        /** Triton's lag before the stream has said anything to measure it by: Smooth FM's, on Ucho. */
+        private const val TRITON_DEFAULT_LAG_MS = 5_000L
+
+        /** A measured lag beyond this is a mismatch, not a lag. */
+        private const val TRITON_MAX_LAG_MS = 30_000L
+
         /** How long a new song waits for its cover, to go up with it - see publishNow. */
         private const val SONG_COVER_WAIT_MS = 1_000L
 
@@ -2554,6 +2675,12 @@ class RadioService : MediaLibraryService() {
          * leaving a stale title on screen for too long.
          */
         private const val STALE_GRACE_MS = 30_000L
+
+        /**
+         * How long a track over by the clock stays up while the station is given
+         * the chance to name the next one - see checkStale.
+         */
+        private const val STALE_DECIDE_MS = 10_000L
 
         /**
          * How long silence (no signal, a station not answering) may last before

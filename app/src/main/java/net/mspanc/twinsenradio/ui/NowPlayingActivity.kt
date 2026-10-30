@@ -185,7 +185,8 @@ class NowPlayingActivity : AppCompatActivity() {
         val onAir = if (joining) null else PlaybackStatusBus.onAir.value
         val text = if (playing != null) {
             MetadataFactory.forPhone(
-                now, PlaybackStatusBus.trackInfo.value, onAir, prefs.presentation, prefs.enrichWithYear
+                now, PlaybackStatusBus.trackInfo.value, onAir, prefs.presentation, prefs.enrichWithYear,
+                station?.slashMayBeAlbum == true
             )
         } else {
             PhoneText(station?.let { prefs.slogan(it.id) }.orEmpty(), "", "")
