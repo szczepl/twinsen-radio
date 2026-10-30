@@ -1707,8 +1707,13 @@ class RadioService : MediaLibraryService() {
         // play() is not a pause. A silence outranks joining - it has a reason
         // to show.
         val phase = if (prefs.diagnosticMode || lostAir) JoinPhase.NONE else joinPhase()
-        PlaybackStatusBus.setJoining(phase == JoinPhase.WAITING)
-        PlaybackStatusBus.setArtPending(phase != JoinPhase.NONE)
+        PlaybackStatusBus.setJoin(
+            when (phase) {
+                JoinPhase.NONE -> PlaybackStatusBus.Join.NONE
+                JoinPhase.WAITING -> PlaybackStatusBus.Join.WAITING
+                JoinPhase.COVER -> PlaybackStatusBus.Join.COVER
+            }
+        )
         val stopped = phase == JoinPhase.NONE && (!player.playWhenReady || lostAir)
         val onAir = if (stopped || phase != JoinPhase.NONE) null else onAirFor(station, now)
         val standby = if (stopped) {
@@ -2325,11 +2330,17 @@ class RadioService : MediaLibraryService() {
         )
     }
 
+    /**
+     * The item play starts with. Its metadata is what every reader sees before
+     * our first push replaces it, so it is the joining state - the station's
+     * name and an empty picture - not the gap layout with its logo, which the
+     * notification and the head unit drew for an instant after play.
+     */
     private fun playableItem(station: Station): MediaItem =
         MediaItem.Builder()
             .setMediaId(station.mediaId)
             .setUri(station.stream)
-            .setMediaMetadata(metadata.forPlayback(station, null))
+            .setMediaMetadata(metadata.forJoining(station))
             .build()
 
     /**
@@ -2395,7 +2406,7 @@ class RadioService : MediaLibraryService() {
          * station that answers instantly and one that takes a second both land
          * at the same moment.
          */
-        /** How long a joined station may stay silent before its silence is the answer - see joining. */
+        /** How long a joined station may stay silent before its silence is the answer - see joinPhase. */
         private const val JOIN_WAIT_MS = 3_000L
 
         /** How long a song found on joining waits for its cover, to go up whole. */

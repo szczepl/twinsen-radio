@@ -305,10 +305,7 @@ class MainActivity : AppCompatActivity() {
             PlaybackStatusBus.lostAir.collect { renderMiniPlayer() }
         }
         lifecycleScope.launch {
-            PlaybackStatusBus.joining.collect { renderMiniPlayer() }
-        }
-        lifecycleScope.launch {
-            PlaybackStatusBus.artPending.collect { renderMiniPlayer() }
+            PlaybackStatusBus.join.collect { renderMiniPlayer() }
         }
         // Favourites can change on the playback screen or in the car. The state
         // isn't part of the station model, so DiffUtil won't refresh anything on its own.
@@ -359,7 +356,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderMiniPlayer() {
         val station = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
         // Joining a station: only the station, as the car gets it - see RadioService.joinPhase.
-        val joining = PlaybackStatusBus.joining.value
+        val joining = PlaybackStatusBus.joining()
         val now = if (joining) null else PlaybackStatusBus.nowPlaying.value
 
         // "Nie gra" - before play, or paused, one look for both: the station
@@ -410,7 +407,7 @@ class MainActivity : AppCompatActivity() {
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.miniLogo,
             station?.let { metadata.phoneClock(now?.isRealSong == true)?.takeUnless { joining } },
-            blank = PlaybackStatusBus.artPending.value
+            blank = PlaybackStatusBus.artPending()
         )
         b.playPause.setImageResource(
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause

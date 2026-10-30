@@ -27,8 +27,8 @@ object ArtworkLoader {
      * @param coverUri track cover art from session metadata; null or non-http(s)
      *   means we fall through to [logoUri] instead.
      * @param logoUri the station's own logo - a custom one (file://) is decoded
-     *   immediately and shown as the resting image; a remote one (http(s)) is
-     *   fetched the same way cover art is. This is what's shown whenever there's
+     *   on the spot; a remote one (http(s)) is fetched the same way cover art
+     *   is. Shown when there is no cover, or the cover can't be fetched. This is what's shown whenever there's
      *   no cover art - previously callers only passed a static resource here,
      *   so a station with a custom or remote logo but no cover art showed the
      *   bare placeholder instead of its own logo.
@@ -53,7 +53,7 @@ object ArtworkLoader {
     ) {
         target.alpha = if (muted) LogoProvider.MUTED_ALPHA else 1f
         if (blank) {
-            // The picture isn't decided yet (see PlaybackStatusBus.artPending):
+            // The picture isn't decided yet (see PlaybackStatusBus.join):
             // an empty slot now, the right picture once - not a logo first.
             target.setTag(TAG_KEY, null)
             target.setImageDrawable(null)
@@ -66,56 +66,57 @@ object ArtworkLoader {
             return
         }
 
-        // The custom logo lives in the app's directory - decode it right away as
-        // the resting image, without downloading and without caching by URL.
+        // The custom logo lives in the app's directory - decoded right away,
+        // without downloading and without caching by URL.
         val localLogo = logoUri?.takeIf { it.scheme == "file" }
             ?.let { runCatching { BitmapFactory.decodeFile(it.path) }.getOrNull() }
-        if (localLogo != null) {
-            target.setImageBitmap(localLogo)
-        } else {
-            target.setImageResource(fallbackRes)
+
+        // The logo, or the bare placeholder - for when there is nothing better,
+        // and only then. It used to go up first as a "resting image" under every
+        // download, so a cover arriving after play was preceded by the logo for
+        // the half second the download took - exactly the flash the empty slot
+        // after play exists to prevent (seen 30.10.2026 on the phone, frame by
+        // frame: empty, logo, cover).
+        fun resting() {
+            if (localLogo != null) target.setImageBitmap(localLogo) else target.setImageResource(fallbackRes)
         }
 
-        // The presenter's photo is ours already, behind LogoProvider - the same
-        // address the head unit gets, read here through the resolver.
-        if (coverUri?.scheme == "content") {
-            val key = coverUri.toString()
-            cache.get(key)?.let {
-                target.setImageBitmap(it)
-                return
-            }
-            target.setTag(TAG_KEY, key)
-            val resolver = target.context.applicationContext.contentResolver
-            scope.launch {
-                val bitmap = withContext(Dispatchers.IO) {
-                    runCatching { resolver.openInputStream(coverUri)?.use { BitmapFactory.decodeStream(it) } }.getOrNull()
-                }
-                if (bitmap != null && target.getTag(TAG_KEY) == key) {
-                    cache.put(key, bitmap)
-                    target.setImageBitmap(bitmap)
-                }
-            }
+        // What has to be fetched: the presenter's photo (ours already, behind
+        // LogoProvider - the same address the head unit gets), the cover, or a
+        // remote station logo.
+        val key = coverUri?.takeIf { it.scheme == "content" || it.scheme == "http" || it.scheme == "https" }
+            ?: logoUri?.takeIf { it.scheme == "http" || it.scheme == "https" }
+        if (key == null) {
+            target.setTag(TAG_KEY, null)
+            resting()
             return
         }
-
-        // Cover art wins when we have one; a remote station logo is the next best
-        // thing to fetch and show instead of the bare placeholder.
-        val url = coverUri?.takeIf { it.scheme == "http" || it.scheme == "https" }?.toString()
-            ?: logoUri?.takeIf { it.scheme == "http" || it.scheme == "https" }?.toString()
-        if (url == null) return
-
-        cache.get(url)?.let {
+        cache.get(key.toString())?.let {
+            target.setTag(TAG_KEY, null)
             target.setImageBitmap(it)
             return
         }
 
-        target.setTag(TAG_KEY, url)
+        // Not in the cache: what is showing stays until the picture arrives -
+        // the empty slot after play, or the previous picture for the moment a
+        // download takes - and the logo goes up only if the download fails.
+        target.setTag(TAG_KEY, key.toString())
+        val resolver = target.context.applicationContext.contentResolver
         scope.launch {
-            val bitmap = withContext(Dispatchers.IO) { fetch(url) }
+            val bitmap = withContext(Dispatchers.IO) {
+                if (key.scheme == "content") {
+                    runCatching { resolver.openInputStream(key)?.use { BitmapFactory.decodeStream(it) } }.getOrNull()
+                } else {
+                    fetch(key.toString())
+                }
+            }
             // the track (or station) may have changed in the meantime
-            if (bitmap != null && target.getTag(TAG_KEY) == url) {
-                cache.put(url, bitmap)
+            if (target.getTag(TAG_KEY) != key.toString()) return@launch
+            if (bitmap != null) {
+                cache.put(key.toString(), bitmap)
                 target.setImageBitmap(bitmap)
+            } else {
+                resting()
             }
         }
     }

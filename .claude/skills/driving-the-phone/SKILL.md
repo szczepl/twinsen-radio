@@ -104,6 +104,31 @@ else, or not at all - `adb pull` already has it.
 `SettingsActivity` is not exported, so `am start` on it is a
 SecurityException. Overflow menu (three dots, top right) → *Opcje*.
 
+## No media keys
+
+**Never send `KEYCODE_MEDIA_PLAY` / `_PAUSE` / `_NEXT` from adb.** Android
+hands them to whichever media session was active last - with our app
+stopped, that is the user's own Radio Nowy Świat app, which then starts
+(30.10.2026: the user found it launched after a test). And NEXT does nothing
+in ours anyway: the player holds one item. Pause and play through our own
+screens - the play/pause button on the playback screen, a station row on the
+list - or restart with `play_station`.
+
+## Seeing what lasts less than a second
+
+A flash of the wrong picture is shorter than a screenshot round trip. Loop raw
+captures on the device and time them against the tap:
+
+```bash
+adb shell 'i=0; while [ $i -lt 30 ]; do screencap /sdcard/k/f$i.raw; echo "$i $(date +%s.%N)" >> /sdcard/k/t.txt; i=$((i+1)); done' &
+adb shell 'echo "TAP $(date +%s.%N)" >> /sdcard/k/t.txt; input tap X Y'
+```
+
+About five frames a second. A `.raw` is a 16-byte header (width, height,
+format, colour space) and RGBA; PIL reads it with `Image.frombytes`. Logging
+what was sent to the car is not enough: the phone's own screens load pictures
+themselves, and that is where the flash was.
+
 ## What not to touch
 
 **Never kill `com.google.android.projection.gearhead`.** That is the head

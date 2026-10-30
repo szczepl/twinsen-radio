@@ -78,8 +78,7 @@ class NowPlayingActivity : AppCompatActivity() {
             PlaybackStatusBus.onAir,
             PlaybackStatusBus.wantsToPlay,
             PlaybackStatusBus.lostAir,
-            PlaybackStatusBus.joining,
-            PlaybackStatusBus.artPending,
+            PlaybackStatusBus.join,
             PlaybackStatusBus.quality,
             Prefs.favouritesFlow
         ).forEach { flow ->
@@ -177,7 +176,7 @@ class NowPlayingActivity : AppCompatActivity() {
         // renderMiniPlayer, and MetadataFactory.forStopped).
         val playing = loaded?.takeIf { !PlaybackStatusBus.notPlaying() }
         // Joining a station: only the station, as the car gets it - see RadioService.joinPhase.
-        val joining = PlaybackStatusBus.joining.value
+        val joining = PlaybackStatusBus.joining()
         val now = if (joining) null else PlaybackStatusBus.nowPlaying.value
 
         b.stationName.text = station?.name ?: getString(R.string.nothing_playing)
@@ -224,7 +223,7 @@ class NowPlayingActivity : AppCompatActivity() {
             // Nothing playing yet, nothing to put a clock in place of.
             playing?.let { metadata.phoneClock(now?.isRealSong == true)?.takeUnless { joining } },
             muted = playing == null && standby == null,
-            blank = playing != null && PlaybackStatusBus.artPending.value
+            blank = playing != null && PlaybackStatusBus.artPending()
         )
         val statusText = getString(
             when (PlaybackStatusBus.status.value) {

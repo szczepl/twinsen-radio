@@ -86,33 +86,37 @@ object PlaybackStatusBus {
     }
 
     /**
-     * A station has just been joined and hasn't said yet what is on - see
-     * RadioService.joinPhase. Until it does, both screens show only the
-     * station's name: not the gap's programme and photo, which may be wrong,
-     * nor "nie gra", which the moment before play() would otherwise flash.
+     * Where joining a station has got to - see RadioService.joinPhase. One
+     * value, not two flags: the screens redraw on every change, and two flags
+     * set one after the other showed the moment between them - the logo the
+     * whole thing exists to keep off the screen (seen 30.10.2026 on the phone).
      */
-    private val _joining = MutableStateFlow(false)
-    val joining: StateFlow<Boolean> = _joining
+    enum class Join {
+        NONE,
 
-    fun setJoining(value: Boolean) {
-        _joining.value = value
+        /** The station hasn't said what is on: only its name, and no picture. */
+        WAITING,
+
+        /** A song is known, its cover is not: its text, and still no picture. */
+        COVER
     }
 
-    /**
-     * The picture is not decided yet - joining, or a song known on joining
-     * whose cover is still being looked up. The slot stays empty until it is,
-     * and then gets the right picture at once rather than a logo first.
-     */
-    private val _artPending = MutableStateFlow(false)
-    val artPending: StateFlow<Boolean> = _artPending
+    private val _join = MutableStateFlow(Join.NONE)
+    val join: StateFlow<Join> = _join
 
-    fun setArtPending(value: Boolean) {
-        _artPending.value = value
+    fun setJoin(value: Join) {
+        _join.value = value
     }
+
+    /** Only the station's name - not the gap's programme, nor "nie gra". */
+    fun joining(): Boolean = join.value == Join.WAITING
+
+    /** The picture isn't decided yet: the slot stays empty until it is. */
+    fun artPending(): Boolean = join.value != Join.NONE
 
     /** "Nie gra", the one look: before play, paused, or silent past the grace. */
     fun notPlaying(): Boolean =
-        stationId.value == null || lostAir.value || (!wantsToPlay.value && !joining.value)
+        stationId.value == null || lostAir.value || (!wantsToPlay.value && !joining())
 
     private val _status = MutableStateFlow(Status.IDLE)
     val status: StateFlow<Status> = _status
@@ -139,6 +143,10 @@ object PlaybackStatusBus {
 
     fun setStation(id: String?) {
         if (_stationId.value != id) {
+            // Before the station itself: anything that redraws on the new
+            // station must already see that it is being joined, or it draws the
+            // logo for the instant before the service says so.
+            if (id != null) _join.value = Join.WAITING
             _stationId.value = id
             _nowPlaying.value = null
             _coverArtUrl.value = null
