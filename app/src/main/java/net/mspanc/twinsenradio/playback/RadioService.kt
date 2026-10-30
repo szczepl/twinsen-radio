@@ -42,10 +42,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ContentStyle
 import net.mspanc.twinsenradio.data.Prefs
@@ -156,6 +158,12 @@ class RadioService : MediaLibraryService() {
 
     /** Waits after a control marker for whatever the station inserts next. */
     private var pendingMarkerJob: Job? = null
+
+    /** A new song waiting for its cover before it goes up - see [publishNow]. */
+    private var pendingSongJob: Job? = null
+
+    /** A cover lookup that finished in time, or a sign that it didn't - see [publishNow]. */
+    private class Prefetched(val info: CoverArtLookup.TrackInfo?)
 
     /** Watches whether the track description has gone stale because the station announced nothing. */
     private var staleJob: Job? = null
@@ -645,7 +653,9 @@ class RadioService : MediaLibraryService() {
                     is IcyInfo -> {
                         val raw = logIcyInfo(entry)
                         val api = titleApiSource()
-                        if (api == null) {
+                        if (api == null || !api.decides) {
+                            // the comparison is still worth keeping where the API only witnesses
+                            if (api != null) witness(StreamWitness.Source.ICY, entry.title, raw)
                             handleIcyTitle(entry.title, raw)
                         } else {
                             witness(StreamWitness.Source.ICY, entry.title, raw)
@@ -826,7 +836,8 @@ class RadioService : MediaLibraryService() {
                     Log.i(TAG_ICY, "API tytulow: $body")
                     val raw = "api: $body"
                     witness(StreamWitness.Source.API, title, raw)
-                    handleIcyTitleHeld(title, raw, prefs.apiHoldSeconds * 1_000L)
+                    // Where the stream decides (Radio 357), the API is only written down.
+                    if (source.decides) handleIcyTitleHeld(title, raw, prefs.apiHoldSeconds * 1_000L)
                 }
                 delay(StationTitleApi.POLL_MS)
             }
@@ -1107,6 +1118,37 @@ class RadioService : MediaLibraryService() {
      */
     private fun publishNow(now: NowPlaying?) {
         pendingMarkerJob?.cancel()
+        // Whatever arrives now replaces a song still waiting for its cover.
+        pendingSongJob?.cancel()
+
+        // A new song goes up whole - its text and its picture in one step.
+        // It used to go up as text with the picture cleared to the logo, and
+        // the cover a moment later: presenter's photo, logo, cover (seen
+        // 30.10.2026 on Radio 357). The logo was there so the previous cover
+        // wouldn't hang next to the new title; holding the whole change for
+        // the lookup does that too, and shows nothing in between. Stations
+        // announce a song before it starts, so the text loses nothing worth
+        // having; a lookup slower than [SONG_COVER_WAIT_MS] goes up as text
+        // and logo, and its cover follows as before.
+        val key = if (now?.isRealSong == true) "${now.artist}|${now.songTitle}" else null
+        if (now != null && key != null && key != coverTrackKey) {
+            val polish = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }?.isPolish == true
+            pendingSongJob = scope.launch {
+                // In the background and awaited, not timed out in place: the
+                // lookup is blocking network I/O, which a timeout doesn't
+                // interrupt - it waited for all of it, 7.5 s for a song both
+                // iTunes stores answered about something else (Jean Michel
+                // Jarre, 30.10.2026), and the title went up that late. Left to
+                // finish, the answer lands in the lookup's cache, where the
+                // cover's own lookup after a timeout picks it up.
+                val lookup = async(Dispatchers.IO) {
+                    Prefetched(CoverArtLookup.find(now.artist, now.songTitle, polishFirst = polish))
+                }
+                val found = withTimeoutOrNull(SONG_COVER_WAIT_MS) { lookup.await() }
+                apply(now, found)
+            }
+            return
+        }
 
         if (now?.isControlMarker == true && now.isAd != true) {
             Log.i(TAG_ICY, "znacznik '${now.raw}' - czekam ${MARKER_GRACE_MS}ms na to, co dalej")
@@ -1121,7 +1163,7 @@ class RadioService : MediaLibraryService() {
         apply(now)
     }
 
-    private fun apply(now: NowPlaying?) {
+    private fun apply(now: NowPlaying?, prefetched: Prefetched? = null) {
         now?.slogan?.let { lastSlogan = it }
 
         // An insertion that states its own length tells us when the music can
@@ -1150,7 +1192,6 @@ class RadioService : MediaLibraryService() {
             PlaybackStatusBus.setTrackInfo(null)
         }
 
-        PlaybackStatusBus.setNowPlaying(now)
         // Kept for the screen before play, which has no stream to hear it from.
         // Not the news: "FAKTY" is what was on, not what the station calls itself.
         val slogan = now?.slogan
@@ -1162,7 +1203,12 @@ class RadioService : MediaLibraryService() {
         // metadata. The other way around, the car would get a new description
         // with the old artwork - after the song, the studio would come on and
         // "Pion i poziom!" would still show the previous track's cover.
-        updateCoverArt(now, key, sameTrack)
+        updateCoverArt(now, key, sameTrack, prefetched)
+        // After the cover, not before: the phone redraws on each of these, and a
+        // song on the bus a step ahead of its cover was drawn as "a song with no
+        // cover" - the logo, held until the cover had downloaded (seen
+        // 30.10.2026 on Radio 357, presenter's photo -> logo -> cover).
+        PlaybackStatusBus.setNowPlaying(now)
         joinAnswered(now)
         refreshCurrentMetadata(force = true, now = now, why = "icy")
         scheduleStaleCheck(now)
@@ -1297,10 +1343,23 @@ class RadioService : MediaLibraryService() {
     private fun joinPhase(): JoinPhase {
         if (joinUntilMs == 0L) return JoinPhase.NONE
         val t = SystemClock.elapsedRealtime()
+        val stationId = PlaybackStatusBus.stationId.value
+        val song = PlaybackStatusBus.nowPlaying.value?.isRealSong == true
+        // A station with a programme guide shows it between tracks, so a gap
+        // isn't decided until the guide and the presenter's photo are in:
+        // otherwise the slogan and the logo went up for the moment they took,
+        // and then the programme and the photo (Radio 357, 30.10.2026).
+        val guideComing = stationId != null && prefs.presentation.usesProgramme && onAirGuide.loading(stationId)
         val phase = when {
-            !joinAnswered -> if (t < joinUntilMs) JoinPhase.WAITING else JoinPhase.NONE
-            coverWaitUntilMs != 0L && t < coverWaitUntilMs && coverArtUrl == null &&
-                PlaybackStatusBus.nowPlaying.value?.isRealSong == true -> JoinPhase.COVER
+            // One limit for the lot, so a slow network can't hold the slot empty for long.
+            t >= joinUntilMs -> JoinPhase.NONE
+            !joinAnswered -> JoinPhase.WAITING
+            song -> if (coverWaitUntilMs != 0L && t < coverWaitUntilMs && coverArtUrl == null) {
+                JoinPhase.COVER
+            } else {
+                JoinPhase.NONE
+            }
+            guideComing -> JoinPhase.WAITING
             else -> JoinPhase.NONE
         }
         if (phase == JoinPhase.NONE) {
@@ -1486,6 +1545,7 @@ class RadioService : MediaLibraryService() {
         // An advert belongs to the station we are leaving.
         adEndsAtMs = 0L
         pendingMarkerJob?.cancel()
+        pendingSongJob?.cancel()
         stationAtMs = SystemClock.elapsedRealtime()
         coverTrackKey = null
         coverArtUrl = null
@@ -1535,13 +1595,30 @@ class RadioService : MediaLibraryService() {
      * sends metadata right at connection time, the lookup usually takes
      * ~200 ms and the logo barely has time to appear.
      */
-    private fun updateCoverArt(now: NowPlaying?, key: String?, sameTrack: Boolean) {
+    private fun updateCoverArt(
+        now: NowPlaying?,
+        key: String?,
+        sameTrack: Boolean,
+        prefetched: Prefetched? = null
+    ) {
         // Same track re-announced - we already have its art (or a lookup for it
         // already in flight), nothing to clear or re-fetch.
         if (sameTrack) return
 
         val generation = ++coverGeneration
         coverRevertJob?.cancel()
+
+        // Looked up before the song went up (see publishNow): the answer is
+        // the picture now, whatever it is - the cover, or no cover and so the
+        // logo - with nothing cleared in between.
+        if (prefetched != null && key != null) {
+            coverTrackKey = key
+            coverArtUrl = prefetched.info?.artworkUrl
+            trackInfo = prefetched.info
+            PlaybackStatusBus.setCoverArt(coverArtUrl)
+            PlaybackStatusBus.setTrackInfo(prefetched.info)
+            return
+        }
 
         fun applyIfCurrent(info: CoverArtLookup.TrackInfo?) {
             if (generation != coverGeneration) return
@@ -1716,7 +1793,9 @@ class RadioService : MediaLibraryService() {
             }
         )
         val stopped = phase == JoinPhase.NONE && (!player.playWhenReady || lostAir)
-        val onAir = if (stopped || phase != JoinPhase.NONE) null else onAirFor(station, now)
+        // Asked while joining too - that is what starts fetching the guide, which
+        // joining may be waiting for - but only shown once joining is over.
+        val onAir = if (stopped) null else onAirFor(station, now).takeIf { phase == JoinPhase.NONE }
         val standby = if (stopped) {
             StandbyArt.file(this, station, scope) { refreshCurrentMetadata(force = true, why = "grafika-postoju") }
         } else {
@@ -2407,11 +2486,18 @@ class RadioService : MediaLibraryService() {
          * station that answers instantly and one that takes a second both land
          * at the same moment.
          */
-        /** How long a joined station may stay silent before its silence is the answer - see joinPhase. */
-        private const val JOIN_WAIT_MS = 3_000L
+        /**
+         * The most joining may take - waiting for the station to say what is
+         * on and, between tracks, for its programme guide and photo - before
+         * whatever is known goes up. See joinPhase.
+         */
+        private const val JOIN_WAIT_MS = 5_000L
 
         /** How long a song found on joining waits for its cover, to go up whole. */
         private const val JOIN_COVER_WAIT_MS = 1_000L
+
+        /** How long a new song waits for its cover, to go up with it - see publishNow. */
+        private const val SONG_COVER_WAIT_MS = 1_000L
 
         /**
          * How long after a station change titles go on without their hold -

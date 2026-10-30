@@ -250,6 +250,26 @@ Dead ends not worth repeating:
   anonymous visitor has the 256 entry with `src: "-"`; `4md4m0a0fs8uv` is that
   stream (frames decode as 256 kb/s) and plays without logging in. Its
   `icy-name` is now plain "Radio Nowy Swiat", no longer "… - MP3 256".
+* **Radio 357** (30.10.2026). Its web player polls
+  `stream.radio357.pl/now/playing.json` (found in `r357api.js`): the title
+  (`s`, "Artist - Title", the slogan "Radio 357 - Najlepszy radiowy adres na
+  świecie!" between tracks), the programme on air with its presenters, a
+  square photo, its length and how far into it we are, and the next one's
+  name. No key. **But it sits behind Cloudflare** with
+  `stale-while-revalidate=172800`, and neither a query string nor
+  `Cache-Control`/`Pragma: no-cache` gets past it (`cf-cache-status: HIT`
+  every time): an answer can be minutes old. "Eagles - Born to Boogie"
+  started 16:16:45, the stream said so at 16:16:54, the API at 16:17:02. So
+  here **the stream decides the title and the API is the witness** - the
+  other way round from RNŚ - while the API still feeds the programme guide.
+  The stream agreed with the API on every title that day.
+  Streams, measured from the ADTS frames rather than `icy-br` (which says
+  128 for the first): redcdn `radio357_pr.livx` AAC-LC 48 kHz ~192 kb/s;
+  `stream.radio357.pl/?s=web` (what the player picks for patrons, no login)
+  HE-AAC 128; `?s=www` the same; the bare address MP3 128. All carry ICY.
+  Once that afternoon both sources named "Jean Michel Jarre - Oxygene Part 4"
+  for three minutes while, by ear, the presenter talked and no Jarre played -
+  the station's own metadata, so nothing in the titles can tell.
 * **Jacaranda FM** breaks two conventions at once. Stream sniff
   (2026-08-11):
 

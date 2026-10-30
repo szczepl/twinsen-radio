@@ -7,7 +7,12 @@
       { "url": "https://stream.rcs.revma.com/ypqt40u0x1zuv", "label": "MP3 128 kb/s — zapasowy",      "kbps": 128 },
       { "url": "https://stream.nowyswiat.online/aac",        "label": "AAC+ 64 kb/s — oszczędny",     "kbps": 64 }
     ] },
-  { "id": "r357",        "name": "Radio 357",               "genre": "Muzyka i rozmowa", "logoUrl": "https://radio357.pl/wp-content/uploads/2022/04/c5399c0d-1b8e-43d5-b23b-e5cef1857856.png", "stream": "https://n-11-21.dcs.redcdn.pl/sc/o2/radio357/live/radio357_pr.livx?preroll=0" },
+  { "id": "r357",        "name": "Radio 357",               "genre": "Muzyka i rozmowa", "logoUrl": "https://radio357.pl/wp-content/uploads/2022/04/c5399c0d-1b8e-43d5-b23b-e5cef1857856.png",
+    "streams": [
+      { "url": "https://n-11-21.dcs.redcdn.pl/sc/o2/radio357/live/radio357_pr.livx?preroll=0", "label": "AAC 192 kb/s — wysoka jakość", "kbps": 192 },
+      { "url": "https://stream.radio357.pl/?s=web", "label": "AAC+ 128 kb/s — dla patronów", "kbps": 128 },
+      { "url": "https://stream.radio357.pl/",       "label": "MP3 128 kb/s",                 "kbps": 128 }
+    ] },
   { "id": "chillizet",   "name": "Chilli ZET",              "genre": "Chillout",         "logoUrl": "https://gfx.chillizet.pl/extension/chillizet/design/standard/images/favicon/apple-touch-icon.png", "stream": "https://ch.cdn.eurozet.pl/chi-net.mp3" },
   { "id": "zet",         "name": "Radio ZET",               "genre": "Pop",              "logoUrl": "https://gfx.radiozet.pl/extension/radiozet/design/standard/images/favicon/apple-touch-icon.png", "stream": "https://zt01.cdn.eurozet.pl/zet-net.mp3" },
   { "id": "melo",        "name": "Meloradio",               "genre": "Przeboje",         "logoUrl": "https://gfx.meloradio.pl/extension/meloradio/design/standard/images/favicon/apple-touch-icon.png", "stream": "https://ml.cdn.eurozet.pl/mel-net.mp3" },

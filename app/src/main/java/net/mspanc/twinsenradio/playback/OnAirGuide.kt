@@ -46,6 +46,12 @@ data class OnAir(
  * baked into that app; the same data is on the public `/ramowka` page, ten
  * days of it, so one fetch covers a long time.
  *
+ * Radio 357 says it outright: `stream.radio357.pl/now/playing.json`, the
+ * address its own web player polls (found in its `r357api.js`, 30.10.2026),
+ * gives the programme on air with its presenters, a square photo, its length
+ * and how far into it we are - and the next one's start and name. No key.
+ * The same rules apply to both; only where the data comes from differs.
+ *
  * Nothing here blocks: [current] answers from what is already known and starts
  * whatever is missing - the guide, a photo - in the background, calling
  * [onChange] when it lands so the dashboard can be redrawn.
@@ -56,7 +62,15 @@ class OnAirGuide(
     private val onChange: () -> Unit
 ) {
 
-    private class Source(val url: String, val base: String)
+    /**
+     * Where a station's guide comes from, how to read it, and how long what was
+     * read stays good: a ten-day guide for hours, a "what's on now" for minutes.
+     */
+    private class Source(
+        val url: String,
+        val refreshMs: Long,
+        val read: (body: String, now: LocalDateTime) -> List<OnAirSlot>
+    )
 
     private class Fetched(val slots: List<OnAirSlot>, val atMs: Long)
 
@@ -76,7 +90,7 @@ class OnAirGuide(
     fun current(stationId: String, now: LocalDateTime, trackPlaying: Boolean, newsMinutes: Int): OnAir? {
         val source = forStation(stationId) ?: return null
         val known = fetched[stationId]
-        val stale = known == null || SystemClock.elapsedRealtime() - known.atMs > REFRESH_MS
+        val stale = known == null || SystemClock.elapsedRealtime() - known.atMs > source.refreshMs
         val slot = known?.let { ProgrammeGuidePage.at(it.slots, now) }
         if (slot == null || stale) fetch(stationId, source)
         if (slot == null) return null
@@ -86,6 +100,15 @@ class OnAirGuide(
         if (news) return null
         return OnAir(slot.name, slot.hosts, slot.imageUrl?.let(::photoUri))
     }
+
+    /**
+     * Whether something about [stationId]'s programme is still on its way - the
+     * guide itself, or a presenter's photo. Joining a station between tracks
+     * waits for it, so the picture goes up as the photo rather than as the logo
+     * the photo replaces a moment later.
+     */
+    fun loading(stationId: String): Boolean =
+        forStation(stationId) != null && (fetching == stationId || photosLoading.isNotEmpty())
 
     /** A new station - the next answer is traced even if it reads the same. */
     fun reset() {
@@ -99,8 +122,8 @@ class OnAirGuide(
         fetching = stationId
         lastAttemptMs = SystemClock.elapsedRealtime()
         scope.launch {
-            val html = withContext(Dispatchers.IO) { download(source.url)?.toString(Charsets.UTF_8) }
-            val slots = html?.let { ProgrammeGuidePage.parse(it, source.base, LocalDate.now()) }.orEmpty()
+            val body = withContext(Dispatchers.IO) { download(source.url)?.toString(Charsets.UTF_8) }
+            val slots = body?.let { runCatching { source.read(it, LocalDateTime.now()) }.getOrNull() }.orEmpty()
             fetching = null
             Trace.write("ramowka") {
                 put("st", stationId)
@@ -173,7 +196,12 @@ class OnAirGuide(
     }
 
     private fun forStation(stationId: String): Source? = when (stationId) {
-        "rns" -> Source("https://nowyswiat.online/ramowka", "https://nowyswiat.online/")
+        "rns" -> Source("https://nowyswiat.online/ramowka", GUIDE_REFRESH_MS) { body, now ->
+            ProgrammeGuidePage.parse(body, "https://nowyswiat.online/", now.toLocalDate())
+        }
+        "r357" -> Source("https://stream.radio357.pl/now/playing.json", NOW_REFRESH_MS) { body, now ->
+            R357NowPlaying.parse(body, now)
+        }
         else -> null
     }
 
@@ -182,7 +210,14 @@ class OnAirGuide(
         private const val TIMEOUT_MS = 10_000
 
         /** The guide covers ten days; twice a day is plenty to catch late changes. */
-        private const val REFRESH_MS = 12 * 3600_000L
+        private const val GUIDE_REFRESH_MS = 12 * 3600_000L
+
+        /**
+         * "What's on now" knows only the programme on air and the next one's
+         * name, so it is asked again often enough that a new programme's
+         * presenters and photo follow its start within minutes.
+         */
+        private const val NOW_REFRESH_MS = 5 * 60_000L
 
         /** How soon a fetch that failed may be tried again. */
         private const val RETRY_MS = 10 * 60_000L
@@ -262,4 +297,39 @@ object ProgrammeGuidePage {
 
     /** Longer than any programme RNS runs (Muzyka do rana is six hours). */
     private const val MAX_SLOT_HOURS = 8L
+}
+
+/**
+ * Reads Radio 357's `now/playing.json`. Pure, so it can be checked against the
+ * answer as it really is:
+ *
+ *     {"s":"Yazoo - Happy People", "p":{"n":"Zlodziej czasu",
+ *      "a":"Marcin Cichonski", "t":"https://radio357.pl/cdn-cgi/image/
+ *      w=660,h=660,fit=cover,.../zespol/cichy.png", "d":7200, "p":6258, ...},
+ *      "n":{"t":"16:00", "n":"Popoludniowka w piatek"}}
+ *
+ * `p.d` is the programme's length and `p.p` how far into it we are, both in
+ * seconds - so its start is worked out from them, not from the clock on their
+ * server. The next programme comes as a slot of its own with only a name, so
+ * the guide doesn't go on naming the old one between its end and the next ask.
+ */
+object R357NowPlaying {
+
+    fun parse(json: String, now: LocalDateTime): List<OnAirSlot> {
+        val root = org.json.JSONObject(json)
+        val p = root.optJSONObject("p") ?: return emptyList()
+        val name = p.optString("n").trim().takeIf { it.isNotEmpty() } ?: return emptyList()
+        val start = now.minusSeconds(p.optLong("p", 0))
+        val current = OnAirSlot(
+            start = start,
+            name = name,
+            hosts = p.optString("a").trim(),
+            // The square crop their player shows; the original, if it alone is there.
+            imageUrl = p.optString("t").ifBlank { p.optJSONObject("c")?.optString("d").orEmpty() }.ifBlank { null }
+        )
+        val length = p.optLong("d", 0)
+        val nextName = root.optJSONObject("n")?.optString("n")?.trim().orEmpty()
+        if (length <= 0 || nextName.isEmpty()) return listOf(current)
+        return listOf(current, OnAirSlot(start.plusSeconds(length), nextName, "", null))
+    }
 }

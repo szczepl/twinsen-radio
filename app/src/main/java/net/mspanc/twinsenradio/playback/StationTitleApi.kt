@@ -30,12 +30,19 @@ object StationTitleApi {
     class Source(
         val url: String,
         /** The response body as a StreamTitle; null = the answer said nothing usable. */
-        val toStreamTitle: (String) -> String?
+        val toStreamTitle: (String) -> String?,
+        /**
+         * Whether the API describes the track, with the stream only a witness
+         * (RNS), or the other way round (Radio 357). Whichever source is the
+         * better one on a station decides there; the other is written down.
+         */
+        val decides: Boolean = true
     )
 
     /** Null for stations whose stream carries its own titles. */
     fun forStation(stationId: String?): Source? = when (stationId) {
         "rns" -> RNS
+        "r357" -> R357
         else -> null
     }
 
@@ -76,6 +83,32 @@ object StationTitleApi {
             who.isNotEmpty() && what.isNotEmpty() -> "$who - $what"
             else -> who.ifEmpty { what }.ifEmpty { null }
         }
+    }
+
+    /**
+     * Radio 357 - the other way round from RNS: its stream decides and this is
+     * the witness. The address its own web player polls (`r357api.js`) sits
+     * behind Cloudflare with `stale-while-revalidate` of two days, and neither
+     * a query string nor `Cache-Control: no-cache` gets past it, so an answer
+     * can be minutes old: on 30.10.2026 "Eagles - Born to Boogie" started at
+     * 16:16:45, the stream said so at 16:16:54, this at 16:17:02. The stream
+     * agreed with it on every title that day and arrives as the sound plays.
+     * This answer still names the programme on air, which [OnAirGuide] reads.
+     */
+    private val R357 = Source(
+        "https://stream.radio357.pl/now/playing.json",
+        ::r357StreamTitle,
+        decides = false
+    )
+
+    /**
+     * `s` is already a StreamTitle - "Yazoo - Happy People", artist first - and
+     * between tracks the same slogan the stream sends, "Radio 357 - Najlepszy
+     * radiowy adres na swiecie!" (measured 30.10.2026, 16:03).
+     */
+    internal fun r357StreamTitle(body: String): String? {
+        val o = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        return o.optString("s").trim().ifEmpty { null }
     }
 
     /** One question to the station. Null on any failure - the next poll simply tries again. */
