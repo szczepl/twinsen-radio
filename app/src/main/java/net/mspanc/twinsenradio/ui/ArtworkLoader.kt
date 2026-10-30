@@ -48,9 +48,17 @@ object ArtworkLoader {
         fallbackRes: Int,
         target: ImageView,
         drawn: Bitmap? = null,
-        muted: Boolean = false
+        muted: Boolean = false,
+        blank: Boolean = false
     ) {
         target.alpha = if (muted) LogoProvider.MUTED_ALPHA else 1f
+        if (blank) {
+            // The picture isn't decided yet (see PlaybackStatusBus.artPending):
+            // an empty slot now, the right picture once - not a logo first.
+            target.setTag(TAG_KEY, null)
+            target.setImageDrawable(null)
+            return
+        }
         if (drawn != null) {
             // A cover still on its way must not land on top of the clock.
             target.setTag(TAG_KEY, null)

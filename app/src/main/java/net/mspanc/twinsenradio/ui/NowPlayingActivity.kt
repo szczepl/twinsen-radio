@@ -78,6 +78,8 @@ class NowPlayingActivity : AppCompatActivity() {
             PlaybackStatusBus.onAir,
             PlaybackStatusBus.wantsToPlay,
             PlaybackStatusBus.lostAir,
+            PlaybackStatusBus.joining,
+            PlaybackStatusBus.artPending,
             PlaybackStatusBus.quality,
             Prefs.favouritesFlow
         ).forEach { flow ->
@@ -174,12 +176,14 @@ class NowPlayingActivity : AppCompatActivity() {
         // "Nie gra" - before play, or paused: one look, the car's too (see
         // renderMiniPlayer, and MetadataFactory.forStopped).
         val playing = loaded?.takeIf { !PlaybackStatusBus.notPlaying() }
-        val now = PlaybackStatusBus.nowPlaying.value
+        // Joining a station: only the station, as the car gets it - see RadioService.joinPhase.
+        val joining = PlaybackStatusBus.joining.value
+        val now = if (joining) null else PlaybackStatusBus.nowPlaying.value
 
         b.stationName.text = station?.name ?: getString(R.string.nothing_playing)
 
         // The rules are the dashboard's, not a copy of them - see forPhone.
-        val onAir = PlaybackStatusBus.onAir.value
+        val onAir = if (joining) null else PlaybackStatusBus.onAir.value
         val text = if (playing != null) {
             MetadataFactory.forPhone(
                 now, PlaybackStatusBus.trackInfo.value, onAir, prefs.presentation, prefs.enrichWithYear
@@ -213,13 +217,14 @@ class NowPlayingActivity : AppCompatActivity() {
         }
         ArtworkLoader.into(
             lifecycleScope,
-            playing?.let { metadata.phoneArtwork(now?.isRealSong == true, PlaybackStatusBus.coverArtUrl.value, onAir) },
+            playing?.let { metadata.phoneArtwork(now?.isRealSong == true, PlaybackStatusBus.coverArtUrl.value.takeUnless { joining }, onAir) },
             standby ?: station?.let { metadata.logoDisplayUri(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.art,
             // Nothing playing yet, nothing to put a clock in place of.
-            playing?.let { metadata.phoneClock(now?.isRealSong == true) },
-            muted = playing == null && standby == null
+            playing?.let { metadata.phoneClock(now?.isRealSong == true)?.takeUnless { joining } },
+            muted = playing == null && standby == null,
+            blank = playing != null && PlaybackStatusBus.artPending.value
         )
         val statusText = getString(
             when (PlaybackStatusBus.status.value) {

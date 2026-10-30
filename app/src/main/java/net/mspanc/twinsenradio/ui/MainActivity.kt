@@ -304,6 +304,12 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             PlaybackStatusBus.lostAir.collect { renderMiniPlayer() }
         }
+        lifecycleScope.launch {
+            PlaybackStatusBus.joining.collect { renderMiniPlayer() }
+        }
+        lifecycleScope.launch {
+            PlaybackStatusBus.artPending.collect { renderMiniPlayer() }
+        }
         // Favourites can change on the playback screen or in the car. The state
         // isn't part of the station model, so DiffUtil won't refresh anything on its own.
         lifecycleScope.launch {
@@ -352,7 +358,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderMiniPlayer() {
         val station = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
-        val now = PlaybackStatusBus.nowPlaying.value
+        // Joining a station: only the station, as the car gets it - see RadioService.joinPhase.
+        val joining = PlaybackStatusBus.joining.value
+        val now = if (joining) null else PlaybackStatusBus.nowPlaying.value
 
         // "Nie gra" - before play, or paused, one look for both: the station
         // (before play, the one play will start with), with what it last said
@@ -384,7 +392,7 @@ class MainActivity : AppCompatActivity() {
         // what we send to the car, and we only signal it on the playback screen.
         // The same rules as the playback screen and the dashboard - see forPhone.
         // Only the genre is the bar's own, for a gap the layout says nothing about.
-        val onAir = PlaybackStatusBus.onAir.value
+        val onAir = if (joining) null else PlaybackStatusBus.onAir.value
         val text = MetadataFactory.forPhone(
             now, PlaybackStatusBus.trackInfo.value, onAir, prefs.presentation, prefs.enrichWithYear
         )
@@ -397,11 +405,12 @@ class MainActivity : AppCompatActivity() {
         b.miniStatus.text = getString(statusLabel())
         ArtworkLoader.into(
             lifecycleScope,
-            metadata.phoneArtwork(now?.isRealSong == true, PlaybackStatusBus.coverArtUrl.value, onAir),
+            metadata.phoneArtwork(now?.isRealSong == true, PlaybackStatusBus.coverArtUrl.value.takeUnless { joining }, onAir),
             station?.let { metadata.logoDisplayUri(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
             b.miniLogo,
-            station?.let { metadata.phoneClock(now?.isRealSong == true) }
+            station?.let { metadata.phoneClock(now?.isRealSong == true)?.takeUnless { joining } },
+            blank = PlaybackStatusBus.artPending.value
         )
         b.playPause.setImageResource(
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause

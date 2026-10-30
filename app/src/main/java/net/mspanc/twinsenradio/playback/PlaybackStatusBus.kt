@@ -85,8 +85,34 @@ object PlaybackStatusBus {
         _lostAir.value = value
     }
 
+    /**
+     * A station has just been joined and hasn't said yet what is on - see
+     * RadioService.joinPhase. Until it does, both screens show only the
+     * station's name: not the gap's programme and photo, which may be wrong,
+     * nor "nie gra", which the moment before play() would otherwise flash.
+     */
+    private val _joining = MutableStateFlow(false)
+    val joining: StateFlow<Boolean> = _joining
+
+    fun setJoining(value: Boolean) {
+        _joining.value = value
+    }
+
+    /**
+     * The picture is not decided yet - joining, or a song known on joining
+     * whose cover is still being looked up. The slot stays empty until it is,
+     * and then gets the right picture at once rather than a logo first.
+     */
+    private val _artPending = MutableStateFlow(false)
+    val artPending: StateFlow<Boolean> = _artPending
+
+    fun setArtPending(value: Boolean) {
+        _artPending.value = value
+    }
+
     /** "Nie gra", the one look: before play, paused, or silent past the grace. */
-    fun notPlaying(): Boolean = stationId.value == null || !wantsToPlay.value || lostAir.value
+    fun notPlaying(): Boolean =
+        stationId.value == null || lostAir.value || (!wantsToPlay.value && !joining.value)
 
     private val _status = MutableStateFlow(Status.IDLE)
     val status: StateFlow<Status> = _status

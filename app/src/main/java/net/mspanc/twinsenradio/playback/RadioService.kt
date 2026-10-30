@@ -93,6 +93,16 @@ class RadioService : MediaLibraryService() {
     /** Silent past [SILENCE_GRACE_MS] - "nie gra" until sound comes back. */
     private var lostAir = false
     private var silenceCheck: Runnable? = null
+
+    /**
+     * Joining a station: until when we wait for it to say what is on (0 when
+     * not joining), whether it has, and - for a song - until when its cover
+     * may still arrive. See [joinPhase].
+     */
+    private var joinUntilMs = 0L
+    private var joinAnswered = true
+    private var coverWaitUntilMs = 0L
+    private var joinCheck: Runnable? = null
     private var lastIcyAtMs = 0L
 
     /** Polls [StationTitleApi] while a station that has one is playing. */
@@ -184,13 +194,9 @@ class RadioService : MediaLibraryService() {
      */
     private var positionUnknown = true
 
-    /** Holds back the first description of a freshly started station - see [publish]. */
-    private var settleJob: Job? = null
-
     /**
-     * When the current station was started, on the monotonic clock. Its
-     * description may go on screen [STATION_SETTLE_MS] later, and everything the
-     * station does is measured from here in the trace.
+     * When the current station was started, on the monotonic clock. Everything
+     * the station does is measured from here in the trace.
      */
     private var stationAtMs = 0L
 
@@ -490,6 +496,7 @@ class RadioService : MediaLibraryService() {
             // survive on the dashboard until the new one happens to say something -
             // and a station that says nothing at all leaves this standing, which
             // is exactly what it should show.
+            startJoin()
             refreshCurrentMetadata(force = true, now = null, why = "zmiana-stacji")
             syncTitlePolling()
 
@@ -590,6 +597,7 @@ class RadioService : MediaLibraryService() {
             player.prepare()
             // Without this the dashboard would keep the track from before the
             // pause until the station happens to announce the next one.
+            startJoin()
             refreshCurrentMetadata(force = true, now = null, why = "dogonienie")
             syncTitlePolling()
         }
@@ -901,28 +909,13 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Holds back the first description of a freshly started station.
-     *
-     * The station change has just put the "no track" state on screen, and a
-     * stream that already has metadata waiting answers within a fraction of a
-     * second - the two arrive so close together that the head unit renders one
-     * flicker instead of two states. So for [STATION_SETTLE_MS] after a change
-     * the description waits; whatever came last during that window is what goes
-     * up. Nothing arriving is not a case to handle: the "no track" state stands
-     * and we wait for the station to say something, whenever that is.
+     * Puts a description up at once. The first one of a station used to wait
+     * 1.5 s so it wouldn't arrive on top of the "no track" state a change put
+     * up first - which left that state, and the programme's photo with it, on
+     * screen over a song already playing. A change now puts up nothing to
+     * collide with (see [joinPhase]), so there is nothing to wait for.
      */
     private fun publish(now: NowPlaying?) {
-        settleJob?.cancel()
-        val wait = stationAtMs + STATION_SETTLE_MS - SystemClock.elapsedRealtime()
-        if (wait > 0) {
-            Log.i(TAG_ICY, "stacja dopiero ruszyla - opis poczeka ${wait}ms")
-            Trace.write("wstrzymanie") { put("ms", wait) }
-            settleJob = scope.launch {
-                delay(wait)
-                publishNow(now)
-            }
-            return
-        }
         publishNow(now)
     }
 
@@ -1170,6 +1163,7 @@ class RadioService : MediaLibraryService() {
         // with the old artwork - after the song, the studio would come on and
         // "Pion i poziom!" would still show the previous track's cover.
         updateCoverArt(now, key, sameTrack)
+        joinAnswered(now)
         refreshCurrentMetadata(force = true, now = now, why = "icy")
         scheduleStaleCheck(now)
     }
@@ -1243,6 +1237,97 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
+     * Starts joining a station - a new one, or the live stream again after a
+     * long pause or a silence.
+     *
+     * Whatever was decided about the moment of joining used to go up at once,
+     * before the station had said a word: the gap's programme and presenter's
+     * photo, the faded "nie gra" of the instant before play(), a bare logo - and
+     * a second later the song that had been playing all along (measured
+     * 30.10.2026: four different pictures in two seconds on RNS, the API having
+     * named the song before the programme even went up). So nothing is decided
+     * until the station answers: see [joinPhase].
+     */
+    private fun startJoin() {
+        joinUntilMs = SystemClock.elapsedRealtime() + JOIN_WAIT_MS
+        // after a silence the API may have answered before the sound came back
+        joinAnswered = PlaybackStatusBus.nowPlaying.value != null
+        coverWaitUntilMs = 0L
+        scheduleJoinCheck(JOIN_WAIT_MS)
+    }
+
+    private fun scheduleJoinCheck(delayMs: Long) {
+        joinCheck?.let { clockHandler.removeCallbacks(it) }
+        val check = Runnable { refreshCurrentMetadata(force = true, why = "dolaczanie") }
+        joinCheck = check
+        clockHandler.postDelayed(check, delayMs)
+    }
+
+    /** Where joining a station has got to - see [joinPhase]. */
+    private enum class JoinPhase {
+        /** Not joining: everything as the rules say. */
+        NONE,
+
+        /** The station hasn't said what is on: its name, and an empty picture slot. */
+        WAITING,
+
+        /** A song is known and its text is up; its cover is still being looked up. */
+        COVER
+    }
+
+    /**
+     * Where joining a station has got to.
+     *
+     * The text follows what is known; the picture goes up once, when it is
+     * decided. That is the point: after play the slot must not show a logo
+     * that a cover replaces a moment later, nor the gap's presenter's photo
+     * over a song - so it stays empty for the short time the decision takes,
+     * and then shows what belongs there.
+     *
+     * [JoinPhase.WAITING] lasts until the station says what is on - the API's
+     * first answer, or the first ICY block - or [JOIN_WAIT_MS] pass in silence,
+     * which then is the answer. A song moves to [JoinPhase.COVER] with its text
+     * up at once - we joined it mid-way, so it is already on air - and the
+     * picture follows when the cover comes, or as the logo after
+     * [JOIN_COVER_WAIT_MS] if the catalogue has none. Anything else (a slogan,
+     * an ad, nothing) ends joining at once: the gap layout and its picture.
+     *
+     * Changes while listening are not joining; they go as they always have.
+     */
+    private fun joinPhase(): JoinPhase {
+        if (joinUntilMs == 0L) return JoinPhase.NONE
+        val t = SystemClock.elapsedRealtime()
+        val phase = when {
+            !joinAnswered -> if (t < joinUntilMs) JoinPhase.WAITING else JoinPhase.NONE
+            coverWaitUntilMs != 0L && t < coverWaitUntilMs && coverArtUrl == null &&
+                PlaybackStatusBus.nowPlaying.value?.isRealSong == true -> JoinPhase.COVER
+            else -> JoinPhase.NONE
+        }
+        if (phase == JoinPhase.NONE) {
+            Trace.write("dolaczono") {
+                put("odpowiedz", joinAnswered)
+                put("okladka", coverArtUrl != null)
+                put("poStacji", sinceStationMs())
+            }
+            joinUntilMs = 0L
+            coverWaitUntilMs = 0L
+            joinCheck?.let { clockHandler.removeCallbacks(it) }
+            joinCheck = null
+        }
+        return phase
+    }
+
+    /** The station has said what is on - see [joinPhase]. */
+    private fun joinAnswered(now: NowPlaying?) {
+        if (joinUntilMs == 0L || joinAnswered) return
+        joinAnswered = true
+        if (now?.isRealSong == true) {
+            coverWaitUntilMs = SystemClock.elapsedRealtime() + JOIN_COVER_WAIT_MS
+            scheduleJoinCheck(JOIN_COVER_WAIT_MS)
+        }
+    }
+
+    /**
      * Keeps the silence clock in step with the player: started when we want to
      * play and the player isn't ready, stopped the moment it is.
      *
@@ -1262,6 +1347,7 @@ class RadioService : MediaLibraryService() {
                 lostAir = false
                 PlaybackStatusBus.setLostAir(false)
                 Trace.write("cisza-koniec") {}
+                startJoin()
                 refreshCurrentMetadata(force = true, why = "powrot-dzwieku")
             } else if (lostAir) {
                 // Paused while silent: that is "nie gra" for a reason of its
@@ -1400,7 +1486,6 @@ class RadioService : MediaLibraryService() {
         // An advert belongs to the station we are leaving.
         adEndsAtMs = 0L
         pendingMarkerJob?.cancel()
-        settleJob?.cancel()
         stationAtMs = SystemClock.elapsedRealtime()
         coverTrackKey = null
         coverArtUrl = null
@@ -1618,14 +1703,24 @@ class RadioService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return
         val station = repo.byMediaId(item.mediaId) ?: return
         if (!force && prefs.diagnosticMode) return
-        val stopped = !player.playWhenReady || lostAir
-        val onAir = if (stopped) null else onAirFor(station, now)
+        // Joining outranks a paused player: the instant between setMediaItem and
+        // play() is not a pause. A silence outranks joining - it has a reason
+        // to show.
+        val phase = if (prefs.diagnosticMode || lostAir) JoinPhase.NONE else joinPhase()
+        PlaybackStatusBus.setJoining(phase == JoinPhase.WAITING)
+        PlaybackStatusBus.setArtPending(phase != JoinPhase.NONE)
+        val stopped = phase == JoinPhase.NONE && (!player.playWhenReady || lostAir)
+        val onAir = if (stopped || phase != JoinPhase.NONE) null else onAirFor(station, now)
         val standby = if (stopped) {
             StandbyArt.file(this, station, scope) { refreshCurrentMetadata(force = true, why = "grafika-postoju") }
         } else {
             null
         }
-        val fresh = metadata.forPlayback(station, now, coverArtUrl, trackInfo, onAir, stopped, standby)
+        val fresh = when (phase) {
+            JoinPhase.WAITING -> metadata.forJoining(station)
+            JoinPhase.COVER -> metadata.withBlankArt(metadata.forPlayback(station, now, null, trackInfo))
+            JoinPhase.NONE -> metadata.forPlayback(station, now, coverArtUrl, trackInfo, onAir, stopped, standby)
+        }
         PlaybackStatusBus.setOnAir(onAir)
         player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(fresh).build())
         traceMetadata(station, fresh, why)
@@ -2300,7 +2395,11 @@ class RadioService : MediaLibraryService() {
          * station that answers instantly and one that takes a second both land
          * at the same moment.
          */
-        private const val STATION_SETTLE_MS = 1_500L
+        /** How long a joined station may stay silent before its silence is the answer - see joining. */
+        private const val JOIN_WAIT_MS = 3_000L
+
+        /** How long a song found on joining waits for its cover, to go up whole. */
+        private const val JOIN_COVER_WAIT_MS = 1_000L
 
         /**
          * How long after a station change titles go on without their hold -

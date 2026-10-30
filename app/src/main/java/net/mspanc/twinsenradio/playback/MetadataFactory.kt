@@ -203,6 +203,39 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
+     * A station just joined, before it has said what is on: the station's name
+     * and an empty picture slot - not the gap's programme and presenter's
+     * photo, which would flash up over a song the station is about to name,
+     * and not the logo either, which a cover would replace a moment later.
+     * The picture goes up once, when it is known. Lines with nothing to say
+     * stay blank.
+     */
+    fun forJoining(station: Station): MediaMetadata = withBlankArt(forPlayback(station, null))
+
+    /**
+     * The same description with the picture slot emptied - a song that is
+     * known while its cover is still being looked up.
+     *
+     * Empty as a picture, not as a missing field: a head unit that receives no
+     * artwork may simply not repaint the slot, and would leave the previous
+     * station's cover there - the same reason empty lines go out as a
+     * non-breaking space (see [drawable]).
+     */
+    fun withBlankArt(m: MediaMetadata): MediaMetadata =
+        m.buildUpon()
+            .setArtworkUri(null)
+            .setArtworkData(blankArt, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            .build()
+
+    private val blankArt: ByteArray by lazy {
+        val bmp = Bitmap.createBitmap(ART_SIZE, ART_SIZE, Bitmap.Config.ARGB_8888)
+        ByteArrayOutputStream().use { out ->
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+            out.toByteArray()
+        }
+    }
+
+    /**
      * The station's logo faded back - see [LogoProvider.mutedUriFor]. Built
      * from whichever logo the station actually has, in the order [logoUri]
      * picks it, so the faded one is always the one shown unfaded elsewhere.

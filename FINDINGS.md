@@ -732,6 +732,33 @@ slogan) with the reason still in the middle line. Verified end to end, twice:
 A 30 s outage changes nothing but the middle line, and comes back to the
 station name without the false "Stacja nie odpowiada…".
 
+### Joining a station: one picture, then the truth (30.10.2026)
+
+Starting RNŚ while a song played sent four pictures in two seconds: the
+faded "nie gra" (the instant before `play()`), a bare logo, the programme
+and presenter's photo — with the API having named the song 0.6 s earlier —
+and finally the song, held back by a 1.5 s settle meant to stop exactly this
+kind of flicker. RMF: faded logo, 1.4 s of blank lines, then the song.
+
+Now (`RadioService.joinPhase`): after play the **picture** goes up once,
+when it is decided — never a logo that a cover replaces a moment later, nor
+the gap's presenter's photo over a song. Until the station says what is on
+(the API's first answer, or the first ICY block; 3 s at most) the text shows
+the station and the picture slot is sent *empty* — as a blank PNG, not as a
+missing field, which a head unit may leave unpainted with the previous
+station's cover in it. A song's text goes up at once; its picture follows as
+the cover, or as the logo if the catalogue has none within 1 s. Anything else
+(slogan, an ad, silence) goes up as the gap layout with its picture. Changes
+while listening are untouched. The 1.5 s settle is gone. Measured (the same
+afternoon, a first version showing the logo while waiting had been rejected):
+
+```
+start RNŚ          empty  +0.39 s song's text   +0.96 s cover
+RNŚ playing → RMF  empty  +1.16 s "Danza Kuduro" +1.67 s cover
+RMF paused → RNŚ   empty  +0.40 s song's text   +0.57 s cover
+Antyradio (no ICY) empty  +3.0 s  logo
+```
+
 ### What the trace could not see, and what it can now (21.09.2026)
 
 Three faults reported from the car had never left an answer in the trace. Going
