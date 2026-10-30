@@ -1,6 +1,7 @@
 package net.mspanc.twinsenradio.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -24,17 +25,50 @@ class StationRepository private constructor(private val appContext: Context) {
     @Volatile
     private var userLoadedFor: List<String> = listOf("<never>")
 
+    /**
+     * The last [all], until anything it is made from changes. Every screen asks
+     * for stations all the time - the station on air by id, the one play would
+     * start with - and each [byId] used to build the whole list afresh: parse
+     * the fetched stations' JSON, resolve their names, sort by play counts.
+     * Finding the station before play looked up ~20 recent ids that way, ~330 ms
+     * a time, and the phone redraws on every change it hears about - ten times
+     * on start, 3.8 s with the screen frozen (measured 30.10.2026: the app took
+     * 4 s to open, the playback screen 3.5 s).
+     */
+    @Volatile
+    private var memo: List<Station>? = null
+
+    /** Bumped on every change, so a list built across one isn't kept. */
+    @Volatile
+    private var generation = 0
+
+    // The list is made of settings - fetched stations, hidden ones, own names,
+    // chosen streams, the sort and the play counts it may sort by - so any
+    // change to them drops it. One SharedPreferences per process: this hears
+    // changes made through every Prefs instance.
+    private val dropMemo = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> forget() }
+
+    init {
+        prefs.registerListener(dropMemo)
+    }
+
+    private fun forget() {
+        generation++
+        memo = null
+    }
+
     /** Built-in list - always available, doesn't require network access. */
     val builtIn: List<Station> by lazy { readBuiltIn() }
 
     /**
      * Full list: built-in + from M3U lists + stations added from the online catalog.
      *
-     * We read the fetched ones on every call, not from `cache`: they live in a
-     * stream in [Prefs] and can change at any moment, including from another
-     * screen. There are at most a dozen or so of them, so there's nothing to optimize.
+     * Kept in [memo] until a setting it is made from changes - see there for
+     * why it can't be built on every call.
      */
     fun all(): List<Station> {
+        memo?.let { return it }
+        val gen = generation
         if (cache.isEmpty()) cache = builtIn
         val extra = prefs.discovered
         val full = if (extra.isEmpty()) cache else cache + extra
@@ -42,7 +76,7 @@ class StationRepository private constructor(private val appContext: Context) {
         // everywhere at once: in the phone list, in search, and in the car's browsing tree.
         val hidden = prefs.hidden
         val visible = if (hidden.isEmpty()) full else full.filterNot { it.id in hidden }
-        return sorted(visible.map(::resolve))
+        return sorted(visible.map(::resolve)).also { if (gen == generation) memo = it }
     }
 
     /**
@@ -77,8 +111,8 @@ class StationRepository private constructor(private val appContext: Context) {
     }
 
     fun recent(): List<Station> {
-        val order = prefs.recent
-        return order.mapNotNull { byId(it) }
+        val byId = all().associateBy { it.id }
+        return prefs.recent.mapNotNull { byId[it] }
     }
 
     /**
@@ -116,6 +150,7 @@ class StationRepository private constructor(private val appContext: Context) {
         }
         cache = builtIn + extra
         userLoadedFor = urls
+        forget()
     }
 
     private fun readBuiltIn(): List<Station> = runCatching {
