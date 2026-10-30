@@ -96,11 +96,19 @@ class MainActivity : AppCompatActivity() {
 
         b.playPause.setOnClickListener {
             val c = controller ?: return@setOnClickListener
-            if (c.isPlaying) c.pause() else c.play()
+            // Before play the bar shows a station, so play starts that one -
+            // not whatever an empty player would make of a bare play().
+            val next = if (PlaybackStatusBus.stationId.value == null) repo.resumeCandidate() else null
+            when {
+                next != null -> play(next)
+                c.isPlaying -> c.pause()
+                else -> c.play()
+            }
         }
-        // Tapping the bar expands the full-screen player
+        // Tapping the bar expands the full-screen player - before play too,
+        // where it shows the station play would start with.
         b.miniPlayer.setOnClickListener {
-            if (PlaybackStatusBus.stationId.value != null) {
+            if (PlaybackStatusBus.stationId.value != null || repo.resumeCandidate() != null) {
                 startActivity(Intent(this, NowPlayingActivity::class.java))
             }
         }
@@ -283,6 +291,12 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             PlaybackStatusBus.coverArtUrl.collect { renderMiniPlayer() }
         }
+        lifecycleScope.launch {
+            PlaybackStatusBus.trackInfo.collect { renderMiniPlayer() }
+        }
+        lifecycleScope.launch {
+            PlaybackStatusBus.onAir.collect { renderMiniPlayer() }
+        }
         // Favourites can change on the playback screen or in the car. The state
         // isn't part of the station model, so DiffUtil won't refresh anything on its own.
         lifecycleScope.launch {
@@ -333,20 +347,38 @@ class MainActivity : AppCompatActivity() {
         val station = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
         val now = PlaybackStatusBus.nowPlaying.value
 
+        // Before play: the station play will start with, faded, with what it
+        // last said about itself - as the station's own app does - rather than
+        // "Nic nie gra" next to a stock radio icon.
+        if (station == null) {
+            val next = repo.resumeCandidate()
+            if (next != null) {
+                b.miniTitle.text = next.name
+                b.miniSubtitle.text = prefs.slogan(next.id) ?: next.genre
+                b.miniStatus.text = getString(R.string.status_idle)
+                ArtworkLoader.into(
+                    lifecycleScope, null, metadata.logoDisplayUri(next), metadata.logoResId(next),
+                    b.miniLogo, muted = true
+                )
+                b.playPause.setImageResource(android.R.drawable.ic_media_play)
+                return
+            }
+        }
+
         b.miniTitle.text = station?.name ?: getString(R.string.nothing_playing)
         // On the phone, metadata should just be metadata - diagnostic mode concerns
         // what we send to the car, and we only signal it on the playback screen.
-        b.miniSubtitle.text = when {
-            now?.isRealSong == true -> {
-                val info = PlaybackStatusBus.trackInfo.value
-                listOf(
-                    MetadataFactory.displayArtist(now, info),
-                    MetadataFactory.displayTitle(now, info)
-                ).filter { it.isNotBlank() }.joinToString(" — ")
-            }
-            now?.slogan != null -> now.slogan
-            now?.isAd == true -> getString(R.string.ad)
-            else -> station?.genre.orEmpty()
+        // The same rules as the playback screen and the dashboard - see forPhone.
+        // Only the genre is the bar's own, for a gap the layout says nothing about.
+        val onAir = PlaybackStatusBus.onAir.value
+        val text = MetadataFactory.forPhone(
+            now, PlaybackStatusBus.trackInfo.value, onAir, prefs.presentation, prefs.enrichWithYear
+        )
+        b.miniSubtitle.text = if (now?.isRealSong == true) {
+            listOf(text.artist, text.title).filter { it.isNotBlank() }.joinToString(" — ")
+        } else {
+            listOf(text.title, text.artist).filter { it.isNotBlank() }.joinToString(MetadataFactory.JOIN)
+                .ifBlank { station?.genre.orEmpty() }
         }
         b.miniStatus.text = getString(
             when (PlaybackStatusBus.status.value) {
@@ -361,10 +393,12 @@ class MainActivity : AppCompatActivity() {
         )
         ArtworkLoader.into(
             lifecycleScope,
-            PlaybackStatusBus.coverArtUrl.value?.let { android.net.Uri.parse(it) },
+            metadata.phoneArtwork(now?.isRealSong == true, PlaybackStatusBus.coverArtUrl.value, onAir),
             station?.let { metadata.logoDisplayUri(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
-            b.miniLogo
+            b.miniLogo,
+            station?.let { metadata.phoneClock(now?.isRealSong == true) },
+            muted = metadata.phoneArtMuted(now?.isRealSong == true)
         )
         b.playPause.setImageResource(
             if (controller?.isPlaying == true) android.R.drawable.ic_media_pause

@@ -89,6 +89,18 @@ class SettingsActivity : AppCompatActivity() {
         bind(b.ddBrowsable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.browsableStyle))
         bind(b.ddPlayable, ContentStyle.LABELS, ContentStyle.valueToIndex(prefs.playableStyle))
         bind(b.ddBuffer, BufferProfile.ALL.map { it.label }, prefs.bufferProfile)
+        // Both are stored as the value itself, not a position, so the list of
+        // choices can change without moving anybody's setting.
+        bind(
+            b.ddApiHold,
+            Prefs.API_HOLD_CHOICES.map { if (it == 0) "Bez opóźnienia" else "$it s" },
+            Prefs.API_HOLD_CHOICES.indexOf(prefs.apiHoldSeconds).coerceAtLeast(0)
+        )
+        bind(
+            b.ddNewsMinutes,
+            Prefs.NEWS_MINUTES_CHOICES.map { if (it == 0) "Nie rozpoznawaj serwisu" else "$it min" },
+            Prefs.NEWS_MINUTES_CHOICES.indexOf(prefs.newsMinutes).coerceAtLeast(0)
+        )
         b.etM3u.setText(prefs.userM3uUrls.joinToString("\n"))
         renderHidden()
 
@@ -264,6 +276,8 @@ class SettingsActivity : AppCompatActivity() {
         prefs.browsableStyle = ContentStyle.indexToValue(pick(b.ddBrowsable))
         prefs.playableStyle = ContentStyle.indexToValue(pick(b.ddPlayable))
         prefs.bufferProfile = pick(b.ddBuffer)
+        prefs.apiHoldSeconds = Prefs.API_HOLD_CHOICES[pick(b.ddApiHold)]
+        prefs.newsMinutes = Prefs.NEWS_MINUTES_CHOICES[pick(b.ddNewsMinutes)]
         prefs.userM3uUrls = b.etM3u.text?.toString().orEmpty().lines()
 
         lifecycleScope.launch {

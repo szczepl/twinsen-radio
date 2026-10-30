@@ -94,11 +94,17 @@ class RadioService : MediaLibraryService() {
     /** The last StreamTitle the API gave - it only goes on when it changes. */
     private var lastApiTitle: String? = null
 
-    /** Stream or API, for a station that has both - see [arbitrate]. */
-    private val titleArbiter = TitleArbiter()
+    /** The stream set against the API, for a station that has both - see [witness]. */
+    private val streamWitness = StreamWitness()
 
-    /** Whether the API's current title was kept off screen because the stream had the say. */
-    private var apiHeldBack = false
+    /**
+     * The programme on air, for a station with a programme guide. It answers
+     * from what it has and fetches the rest in the background; when the guide
+     * or a presenter's photo lands, the dashboard is redrawn with it.
+     */
+    private val onAirGuide by lazy {
+        OnAirGuide(applicationContext, scope) { refreshCurrentMetadata(force = true, why = "ramowka") }
+    }
 
     /** The field names of the API's last answer - see [traceApiFields]. */
     private var lastApiFields: String? = null
@@ -601,8 +607,8 @@ class RadioService : MediaLibraryService() {
                         val api = titleApiSource()
                         if (api == null) {
                             handleIcyTitle(entry.title, raw)
-                        } else if (arbitrate(TitleArbiter.Source.ICY, entry.title, raw)) {
-                            handleIcyTitleHeld(entry.title, raw, api.icyHoldMs)
+                        } else {
+                            witness(StreamWitness.Source.ICY, entry.title, raw)
                         }
                     }
                     else -> Log.i(TAG_ICY, "inny typ metadanych: ${entry.javaClass.simpleName} | $entry")
@@ -754,8 +760,8 @@ class RadioService : MediaLibraryService() {
      * while it wants to play a station that has an API, off otherwise - a
      * paused radio has nothing to describe.
      *
-     * Only a change is considered, and then [arbitrate] decides whether it goes
-     * on - the stream has the say while it is talking. What does go on passes
+     * Only a change is considered, and every change goes on - for such a
+     * station the API alone describes the track, see [StreamWitness]. It passes
      * through [handleIcyTitle] as if the stream had sent it, so its first
      * answer counts as joining mid-track and every later one as a change we
      * saw happen - the same as ICY.
@@ -775,11 +781,12 @@ class RadioService : MediaLibraryService() {
                 body?.let(::traceApiFields)
                 if (body == null) {
                     Log.i(TAG_ICY, "API tytulow nie odpowiedzialo")
-                } else if (title != null && (title != lastApiTitle || heldBackAndStreamGone())) {
+                } else if (title != null && title != lastApiTitle) {
                     lastApiTitle = title
                     Log.i(TAG_ICY, "API tytulow: $body")
                     val raw = "api: $body"
-                    if (arbitrate(TitleArbiter.Source.API, title, raw)) handleIcyTitleHeld(title, raw, source.apiHoldMs)
+                    witness(StreamWitness.Source.API, title, raw)
+                    handleIcyTitleHeld(title, raw, prefs.apiHoldSeconds * 1_000L)
                 }
                 delay(StationTitleApi.POLL_MS)
             }
@@ -787,49 +794,41 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * Whether a title from [source] should go on, for a station that has both
-     * a stream and an API - see [TitleArbiter]. Either way the comparison goes
-     * into the trace, because whether the two agree, and how far apart they
-     * are, is something only a live station can tell us.
+     * Writes down what [source] said next to what the other one last said, for
+     * a station whose screen only the API decides - see [StreamWitness]. The
+     * stream is kept in the trace because whether it agrees again, and how
+     * far behind the API it says things, is something only a live station can
+     * tell us.
      */
-    private fun arbitrate(source: TitleArbiter.Source, title: String?, rawBlock: String): Boolean {
+    private fun witness(source: StreamWitness.Source, title: String?, rawBlock: String) {
         val stationName = player.currentMediaItem?.mediaId?.let { repo.byMediaId(it)?.name }
         val now = NowPlaying.parse(title, stationName, rawBlock)
         val atMs = SystemClock.elapsedRealtime()
         val result = when (source) {
-            TitleArbiter.Source.ICY -> titleArbiter.fromIcy(now, NowPlaying.isPlaceholder(title), atMs)
+            StreamWitness.Source.ICY -> streamWitness.fromIcy(now, atMs)
             // The poll hands over only what parsed - an API answer that says
             // nothing never reaches here.
-            TitleArbiter.Source.API -> now?.let { titleArbiter.fromApi(it, atMs) } ?: return false
+            StreamWitness.Source.API -> now?.let { streamWitness.fromApi(it, atMs) } ?: return
         }
-        if (now != null) {
-            Log.i(TAG_ICY, "zrodla: $source '$title' -> ${result.verdict} zgodne=${result.agrees}")
-            Trace.write("zgodnosc") {
-                put("zrodlo", source.name)
-                put("tytul", title)
-                put("werdykt", result.verdict.name)
-                put("zgodne", result.agrees)
-                put("roznicaMs", result.apartMs)
-                put("icyZaufane", titleArbiter.streamTrusted)
-                put("blok", rawBlock)
-            }
+        Log.i(TAG_ICY, "zrodla: $source '$title' zgodne=${result.agrees}")
+        Trace.write("zgodnosc") {
+            put("zrodlo", source.name)
+            put("tytul", title)
+            put("zgodne", result.agrees)
+            put("roznicaMs", result.apartMs)
+            put("poStacji", sinceStationMs())
+            put("blok", rawBlock)
         }
-        if (source == TitleArbiter.Source.API) apiHeldBack = result.verdict == TitleArbiter.Verdict.STREAM_RULES
-        return result.verdict == TitleArbiter.Verdict.PUBLISH
     }
 
     /**
      * [handleIcyTitle], but a title *change* waits [holdMs] first - see
-     * [StationTitleApi.Source.icyHoldMs] for why a station needs it.
+     * [StationTitleApi] for why a station needs it.
      *
      * Nothing in the first [JOIN_UNHELD_MS] of a station is held: whatever
      * arrives then describes what is already playing, and holding it would only
-     * leave the screen empty for longer. "The first title" is not enough of a
-     * rule, because the stream usually answers first - with an empty block or
-     * a fixed slogan - and the API's track a fraction of a second later would
-     * have counted as a change and waited 12 s behind it. Held titles keep
-     * their order, since one source always holds for the same time and the
-     * arbiter lets only one source through at a time.
+     * leave the screen empty for longer. Held titles keep their order, since
+     * they all wait the same time.
      */
     private fun handleIcyTitleHeld(title: String?, rawBlock: String, holdMs: Long) {
         val joining = sinceStationMs()?.let { it < JOIN_UNHELD_MS } != false
@@ -848,16 +847,6 @@ class RadioService : MediaLibraryService() {
             handleIcyTitle(title, rawBlock)
         }
     }
-
-    /**
-     * The API's current title was held back while the stream had the say, and
-     * the stream has since lost it - stopped following the API, or sent its
-     * placeholder. The poll only acts on a change, so without this the
-     * held-back title would wait for the next track while the screen kept the
-     * stream's last word.
-     */
-    private fun heldBackAndStreamGone(): Boolean =
-        apiHeldBack && !titleArbiter.streamRules(SystemClock.elapsedRealtime())
 
     /**
      * Records the API's fields whenever their set changes. Their web player
@@ -1137,6 +1126,12 @@ class RadioService : MediaLibraryService() {
         }
 
         PlaybackStatusBus.setNowPlaying(now)
+        // Kept for the screen before play, which has no stream to hear it from.
+        // Not the news: "FAKTY" is what was on, not what the station calls itself.
+        val slogan = now?.slogan
+        if (slogan != null && !now.isNews) {
+            PlaybackStatusBus.stationId.value?.let { prefs.rememberSlogan(it, slogan) }
+        }
 
         // Order matters: we clear the cover art first, only then send the
         // metadata. The other way around, the car would get a new description
@@ -1308,8 +1303,8 @@ class RadioService : MediaLibraryService() {
         titlePollJob?.cancel()
         titlePollJob = null
         lastApiTitle = null
-        titleArbiter.reset()
-        apiHeldBack = false
+        streamWitness.reset()
+        onAirGuide.reset()
         // A held title belongs to the station we are leaving.
         heldTitles.forEach { it.cancel() }
         heldTitles.clear()
@@ -1515,10 +1510,21 @@ class RadioService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return
         val station = repo.byMediaId(item.mediaId) ?: return
         if (!force && prefs.diagnosticMode) return
-        val fresh = metadata.forPlayback(station, now, coverArtUrl, trackInfo)
+        val onAir = onAirFor(station, now)
+        val fresh = metadata.forPlayback(station, now, coverArtUrl, trackInfo, onAir)
+        PlaybackStatusBus.setOnAir(onAir)
         player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(fresh).build())
         traceMetadata(station, fresh, why)
         dumpMetadata(station, fresh)
+    }
+
+    /**
+     * The programme on air for [station], when the layout shows any of it - a
+     * layout that doesn't is no reason to fetch a programme guide.
+     */
+    private fun onAirFor(station: Station, now: NowPlaying?): OnAir? {
+        if (prefs.diagnosticMode || !prefs.presentation.usesProgramme) return null
+        return onAirGuide.current(station.id, java.time.LocalDateTime.now(), now?.isRealSong == true, prefs.newsMinutes)
     }
 
     /**
@@ -1939,10 +1945,7 @@ class RadioService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val current = player.currentMediaItem?.mediaId?.let { repo.byMediaId(it) }
-            val station = current
-                ?: repo.recent().firstOrNull()
-                ?: repo.favourites().firstOrNull()
-                ?: repo.all().firstOrNull()
+            val station = current ?: repo.resumeCandidate()
 
             if (station == null) {
                 return Futures.immediateFailedFuture(

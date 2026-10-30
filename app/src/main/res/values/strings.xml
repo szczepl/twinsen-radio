@@ -106,8 +106,6 @@
     <string name="opt_restored_toast">Przywrócono ukryte stacje</string>
     <string name="opt_enrich">Dodawaj rok do płyty</string>
     <string name="opt_enrich_sub">Płyta z katalogu iTunes (np. „Księga”) pokazuje się zawsze, gdy jest znana. Ten przełącznik decyduje tylko, czy dopisać do niej rok — np. „Księga [2024]” zamiast „Księga”.</string>
-    <string name="ad">Reklama</string>
-    <string name="ad_with_length">Reklama · %1$d s</string>
     <string name="opt_presentation">Układ opisu utworu</string>
     <string name="prev_station">Poprzednia stacja</string>
     <string name="next_station">Następna stacja</string>
@@ -125,6 +123,10 @@
     <string name="opt_style_browsable">Schemat Android Auto — foldery</string>
     <string name="opt_style_playable">Schemat Android Auto — stacje</string>
     <string name="opt_buffer">Bufor strumienia</string>
+    <string name="opt_api_hold">Opóźnienie tytułu ze strony stacji</string>
+    <string name="opt_api_hold_help">Dotyczy stacji, których tytuły bierzemy ze strony, a nie ze strumienia (Radio Nowy Świat). Zmiana tytułu czeka tyle, zanim pojawi się na desce — utwór zapowiadany przez spikera wskoczy, gdy ten skończy mówić.</string>
+    <string name="opt_news_minutes">Serwis informacyjny po pełnej godzinie</string>
+    <string name="opt_news_minutes_help">Przez tyle minut po pełnej godzinie przerwa między utworami jest traktowana jak serwis: zamiast audycji i zdjęcia prowadzącego wraca slogan i logo stacji. Ramówka serwisów nie oznacza, to przybliżenie.</string>
     <string name="opt_artwork">Źródło okładki („płyty”)</string>
     <string name="opt_m3u">Własne listy M3U (po jednym URL w linii)</string>
     <string name="opt_save">Zapisz i przeładuj</string>

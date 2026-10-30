@@ -20,7 +20,8 @@ class LineContentTest {
         assertEquals(
             listOf(
                 "TITLE", "ARTIST", "ARTIST_ALBUM", "TITLE_ALBUM", "TRACK_FULL",
-                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE", "ALBUM"
+                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE", "ALBUM",
+                "PROGRAMME", "HOSTS"
             ),
             LineContent.entries.map { it.name }
         )
@@ -98,7 +99,7 @@ class ArtContentTest {
     @Test
     fun `the stored order never moves`() {
         assertEquals(
-            listOf("COVER", "LOGO", "CLOCK_DIGITAL", "CLOCK_ANALOG", "EMPTY"),
+            listOf("COVER", "LOGO", "CLOCK_DIGITAL", "CLOCK_ANALOG", "EMPTY", "HOST_PHOTO"),
             ArtContent.entries.map { it.name }
         )
     }
@@ -260,7 +261,8 @@ class RetiredCompositeTest {
         assertEquals(
             listOf(
                 "TITLE", "ARTIST", "ARTIST_ALBUM", "TITLE_ALBUM", "TRACK_FULL",
-                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE", "ALBUM"
+                "STATION", "CLOCK", "EMPTY", "SLOGAN", "DATE", "CLOCK_DATE", "ALBUM",
+                "PROGRAMME", "HOSTS"
             ),
             LineContent.entries.map { it.name }
         )

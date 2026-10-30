@@ -30,16 +30,24 @@ object ClockArt {
         foregroundColor: Int,
         time: LocalTime = LocalTime.now()
     ): ByteArray? {
-        val bitmap = when (face) {
-            ClockFace.DIGITAL -> digital(time, backgroundColor, foregroundColor)
-            ClockFace.ANALOG -> analog(time, backgroundColor, foregroundColor)
-            ClockFace.NONE -> return null
-        }
+        val bitmap = bitmap(face, backgroundColor, foregroundColor, time) ?: return null
         return ByteArrayOutputStream().use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             bitmap.recycle()
             out.toByteArray()
         }
+    }
+
+    /** The same face as a bitmap, for the phone's own screens, which need no PNG. */
+    fun bitmap(
+        face: ClockFace,
+        backgroundColor: Int,
+        foregroundColor: Int,
+        time: LocalTime = LocalTime.now()
+    ): Bitmap? = when (face) {
+        ClockFace.DIGITAL -> digital(time, backgroundColor, foregroundColor)
+        ClockFace.ANALOG -> analog(time, backgroundColor, foregroundColor)
+        ClockFace.NONE -> null
     }
 
     private fun newCanvas(backgroundColor: Int): Pair<Bitmap, Canvas> {

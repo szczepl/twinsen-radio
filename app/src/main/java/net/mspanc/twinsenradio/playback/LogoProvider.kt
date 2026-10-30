@@ -38,7 +38,9 @@ class LogoProvider : ContentProvider() {
 
     override fun onCreate(): Boolean = true
 
-    override fun getType(uri: Uri): String = "image/png"
+    /** A presenter's photo is a JPEG - see [OnAirGuide]; everything else here is rendered to PNG. */
+    override fun getType(uri: Uri): String =
+        if (uri.getQueryParameter(PARAM_PATH)?.endsWith(".jpg") == true) "image/jpeg" else "image/png"
 
     /**
      * We hand back the image from a cached file rather than a pipe: readers
@@ -143,11 +145,19 @@ class LogoProvider : ContentProvider() {
          * what the head unit has cached.
          */
         fun customUriFor(context: Context, station: Station, file: File): Uri =
+            fileUri(context, station.id, file)
+
+        /**
+         * Any picture the app keeps in its own directory - a custom logo, a
+         * presenter's photo - under a name of its own, with the file's
+         * modification time to invalidate what the head unit cached.
+         */
+        fun fileUri(context: Context, name: String, file: File): Uri =
             Uri.Builder()
                 .scheme("content")
                 .authority(authority(context))
                 .appendPath("custom")
-                .appendPath(station.id)
+                .appendPath(name)
                 .appendQueryParameter(PARAM_PATH, file.absolutePath)
                 .appendQueryParameter(PARAM_VERSION, file.lastModified().toString())
                 .build()

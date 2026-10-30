@@ -81,6 +81,15 @@ class StationRepository private constructor(private val appContext: Context) {
         return order.mapNotNull { byId(it) }
     }
 
+    /**
+     * The station play starts with when nothing is loaded: the most recently
+     * listened one, then the first favourite, then the first on the list. One
+     * answer for the service resuming in the car and for the phone's screen
+     * before play, so the screen shows the station that will actually start.
+     */
+    fun resumeCandidate(): Station? =
+        recent().firstOrNull() ?: favourites().firstOrNull() ?: all().firstOrNull()
+
     fun genres(): List<String> = all().map { it.genre }.distinct().sorted()
 
     fun byGenre(genre: String): List<Station> = all().filter { it.genre == genre }

@@ -30,11 +30,7 @@ object StationTitleApi {
     class Source(
         val url: String,
         /** The response body as a StreamTitle; null = the answer said nothing usable. */
-        val toStreamTitle: (String) -> String?,
-        /** How long a title change from the stream waits before it goes on - see [RNS]. */
-        val icyHoldMs: Long = 0,
-        /** The same for a change from the API. */
-        val apiHoldMs: Long = 0
+        val toStreamTitle: (String) -> String?
     )
 
     /** Null for stations whose stream carries its own titles. */
@@ -44,26 +40,23 @@ object StationTitleApi {
     }
 
     /**
-     * Both holds come from the drive of 28.10.2026, when the stream had its
-     * titles back and both sources ran side by side.
+     * The API alone describes the track (see [StreamWitness] for why), and a
+     * change waits [net.mspanc.twinsenradio.data.Prefs.apiHoldSeconds] before
+     * it goes on.
      *
-     * The stream's title is in step with the audio - Media3 hands ICY over at
-     * the playback position it was cut in at - and still it came 2-3 s before
-     * the song itself, or while the song sat on hold at the desk. That is
-     * RNS's playout naming a track when it is cued, not when the fader goes
-     * up, so 3 s covers it.
-     *
-     * The API is ahead of the stream on top of that: over 14 tracks and
-     * slogans the stream named the same thing 4-13 s after we had seen it in
-     * the API, 9 s on average. That gap is the encoder, the CDN and our own
-     * buffer, none of which the website goes through - so on the API alone a
-     * title would land ten seconds before the song.
+     * That wait used to be 12 s, worked out on 28.10.2026, the one day the
+     * stream had titles and both sources ran side by side: the API named each
+     * track 4-13 s (9 s on average) before the stream did, and the stream
+     * itself 2-3 s before the song, as RNS's playout names a track when it is
+     * cued. But that drive had our playback drifting behind live with every
+     * rebuffer; on a fresh connection the stream came first and the API up to
+     * 8 s after it. Neither the station's app nor its website waits at all.
+     * With the stream mute there is nothing left to measure against but the
+     * ear, so it is now the user's setting.
      */
     private val RNS = Source(
         "https://nowyswiat.online/api/oZeta/stat",
-        ::rnsStreamTitle,
-        icyHoldMs = 3_000,
-        apiHoldMs = 3_000 + 9_000
+        ::rnsStreamTitle
     )
 
     /**

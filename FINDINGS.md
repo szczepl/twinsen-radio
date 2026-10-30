@@ -201,6 +201,48 @@ Dead ends not worth repeating:
     trace event `odroczenie`); the first title of a connection is not held.
     The 9 s is the drive's average, so on a fresh connection an API-only
     title will now come a few seconds late rather than early.
+  **30.10.2026 the stream froze on a real track.** Every mount — the 256,
+  `stream.nowyswiat.online/mp3` (which redirects to the backup 128) and the
+  rest — sends `StreamTitle='Trent Reznor and Atticus Ross - Normal Life'`
+  once on connect and then nothing. A real title looks exactly like a working
+  stream, so the arbiter trusted it: twice that morning it covered the API's
+  correct track for 3 minutes, and the next API change then waited 60 s for
+  the stream to follow plus the 12 s hold (07:26:01 → 07:27:19, 08:23:31 →
+  08:24:47). Three breakages in four days, each beating the rule written for
+  the one before, so **the API alone now decides** for RNŚ. ICY is still
+  read and goes into the trace as `zgodnosc` (`StreamWitness`), to show if it
+  ever comes back. The hold on API changes is a setting (default 3 s, the
+  user's pick): on the 28.10 drive the API led the stream by 9 s on average,
+  but that was with our playback drifting behind live; on a fresh connection
+  the stream came first.
+
+  **The station's own app (2.0.303, Flutter), decompiled the same day with
+  blutter**, does not poll for titles at all. ICY is only a trigger: on a new
+  block that doesn't contain "PION I POZIOM" it asks
+  `/api/Mobile/get_current_player_data` (behind Cloudflare, needs the
+  `X-RNS-API-KEY` baked into the app) for `{rds: {title, artist, img, ts}}` —
+  the same fields as `oZeta/stat` plus a picture. Otherwise it refreshes on
+  start, on resume and on a programme change (an hourly timer). With no song
+  it shows "PION I POZIOM" / "Radio Nowy Świat" and the programme's picture.
+  Phone and Android Auto get the same session; the AA handler only does
+  browsing and search. On the frozen stream its title therefore never moves —
+  measured 10:02–10:14: three changes in the API, none in its session. Our
+  10 s poll of `oZeta` is the better mechanism.
+
+  **Programme guide.** The public `nowyswiat.online/ramowka` carries ten days:
+  start time, programme, presenters (the text before the first "|"; guests
+  and topics follow it), and a 150 px thumbnail whose original, without
+  `_thumb_150x150`, is a wide banner up to 1.6 MB. `OnAirGuide` reads it twice
+  a day and fills the new line blocks "Audycja" and "Prowadzący" and the
+  picture choice "Zdjęcie prowadzącego" between tracks, the photo cut to a
+  512 px square. The guide doesn't list the news, so the first N minutes of
+  an hour without a track count as news (setting, default 5) and give the
+  slogan and logo back.
+
+  **The 256 kb/s mount is the patrons' one.** The site's stream list for an
+  anonymous visitor has the 256 entry with `src: "-"`; `4md4m0a0fs8uv` is that
+  stream (frames decode as 256 kb/s) and plays without logging in. Its
+  `icy-name` is now plain "Radio Nowy Swiat", no longer "… - MP3 256".
 * **Jacaranda FM** breaks two conventions at once. Stream sniff
   (2026-08-11):
 

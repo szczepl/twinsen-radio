@@ -63,8 +63,12 @@ Delete what you left on `/sdcard` when you are done.
 
 ## Tapping
 
-Screenshots come back 1080x2400 and are shown scaled — multiply the
-coordinates you read off the image by the factor the tool states.
+The display resolution is the user's setting and changes: it was 1080x2400,
+on 30.10.2026 it was 720x1600 (HD+), and taps computed for the other one land
+off the target without any error. Read it first with `adb shell wm size`, or
+take the bounds straight from `adb shell uiautomator dump /sdcard/ui.xml` —
+they are in input coordinates. Screenshots come at that same size; multiply
+what you read off the image only by the factor the viewing tool states.
 
 * **Do not tap the stars.** Favourites are the user's own state, and a test
   tap once ruined a measurement they were in the middle of.

@@ -216,6 +216,33 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_BUFFER, 1)
         set(v) = sp.edit { putInt(KEY_BUFFER, v) }
 
+    /**
+     * How long a title change from a station's title API waits before it goes
+     * on, in seconds - see [net.mspanc.twinsenradio.playback.StationTitleApi].
+     *
+     * A setting rather than a constant because there is nothing to measure it
+     * against any more: RNS's stream stopped naming tracks, so the only witness
+     * of when a song really starts is the driver's ear. The default 3 s is the
+     * user's own pick (30.10.2026) - long enough that a song the presenter talks
+     * over appears as the presenter steps away, not under the talking.
+     */
+    var apiHoldSeconds: Int
+        get() = sp.getInt(KEY_API_HOLD, 3)
+        set(v) = sp.edit { putInt(KEY_API_HOLD, v) }
+
+    /**
+     * For how many minutes after the full hour a gap between tracks counts as
+     * the news, so the programme gives way to the station - see
+     * [net.mspanc.twinsenradio.playback.OnAirGuide]. 0 turns it off.
+     *
+     * The programme guide does not list the news and the title API says the
+     * same slogan for it as for any talk, so the hour is the only clue there
+     * is. A guess to be checked against the trace, which is why it is a setting.
+     */
+    var newsMinutes: Int
+        get() = sp.getInt(KEY_NEWS_MINUTES, 5)
+        set(v) = sp.edit { putInt(KEY_NEWS_MINUTES, v) }
+
     /** How cover art is delivered to Android Auto, see [ArtworkMode]. */
     var artworkMode: Int
         get() = sp.getInt(KEY_ARTWORK, ArtworkMode.RESOURCE_URI)
@@ -461,6 +488,17 @@ class Prefs(context: Context) {
     }
 
     /** Custom logo uploaded by the user - a path to a file in the app's directory. */
+    /**
+     * The last slogan a station sent about itself ("Pion i poziom!"), for the
+     * screen before play - like the station's own app, which shows it there.
+     * Written only when it changes: it comes again with every block.
+     */
+    fun slogan(stationId: String): String? = sp.getString(KEY_SLOGAN_PREFIX + stationId, null)
+
+    fun rememberSlogan(stationId: String, slogan: String) {
+        if (slogan(stationId) != slogan) sp.edit { putString(KEY_SLOGAN_PREFIX + stationId, slogan) }
+    }
+
     fun customLogo(stationId: String): String? =
         sp.getString(KEY_CUSTOM_LOGO_PREFIX + stationId, null)?.takeIf { it.isNotBlank() }
 
@@ -568,6 +606,14 @@ class Prefs(context: Context) {
         const val KEY_STYLE_BROWSABLE = "aa_style_browsable"
         const val KEY_STYLE_PLAYABLE = "aa_style_playable"
         const val KEY_BUFFER = "buffer_profile"
+        const val KEY_API_HOLD = "api_hold_seconds"
+        const val KEY_NEWS_MINUTES = "news_minutes"
+
+        /** What the settings offer for [apiHoldSeconds]. */
+        val API_HOLD_CHOICES = listOf(0, 1, 2, 3, 4, 5, 8, 12)
+
+        /** What the settings offer for [newsMinutes]. */
+        val NEWS_MINUTES_CHOICES = listOf(0, 3, 5, 8, 10, 15)
         const val KEY_ARTWORK = "artwork_mode"
         const val KEY_M3U = "user_m3u"
         const val KEY_FAV = "favourites"
@@ -581,6 +627,7 @@ class Prefs(context: Context) {
         private const val KEY_STREAM_PREFIX = "stream_choice_"
         private const val KEY_CUSTOM_STREAM_PREFIX = "stream_custom_"
         private const val KEY_CUSTOM_LOGO_PREFIX = "logo_custom_"
+        private const val KEY_SLOGAN_PREFIX = "slogan_"
         private const val KEY_PLAYS_PREFIX = "plays_"
         const val KEY_HISTORY_LOCAL = "search_history_local"
         const val KEY_HISTORY_WEB = "search_history_web"

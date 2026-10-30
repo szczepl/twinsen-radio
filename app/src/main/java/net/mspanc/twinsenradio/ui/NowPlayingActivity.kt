@@ -13,12 +13,12 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.R
-import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.Prefs
 import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StationRepository
 import net.mspanc.twinsenradio.databinding.ActivityNowPlayingBinding
 import net.mspanc.twinsenradio.playback.MetadataFactory
+import net.mspanc.twinsenradio.playback.PhoneText
 import net.mspanc.twinsenradio.playback.PlaybackStatusBus
 import net.mspanc.twinsenradio.playback.RadioService
 import net.mspanc.twinsenradio.playback.TextCase
@@ -37,6 +37,9 @@ class NowPlayingActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
     private var controller: MediaController? = null
 
+    /** The station on screen - the one playing, or before play the one play would start. */
+    private var shown: Station? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         b = ActivityNowPlayingBinding.inflate(layoutInflater)
@@ -49,12 +52,18 @@ class NowPlayingActivity : AppCompatActivity() {
         b.toolbar.setNavigationOnClickListener { finish() }
         b.playPause.setOnClickListener {
             val c = controller ?: return@setOnClickListener
-            if (c.isPlaying) c.pause() else c.play()
+            // Before play the screen shows a station; play starts that one.
+            val next = if (PlaybackStatusBus.stationId.value == null) shown else null
+            when {
+                next != null -> play(next)
+                c.isPlaying -> c.pause()
+                else -> c.play()
+            }
         }
         b.prev.setOnClickListener { step(-1) }
         b.next.setOnClickListener { step(+1) }
         b.favourite.setOnClickListener {
-            val id = PlaybackStatusBus.stationId.value ?: return@setOnClickListener
+            val id = shown?.id ?: return@setOnClickListener
             prefs.toggleFavourite(id)
             render()
         }
@@ -65,6 +74,7 @@ class NowPlayingActivity : AppCompatActivity() {
             PlaybackStatusBus.status,
             PlaybackStatusBus.coverArtUrl,
             PlaybackStatusBus.trackInfo,
+            PlaybackStatusBus.onAir,
             PlaybackStatusBus.quality,
             Prefs.favouritesFlow
         ).forEach { flow ->
@@ -126,7 +136,7 @@ class NowPlayingActivity : AppCompatActivity() {
     private fun step(delta: Int) {
         val all = repo.all()
         if (all.isEmpty()) return
-        val currentId = PlaybackStatusBus.stationId.value
+        val currentId = shown?.id
         val index = all.indexOfFirst { it.id == currentId }
         val target = if (index < 0) 0 else ((index + delta) % all.size + all.size) % all.size
         play(all[target])
@@ -140,52 +150,27 @@ class NowPlayingActivity : AppCompatActivity() {
     }
 
     private fun render() {
-        val station = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
+        val playing = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }
+        // Before play: the station play will start with - see renderMiniPlayer.
+        val station = playing ?: repo.resumeCandidate()
+        shown = station
         val now = PlaybackStatusBus.nowPlaying.value
 
         b.stationName.text = station?.name ?: getString(R.string.nothing_playing)
 
-        // Same logic as in the car metadata: a real track, station slogan, or
-        // an ad - never a duplicated station name.
-        when {
-            now?.isRealSong == true -> {
-                val info = PlaybackStatusBus.trackInfo.value
-                // Artist only - the album goes separately, on its own line below
-                b.songArtist.text = MetadataFactory.composeArtistOnly(now, info)
-                // The phone follows the dashboard: a record switched off in the
-                // line settings is switched off here too, or the two screens
-                // describe the same track differently.
-                val album = if (prefs.presentation.playing.shows(LineContent.Part.ALBUM)) {
-                    info?.albumLabel(prefs.enrichWithYear).orEmpty()
-                } else {
-                    ""
-                }
-                b.songAlbum.text = album
-                b.songAlbum.visibility = if (album.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
-                // Same processing as in the car: corrected order and spelling.
-                b.songTitle.text = MetadataFactory.displayTitle(now, info)
-            }
-            now?.slogan != null -> {
-                b.songTitle.text = now.slogan
-                b.songArtist.text = ""
-                b.songAlbum.visibility = android.view.View.GONE
-            }
-            now?.isAd == true -> {
-                val seconds = now.adDurationMs / 1000
-                b.songTitle.text = if (seconds > 0) {
-                    getString(R.string.ad_with_length, seconds)
-                } else {
-                    getString(R.string.ad)
-                }
-                b.songArtist.text = ""
-                b.songAlbum.visibility = android.view.View.GONE
-            }
-            else -> {
-                b.songTitle.text = ""
-                b.songArtist.text = ""
-                b.songAlbum.visibility = android.view.View.GONE
-            }
+        // The rules are the dashboard's, not a copy of them - see forPhone.
+        val onAir = PlaybackStatusBus.onAir.value
+        val text = if (playing != null) {
+            MetadataFactory.forPhone(
+                now, PlaybackStatusBus.trackInfo.value, onAir, prefs.presentation, prefs.enrichWithYear
+            )
+        } else {
+            PhoneText(station?.let { prefs.slogan(it.id) }.orEmpty(), "", "")
         }
+        b.songTitle.text = text.title
+        b.songArtist.text = text.artist
+        b.songAlbum.text = text.album
+        b.songAlbum.visibility = if (text.album.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
 
         val isFav = station != null && station.id in prefs.favourites
         b.favourite.setImageResource(
@@ -196,15 +181,18 @@ class NowPlayingActivity : AppCompatActivity() {
 
         b.diagnosticBanner.visibility =
             if (prefs.diagnosticMode) android.view.View.VISIBLE else android.view.View.GONE
-        // We take the cover art from our own bus, not from session metadata.
-        // The session may hold a clock instead of cover art - that's a feature
-        // exclusively for the car screen; on the phone it should always be cover art or the station logo.
+        // From our own bus, not from session metadata: with no car attached the
+        // session's picture is cut for the notification shade, which gets no
+        // clock. This screen follows the layout's choice, clock included.
         ArtworkLoader.into(
             lifecycleScope,
-            PlaybackStatusBus.coverArtUrl.value?.let { android.net.Uri.parse(it) },
+            playing?.let { metadata.phoneArtwork(now?.isRealSong == true, PlaybackStatusBus.coverArtUrl.value, onAir) },
             station?.let { metadata.logoDisplayUri(it) },
             station?.let { metadata.logoResId(it) } ?: R.drawable.logo_placeholder,
-            b.art
+            b.art,
+            // Nothing playing yet, nothing to put a clock in place of.
+            playing?.let { metadata.phoneClock(now?.isRealSong == true) },
+            muted = playing == null || metadata.phoneArtMuted(now?.isRealSong == true)
         )
         val statusText = getString(
             when (PlaybackStatusBus.status.value) {

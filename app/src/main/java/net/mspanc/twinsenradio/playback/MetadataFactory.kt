@@ -14,6 +14,7 @@ import net.mspanc.twinsenradio.data.ClockColors
 import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.LineSpec
 import net.mspanc.twinsenradio.data.Prefs
+import net.mspanc.twinsenradio.data.Presentation
 import net.mspanc.twinsenradio.data.Station
 import net.mspanc.twinsenradio.data.StationNames
 import java.io.ByteArrayOutputStream
@@ -87,7 +88,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         station: Station,
         now: NowPlaying?,
         coverArtUrl: String? = null,
-        trackInfo: CoverArtLookup.TrackInfo? = null
+        trackInfo: CoverArtLookup.TrackInfo? = null,
+        onAir: OnAir? = null
     ): MediaMetadata {
         val b = MediaMetadata.Builder()
             .setIsBrowsable(false)
@@ -142,15 +144,15 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             // what the second set exists to fill.
             val lines = p.setFor(now?.isRealSong == true)
 
-            val top = lineOf(lines.top, station, now, trackInfo, title, artist)
-            val bottom = lineOf(lines.bottom, station, now, trackInfo, title, artist)
+            val top = lineOf(lines.top, station, now, trackInfo, title, artist, onAir)
+            val bottom = lineOf(lines.bottom, station, now, trackInfo, title, artist, onAir)
 
             // The middle line is only visible on the AID - the one place where a
             // warning can go without cluttering the central screen too. What the
             // state of the connection has to say there, and when it says nothing,
             // is [StatusLine]'s to decide.
             val middle = StatusLine.textFor(context, PlaybackStatusBus.status.value)
-                ?: lineOf(lines.middle, station, now, trackInfo, title, artist)
+                ?: lineOf(lines.middle, station, now, trackInfo, title, artist, onAir)
 
             // The fields the head unit actually renders. Measured in the Passat
             // (FINDINGS.md): the AID reads subtitle / description / displayTitle,
@@ -168,7 +170,7 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
                 .setGenre(station.genre)
         }
 
-        applyArtwork(b, station, coverArtUrl, now?.isRealSong == true)
+        applyArtwork(b, station, coverArtUrl, now?.isRealSong == true, onAir)
         return b.build()
     }
 
@@ -205,17 +207,20 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         now: NowPlaying?,
         info: CoverArtLookup.TrackInfo?,
         title: String,
-        artist: String
+        artist: String,
+        onAir: OnAir?
     ): String {
-        val first = lineText(spec.primary, station, now, info, title, artist)
+        val first = lineText(spec.primary, station, now, info, title, artist, onAir)
         // The picker won't offer a second half that repeats the first, but a
         // stored pair can outlive the version that wrote it - and "Godzina ·
         // data" next to "Data" printed the date twice, which reads as a fault
         // rather than a layout. Overlap, not equality: the two entries that did
         // that were never the same entry.
         if (spec.secondary.overlaps(spec.primary)) return first
-        val second = shortenSecond(spec.secondary, lineText(spec.secondary, station, now, info, title, artist))
-        return listOf(first, second).filter { it.isNotBlank() }.joinToString(JOIN)
+        val second = shortenSecond(spec.secondary, lineText(spec.secondary, station, now, info, title, artist, onAir))
+        // Distinct, because a programme with no guide behind it says what the
+        // slogan says - next to "Slogan stacji" that would be the same words twice.
+        return listOf(first, second).filter { it.isNotBlank() }.distinct().joinToString(JOIN)
     }
 
     /**
@@ -264,7 +269,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         now: NowPlaying?,
         info: CoverArtLookup.TrackInfo?,
         title: String,
-        artist: String
+        artist: String,
+        onAir: OnAir?
     ): String = when (content) {
         LineContent.CLOCK -> clockText()
         LineContent.DATE -> dateText()
@@ -272,8 +278,16 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         LineContent.STATION -> station.name
         LineContent.SLOGAN -> stationSaysLine(now)
         LineContent.EMPTY -> ""
+        // The programme fills a gap; over a record it would be a second
+        // description competing with the real one. Without a guide - another
+        // station, or the news - the line says what the slogan would.
+        LineContent.PROGRAMME -> if (now?.isRealSong == true) "" else onAir?.name ?: stationSaysLine(now)
+        LineContent.HOSTS -> if (now?.isRealSong == true) "" else onAir?.hosts.orEmpty()
         LineContent.TITLE -> titleLine(now, title)
-        LineContent.ARTIST -> if (now?.isRealSong == true) artist else ""
+        // Without the album RMF tacks onto the artist ("Wiktoria Kida / Ksiega"):
+        // that has a line of its own now, and next to it the record was named
+        // twice. The phone has always cut it the same way.
+        LineContent.ARTIST -> if (now != null && now.isRealSong) composeArtistOnly(now, info) else ""
         LineContent.ALBUM ->
             if (now?.isRealSong == true) {
                 info?.albumLabel(prefs.enrichWithYear).orEmpty()
@@ -302,34 +316,37 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * What the station is saying for itself right now.
+     * The picture for the phone's own screens, by the same choice the dashboard
+     * makes - null meaning the station's logo. A clock is [phoneClock]'s.
      *
-     * Named "slogan" in the picker because that is what it usually is - "Pion i
-     * poziom!" on RNS - but the news and an ad block belong here too. All three
-     * are the same kind of thing: the station's own words standing in for a
-     * track, and whichever of them is true at the moment is what that line
-     * should carry.
+     * One departure: "Puste" gives way to the logo, faded back - see
+     * [phoneArtMuted] - because an empty square in the middle of the playback
+     * screen reads as a picture that failed to load.
      */
-    private fun stationSaysLine(now: NowPlaying?): String = when {
-        now?.isRealSong == true -> ""
-        else -> titleLine(now, "")
-    }
+    fun phoneArtwork(trackPlaying: Boolean, coverArtUrl: String?, onAir: OnAir?): Uri? =
+        when (prefs.presentation.artFor(trackPlaying)) {
+            ArtContent.COVER -> coverArtUrl?.let { Uri.parse(it) }
+            ArtContent.HOST_PHOTO -> onAir?.photoUri
+            ArtContent.LOGO, ArtContent.EMPTY, ArtContent.CLOCK_DIGITAL, ArtContent.CLOCK_ANALOG -> null
+        }
+
+    /** Whether the phone's picture is the faded logo standing in for "Puste". */
+    fun phoneArtMuted(trackPlaying: Boolean): Boolean =
+        prefs.presentation.artFor(trackPlaying) == ArtContent.EMPTY
 
     /**
-     * The title line. Outside of a track we insert whatever we know at that
-     * moment: the news, the station's slogan, or an ad label - anything but an empty screen.
+     * The clock face for the phone's own screens, when the layout asks for one
+     * in this state - in place of the cover, the logo, or the presenter's photo,
+     * exactly as on the dashboard.
+     *
+     * The notification shade is the one place that still doesn't get it (see
+     * [carAttached]): there it sat next to the system's own clock. The app's
+     * screens are a choice the user made for the picture, and they get it.
      */
-    private fun titleLine(now: NowPlaying?, title: String): String = when {
-        now?.isRealSong == true -> title
-        now?.isNews == true -> "${now.slogan} — serwis informacyjny"
-        now?.slogan != null -> now.slogan!!
-        now?.isAd == true -> adText(now)
-        else -> ""
-    }
-
-    private fun adText(now: NowPlaying): String {
-        val seconds = now.adDurationMs / 1000
-        return if (seconds > 0) "$AD_LABEL · ${seconds}s" else AD_LABEL
+    fun phoneClock(trackPlaying: Boolean): Bitmap? {
+        val face = prefs.presentation.artFor(trackPlaying).clockFace ?: return null
+        val bg = ClockColors.background(prefs.clockBackground)
+        return ClockArt.bitmap(face, bg, ClockColors.foreground(prefs.clockForeground, bg))
     }
 
     /**
@@ -346,7 +363,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         b: MediaMetadata.Builder,
         station: Station,
         coverArtUrl: String?,
-        trackPlaying: Boolean
+        trackPlaying: Boolean,
+        onAir: OnAir?
     ) {
         // A clock belongs to the dashboard - see [carAttached]. With no head
         // unit listening it would only put a drawn clock in the phone's own
@@ -376,6 +394,11 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
             }
 
             ArtContent.LOGO -> applyLogo(b, station)
+
+            ArtContent.HOST_PHOTO -> {
+                val photo = onAir?.photoUri
+                if (photo != null) b.setArtworkUri(photo) else applyLogo(b, station)
+            }
         }
     }
 
@@ -485,15 +508,77 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         const val AD_LABEL = "Reklama"
 
         /**
-         * The artist line, supplemented with the release when needed.
+         * What the phone's playback screen shows under the station name: a big
+         * line, a smaller one under it, and the record.
          *
-         * Shared between the car metadata and the phone's playback screen -
-         * otherwise the phone would be missing the album name visible in the car.
+         * The phone's screen has its own shape, but not its own rules. It used to
+         * keep a copy of them, and the copy drifted: the dashboard learned to call
+         * the news by name and to show the programme and its presenters between
+         * tracks, while the phone went on showing the bare slogan, or nothing. So
+         * everything here is decided by the same layout and the same functions
+         * the dashboard lines use - a part the dashboard doesn't show, the phone
+         * doesn't either.
          *
-         * RMF already provides a ready-made "Wiktoria Kida / Księga" - we don't
-         * touch that kind of text. For stations that give just the artist, we
-         * append what the catalog knows: "Kaeyra · single [2024]".
+         * Over a record: title, artist, album. Between records: what the
+         * dashboard says about the gap - the programme, or the station's own words
+         * (slogan, news, ad) - with the presenters under it.
          */
+        fun forPhone(
+            now: NowPlaying?,
+            info: CoverArtLookup.TrackInfo?,
+            onAir: OnAir?,
+            p: Presentation,
+            includeYear: Boolean
+        ): PhoneText {
+            if (now != null && now.isRealSong) {
+                val lines = p.playing
+                return PhoneText(
+                    title = if (lines.shows(LineContent.Part.TITLE)) displayTitle(now, info) else "",
+                    artist = if (lines.shows(LineContent.Part.ARTIST)) composeArtistOnly(now, info) else "",
+                    album = if (lines.shows(LineContent.Part.ALBUM)) info?.albumLabel(includeYear).orEmpty() else ""
+                )
+            }
+            val lines = p.idle
+            val says = when {
+                lines.shows(LineContent.Part.PROGRAMME) -> onAir?.name ?: stationSaysLine(now)
+                lines.shows(LineContent.Part.SLOGAN) -> stationSaysLine(now)
+                else -> ""
+            }
+            val hosts = if (lines.shows(LineContent.Part.HOSTS)) onAir?.hosts.orEmpty() else ""
+            return PhoneText(title = says, artist = hosts.takeIf { it != says }.orEmpty(), album = "")
+        }
+
+        /**
+         * What the station is saying for itself right now.
+         *
+         * Named "slogan" in the picker because that is what it usually is - "Pion i
+         * poziom!" on RNS - but the news and an ad block belong here too. All three
+         * are the same kind of thing: the station's own words standing in for a
+         * track, and whichever of them is true at the moment is what that line
+         * should carry.
+         */
+        private fun stationSaysLine(now: NowPlaying?): String = when {
+            now?.isRealSong == true -> ""
+            else -> titleLine(now, "")
+        }
+
+        /**
+         * The title line. Outside of a track we insert whatever we know at that
+         * moment: the news, the station's slogan, or an ad label - anything but an empty screen.
+         */
+        private fun titleLine(now: NowPlaying?, title: String): String = when {
+            now?.isRealSong == true -> title
+            now?.isNews == true -> "${now.slogan} — serwis informacyjny"
+            now?.slogan != null -> now.slogan!!
+            now?.isAd == true -> adText(now)
+            else -> ""
+        }
+
+        private fun adText(now: NowPlaying): String {
+            val seconds = now.adDurationMs / 1000
+            return if (seconds > 0) "$AD_LABEL · ${seconds}s" else AD_LABEL
+        }
+
         /**
          * Title and artist in a form fit for the screen: with corrected
          * order (when the station broadcasts it reversed) and tidied-up text.
@@ -573,6 +658,9 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         fun dateText(): String = LocalDate.now().format(DATE_FORMAT)
     }
 }
+
+/** The text of the phone's playback screen - see [MetadataFactory.forPhone]. */
+data class PhoneText(val title: String, val artist: String, val album: String)
 
 /**
  * What came in the ICY (Icecast/SHOUTcast) metadata for the current stream.

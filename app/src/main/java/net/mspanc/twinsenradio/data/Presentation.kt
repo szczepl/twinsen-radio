@@ -36,7 +36,9 @@ enum class LineContent(val label: String) {
     SLOGAN("Slogan stacji"),
     DATE("Data"),
     CLOCK_DATE("Godzina · data"),
-    ALBUM("Płyta");
+    ALBUM("Płyta"),
+    PROGRAMME("Audycja (z ramówki)"),
+    HOSTS("Prowadzący (z ramówki)");
 
     /**
      * The things this entry actually puts on the line.
@@ -62,6 +64,8 @@ enum class LineContent(val label: String) {
             DATE -> setOf(Part.DATE)
             CLOCK_DATE -> setOf(Part.CLOCK, Part.DATE)
             ALBUM -> setOf(Part.ALBUM)
+            PROGRAMME -> setOf(Part.PROGRAMME)
+            HOSTS -> setOf(Part.HOSTS)
             // Nothing to collide with, which is why it is always on offer.
             EMPTY -> emptySet()
         }
@@ -69,7 +73,7 @@ enum class LineContent(val label: String) {
     /** Whether putting these two on one line would say something twice. */
     fun overlaps(other: LineContent): Boolean = parts.any { it in other.parts }
 
-    enum class Part { TITLE, ARTIST, ALBUM, STATION, SLOGAN, CLOCK, DATE }
+    enum class Part { TITLE, ARTIST, ALBUM, STATION, SLOGAN, CLOCK, DATE, PROGRAMME, HOSTS }
 
     companion object {
         /**
@@ -89,8 +93,12 @@ enum class LineContent(val label: String) {
          * Everything that names a track is gone - there is none, and offering
          * the choice would only promise an empty line. What remains is what the
          * app still knows at that moment.
+         *
+         * [PROGRAMME] and [HOSTS] are here and not in [WHEN_PLAYING]: while a
+         * record plays the lines are about the record, and the programme is
+         * what fills the gap when the presenter talks.
          */
-        val WHEN_IDLE = listOf(CLOCK, DATE, STATION, SLOGAN, EMPTY)
+        val WHEN_IDLE = listOf(CLOCK, DATE, STATION, SLOGAN, PROGRAMME, HOSTS, EMPTY)
 
         /**
          * Entries that are no longer offered, because a line can now hold two
@@ -159,7 +167,15 @@ enum class ArtContent(val label: String) {
     LOGO("Logo stacji"),
     CLOCK_DIGITAL("Zegar cyfrowy"),
     CLOCK_ANALOG("Zegar analogowy"),
-    EMPTY("Puste");
+    EMPTY("Puste"),
+
+    /**
+     * The presenter's photo from the station's programme guide, and the logo
+     * where there is none - another station, a night of music with nobody at
+     * the desk who has a face on the website, or the news, which belongs to the
+     * station rather than to the programme it interrupts.
+     */
+    HOST_PHOTO("Zdjęcie prowadzącego, inaczej logo");
 
     /** The face to draw, or null when this choice isn't a clock at all. */
     val clockFace: ClockFace?
@@ -331,7 +347,18 @@ data class Presentation(
         get() = listOf(artPlaying, artIdle).any { it.clockFace != null } ||
             (playing.all() + idle.all()).any {
                 it == LineContent.CLOCK || it == LineContent.DATE || it == LineContent.CLOCK_DATE
-            }
+            } ||
+            usesProgramme
+
+    /**
+     * Whether anything here comes from the programme guide. Such a layout
+     * changes on the hour without anybody saying anything - a new programme,
+     * the news starting and ending - so it needs the minute tick as much as a
+     * clock does.
+     */
+    val usesProgramme: Boolean
+        get() = listOf(artPlaying, artIdle).any { it == ArtContent.HOST_PHOTO } ||
+            idle.shows(LineContent.Part.PROGRAMME) || idle.shows(LineContent.Part.HOSTS)
 
     companion object {
         /**
@@ -350,13 +377,15 @@ data class Presentation(
         /**
          * Default between tracks. Chosen to say something useful rather than to
          * reproduce what the old single-set layout happened to produce: the time
-         * where the artist was, the station where it already was, and whatever
-         * the station is saying for itself on the line the AID prints boldest.
+         * where the artist was, the station where it already was, and on the
+         * line the AID prints boldest the programme and who presents it - or,
+         * where there is no programme guide, whatever the station is saying
+         * for itself.
          */
         val DEFAULT_IDLE = LineSet(
             top = LineSpec(LineContent.CLOCK),
             middle = LineSpec(LineContent.STATION),
-            bottom = LineSpec(LineContent.SLOGAN)
+            bottom = LineSpec(LineContent.PROGRAMME, LineContent.HOSTS)
         )
 
         val DEFAULT = Presentation(

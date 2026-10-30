@@ -38,6 +38,18 @@ object PlaybackStatusBus {
     }
 
     /**
+     * The programme the last metadata push was built with. Published rather than
+     * asked for again, so the phone shows the programme the dashboard got -
+     * asking the guide a second time could land on the other side of the hour.
+     */
+    private val _onAir = MutableStateFlow<OnAir?>(null)
+    val onAir: StateFlow<OnAir?> = _onAir
+
+    fun setOnAir(value: OnAir?) {
+        _onAir.value = value
+    }
+
+    /**
      * A description of the current stream's quality - codec, bitrate, sample
      * rate. For the phone only; in the car there's no field to display it in.
      */
@@ -87,6 +99,7 @@ object PlaybackStatusBus {
             _nowPlaying.value = null
             _coverArtUrl.value = null
             _trackInfo.value = null
+            _onAir.value = null
             // A new station means a new stream - the old quality stops being
             // valid immediately, and we'll only learn the new one after the
             // first frame from the decoder.
