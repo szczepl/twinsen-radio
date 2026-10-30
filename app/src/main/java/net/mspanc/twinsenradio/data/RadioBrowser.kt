@@ -104,7 +104,8 @@ object RadioBrowser {
                 stream = stream,
                 streams = (listOf(own) + alternates).sortedByDescending { it.kbps },
                 logoUrl = faviconUrl,
-                source = Station.Source.DISCOVERED
+                source = Station.Source.DISCOVERED,
+                country = country?.uppercase()
             )
         }
 

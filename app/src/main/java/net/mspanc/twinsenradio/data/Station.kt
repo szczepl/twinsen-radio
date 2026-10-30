@@ -54,8 +54,18 @@ data class Station(
      * one (RNS: its placeholder banner). Without it the screen before play
      * shows the logo faded back.
      */
-    val standbyArtUrl: String? = null
+    val standbyArtUrl: String? = null,
+    /**
+     * Where the station broadcasts from, as an ISO code ("PL", "AU"); null
+     * when nobody knows - stations added from the directory before it was
+     * kept. Decides which iTunes store is asked first for a cover: see
+     * [isPolish].
+     */
+    val country: String? = null
 ) {
+    /** Polish repertoire is looked up in the Polish iTunes store first. */
+    val isPolish: Boolean get() = country.equals("PL", ignoreCase = true)
+
     enum class Source {
         BUILT_IN,
         USER_M3U,

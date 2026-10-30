@@ -1569,7 +1569,8 @@ class RadioService : MediaLibraryService() {
 
         scope.launch {
             val startedAt = SystemClock.elapsedRealtime()
-            val info = CoverArtLookup.find(now!!.artist, now.songTitle)
+            val polish = PlaybackStatusBus.stationId.value?.let { repo.byId(it) }?.isPolish == true
+            val info = CoverArtLookup.find(now!!.artist, now.songTitle, polishFirst = polish)
             // The answer, and the decision taken on it. The swapped flag is here
             // because the station's own order cannot be judged without it -
             // Jacaranda sends title first, and that only shows against a catalogue.

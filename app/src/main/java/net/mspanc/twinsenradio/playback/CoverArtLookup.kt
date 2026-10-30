@@ -181,7 +181,15 @@ object CoverArtLookup {
      *   so we don't keep re-querying for tracks that aren't in the catalogue
      *   (and there are plenty of those among Polish stations).
      */
-    suspend fun find(artist: String?, title: String?): TrackInfo? = withContext(Dispatchers.IO) {
+    /**
+     * @param polishFirst ask the Polish iTunes store before the US one - for a
+     *   Polish station. Without a country iTunes searches its US store, which
+     *   doesn't carry a good part of Polish releases at all: "Jakub Skorupa -
+     *   Pociagi towarowe" is 0 results there and the track, album and cover in
+     *   the Polish one (30.10.2026, Radio 357). For a foreign station the US
+     *   store comes first - the Australian stations' repertoire is found there.
+     */
+    suspend fun find(artist: String?, title: String?, polishFirst: Boolean = false): TrackInfo? = withContext(Dispatchers.IO) {
         val a = artist?.trim().orEmpty()
         val t = title?.trim().orEmpty()
         if (t.isEmpty()) return@withContext null
@@ -189,10 +197,15 @@ object CoverArtLookup {
         val key = "$a|$t".lowercase()
         synchronized(cache) { if (cache.containsKey(key)) return@withContext cache[key] }
 
-        var result = runCatching { query("$a $t".trim()) }
-            .onFailure { Log.w(TAG, "iTunes nie odpowiedzial: ${it.message}") }
-            .getOrNull()
-            ?.let { ourTrackOrNull(a, t, it, "iTunes") }
+        var result: TrackInfo? = null
+        for (store in if (polishFirst) listOf("PL", null) else listOf(null, "PL")) {
+            val name = "iTunes ${store ?: "US"}"
+            result = runCatching { query("$a $t".trim(), country = store) }
+                .onFailure { Log.w(TAG, "$name nie odpowiedzial: ${it.message}") }
+                .getOrNull()
+                ?.let { ourTrackOrNull(a, t, it, name) }
+            if (result != null) break
+        }
 
         // iTunes has poor coverage of older Polish repertoire - "Czesław
         // Niemen - Lipowa łyżka" isn't there at all, while MusicBrainz knows
@@ -206,7 +219,7 @@ object CoverArtLookup {
         }
 
         synchronized(cache) { cache[key] = result }
-        Log.i(TAG, "'$a - $t' -> okladka=${result?.artworkUrl != null} album='${result?.albumLabel()}'")
+        Log.i(TAG, "'$a - $t' -> okladka=${result?.artworkUrl != null} album='${result?.albumLabel()}' (najpierw ${if (polishFirst) "PL" else "US"})")
         result
     }
 
@@ -314,8 +327,10 @@ object CoverArtLookup {
         }
     }.getOrDefault(false)
 
-    private fun query(term: String): TrackInfo? {
-        val url = "$ENDPOINT?term=${URLEncoder.encode(term, "UTF-8")}&media=music&entity=song&limit=1"
+    /** @param country an iTunes store (ISO code); null is the US one. */
+    private fun query(term: String, country: String? = null): TrackInfo? {
+        val url = "$ENDPOINT?term=${URLEncoder.encode(term, "UTF-8")}&media=music&entity=song&limit=1" +
+            (country?.let { "&country=$it" } ?: "")
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8_000
             readTimeout = 8_000

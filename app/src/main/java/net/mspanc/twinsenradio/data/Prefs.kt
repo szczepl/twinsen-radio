@@ -339,6 +339,7 @@ class Prefs(context: Context) {
                     .put("stream", s.stream)
                     .put("streams", variants)
                     .put("logoUrl", s.logoUrl ?: "")
+                    .put("country", s.country ?: "")
             )
         }
         sp.edit { putString(KEY_DISCOVERED, arr.toString()) }
@@ -399,7 +400,8 @@ class Prefs(context: Context) {
                 logoUrl = o.optString("logoUrl").ifBlank { null },
                 source = Station.Source.DISCOVERED,
                 catalogName = catalog.takeIf { it != display },
-                renamed = own != null
+                renamed = own != null,
+                country = o.optString("country").ifBlank { null }
             )
         }
     }.getOrElse { emptyList() }
