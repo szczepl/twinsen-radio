@@ -653,13 +653,26 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
          */
         fun displayTitle(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
             val swapped = info?.looksSwapped(now.artist, now.songTitle) == true
-            return TextCase.tidy(if (swapped) now.artist else now.songTitle, info?.trackName)
+            return joinedNames(TextCase.tidy(if (swapped) now.artist else now.songTitle, info?.trackName))
         }
 
         fun displayArtist(now: NowPlaying, info: CoverArtLookup.TrackInfo?): String {
             val swapped = info?.looksSwapped(now.artist, now.songTitle) == true
-            return TextCase.tidy(if (swapped) now.songTitle else now.artist, info?.artistName)
+            return joinedNames(TextCase.tidy(if (swapped) now.songTitle else now.artist, info?.artistName))
         }
+
+        /**
+         * Jacaranda FM joins collaborators with "[+]" - "BEYONCE [+] JAY Z",
+         * "PITBULL [+] NE-YO [+] AFROJACK". Fine as a separator, odd on a
+         * dashboard; shown as "&", the way the catalogue writes it and two
+         * characters shorter than "and" on a line that runs out of room.
+         *
+         * Only on the way to the screen: the raw text keeps its "[+]", which is
+         * what the catalogue lookup splits the names on (see CoverArtLookup).
+         */
+        fun joinedNames(text: String): String = text.replace(PLUS_JOIN, " & ")
+
+        private val PLUS_JOIN = Regex("""\s*\[\+]\s*""")
 
         /**
          * The artist alone, without the album - for use where the album should go

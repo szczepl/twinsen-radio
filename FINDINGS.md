@@ -267,6 +267,8 @@ Dead ends not worth repeating:
   be the artist is the track title in iTunes — the fields are swapped.
   Comparing the artist too doesn't work, because on collaborations the
   strings diverge (station: "KYGO [+] TINA TURNER", catalog: "Tina Turner").
+  On screen the `[+]` shows as `&` (30.10.2026, `MetadataFactory.joinedNames`)
+  — only there: the catalog lookup still splits the names on the raw `[+]`.
 * **Polskie Radio** — the entire Shoutcast plant (ports 8900–8918) doesn't
   respond: the TCP connection goes through, but no data comes back. Only HLS
   works, one server per program: `stream11/pr1`, `stream12/pr2`,
