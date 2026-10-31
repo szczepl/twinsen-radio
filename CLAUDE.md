@@ -142,6 +142,13 @@ default.
    phone/car parity below. Both were checked on the phone and in what the
    session sends (`MetaDump`), not on a screen in the car or the DHU. The
    DHU needs the head unit server started on the phone by hand.
+7. **How the AID wraps "Audycja · Prowadzący" (31.10.2026).** It breaks the
+   bottom line after a space, so the dot hangs at the end of the first row.
+   Options → Tryb diagnostyczny → "Łącznik audycji i prowadzących" offers
+   every candidate (LF, CRLF, U+2028, non-breaking spaces, other marks);
+   whether the HDU honours any line break is unknown until tried in the car.
+   Once one wins, make it the default and drop the list. Presenters are off
+   by default and are no longer clipped by us — only the HDU cuts them.
 
 **Done on 2026-10-30:** the phone's screens follow the dashboard's rules
 instead of a copy of them (news named as news, programme and presenters
