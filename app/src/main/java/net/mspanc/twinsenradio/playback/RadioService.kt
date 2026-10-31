@@ -262,7 +262,7 @@ class RadioService : MediaLibraryService() {
                     player.prepare()
                 }
             }
-            Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK,
+            Prefs.KEY_DIAG_API, Prefs.KEY_ARTWORK, Prefs.KEY_HOSTS_JOIN,
             Prefs.KEY_LINE_TOP, Prefs.KEY_LINE_MIDDLE, Prefs.KEY_LINE_BOTTOM,
             Prefs.KEY_LINE_TOP_IDLE, Prefs.KEY_LINE_MIDDLE_IDLE, Prefs.KEY_LINE_BOTTOM_IDLE,
             Prefs.KEY_ART_PLAYING, Prefs.KEY_ART_IDLE, Prefs.KEY_CLOCK_BG,

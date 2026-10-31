@@ -11,6 +11,7 @@ import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.ArtContent
 import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.ClockColors
+import net.mspanc.twinsenradio.data.HostsJoin
 import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.LineSpec
 import net.mspanc.twinsenradio.data.Prefs
@@ -291,9 +292,16 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         // that were never the same entry.
         if (spec.secondary.overlaps(spec.primary)) return first
         val second = shortenSecond(spec.secondary, lineText(spec.secondary, station, now, info, title, artist, onAir))
+        // The programme with its presenters takes the joiner being tried in the
+        // car - see [HostsJoin]. Every other pair keeps the dot.
+        val join = if (setOf(spec.primary, spec.secondary) == PROGRAMME_HOSTS) {
+            HostsJoin.at(prefs.hostsJoin).separator
+        } else {
+            JOIN
+        }
         // Distinct, because a programme with no guide behind it says what the
         // slogan says - next to "Slogan stacji" that would be the same words twice.
-        return listOf(first, second).filter { it.isNotBlank() }.distinct().joinToString(JOIN)
+        return listOf(first, second).filter { it.isNotBlank() }.distinct().joinToString(join)
     }
 
     /**
@@ -311,6 +319,11 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
      */
     private fun shortenSecond(content: LineContent, text: String): String {
         if (text.length <= SECOND_BUDGET) return text
+        // The programme guide is never cut by us (user's call, 31.10.2026): a
+        // clipped list of presenters named one of two, and passed for the whole
+        // list. If it doesn't fit, the head unit cuts it - from the end, where
+        // the line can at least be seen to go on.
+        if (content == LineContent.HOSTS || content == LineContent.PROGRAMME) return text
         // A station has a shorter form that is still its name; everything else
         // can only be cut, and is cut on a word so the remnant stays readable.
         if (content == LineContent.STATION) {
@@ -569,6 +582,8 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
 
         /** The separator between two halves of a line, and inside a track line. */
         const val JOIN = " · "
+
+        private val PROGRAMME_HOSTS = setOf(LineContent.PROGRAMME, LineContent.HOSTS)
 
         /** An empty line as a value the head unit can draw - see [drawable]. */
         private const val BLANK = "\u00A0"

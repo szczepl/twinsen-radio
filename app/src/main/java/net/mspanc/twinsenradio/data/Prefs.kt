@@ -42,6 +42,15 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_STRIP_ICY, false)
         set(v) = sp.edit { putBoolean(KEY_STRIP_ICY, v) }
 
+    /**
+     * How the programme and its presenters are joined on one line - a position
+     * in [net.mspanc.twinsenradio.data.HostsJoin]. A probe for the AID, which
+     * wraps that line by itself; the dot until the car says otherwise.
+     */
+    var hostsJoin: Int
+        get() = sp.getInt(KEY_HOSTS_JOIN, 0)
+        set(v) = sp.edit { putInt(KEY_HOSTS_JOIN, v) }
+
     /** Whether to append the API field name to the Polish label, e.g. "TYTUL<title>". */
     var diagnosticShowApiName: Boolean
         get() = sp.getBoolean(KEY_DIAG_API, false)
@@ -583,6 +592,7 @@ class Prefs(context: Context) {
 
         const val KEY_DIAG = "diagnostic_mode"
         const val KEY_DIAG_API = "diagnostic_api_names"
+        const val KEY_HOSTS_JOIN = "hosts_join"
         const val KEY_TRACE = "trace_enabled"
         const val KEY_STRIP_ICY = "strip_icy_in_diagnostic"
         const val KEY_LINE_TOP = "line_top"
