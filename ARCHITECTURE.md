@@ -95,9 +95,12 @@ A few rules worked out from live material:
 * **We recognize a control marker by the rule** `^[A-Z0-9][A-Z0-9_]{3,}$` —
   without it, `STOP_AD_BREAK` was ending up in iTunes as a track title.
 * **Description expiry.** Since the catalog knows the track's duration, after
-  `duration + STALE_GRACE_MS` it's certainly no longer playing. When we don't
-  know the duration — `FALLBACK_TRACK_MS`. Instead of showing nothing, we
-  then fall back to the last known station slogan.
+  `duration + margin` it's certainly no longer playing. When we don't know
+  the duration — a fixed time. Instead of showing nothing, we then fall back
+  to the last known station slogan. Since 03.11.2026 this is the user's
+  choice (`TrackEnd`): catalog or fixed time, catalog only, fixed time only,
+  or no prediction at all; the fixed time (default 5 min) and the margin
+  (default 30 s) are settings too.
 * **All caps.** Jacaranda FM sends everything in ALL CAPS, and record labels
   do the same in their catalogs. `TextCase` cleans this up in three steps, in
   this order: a string that isn't shouting is left untouched → if it is

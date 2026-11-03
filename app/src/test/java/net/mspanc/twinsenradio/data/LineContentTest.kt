@@ -27,24 +27,17 @@ class LineContentTest {
         )
     }
 
-    @Test
-    fun `nothing that names a track is offered between tracks`() {
-        val trackShaped = listOf(
-            LineContent.TITLE, LineContent.ARTIST, LineContent.ARTIST_ALBUM,
-            LineContent.TITLE_ALBUM, LineContent.TRACK_FULL
-        )
-        trackShaped.forEach { assertFalse("$it", it in LineContent.WHEN_IDLE) }
-    }
-
     /**
-     * The station's own words are what fills the gap between tracks, and next to
-     * a playing track they would be whatever was said before it - stale by
-     * definition.
+     * Every entry still on offer is on both lists (03.11.2026): the user lays
+     * out each state as they like - presenters on the artist's line, the
+     * programme on the title's - and a list pruned to what seemed sensible was
+     * what stood in the way.
      */
     @Test
-    fun `the slogan is offered only between tracks`() {
-        assertTrue(LineContent.SLOGAN in LineContent.WHEN_IDLE)
-        assertFalse(LineContent.SLOGAN in LineContent.WHEN_PLAYING)
+    fun `both states offer every entry`() {
+        val offered = LineContent.entries.filterNot { it in LineContent.RETIRED }
+        assertEquals(offered.toSet(), LineContent.WHEN_PLAYING.toSet())
+        assertEquals(offered.toSet(), LineContent.WHEN_IDLE.toSet())
     }
 
     /**
@@ -66,7 +59,7 @@ class LineContentTest {
     fun `labels follow the list they are asked for`() {
         val labels = LineContent.labels(LineContent.WHEN_IDLE, includeYear = false)
         assertEquals(LineContent.WHEN_IDLE.size, labels.size)
-        assertEquals(LineContent.CLOCK.label, labels.first())
+        assertEquals(LineContent.WHEN_IDLE.first().label, labels.first())
     }
 
     /**

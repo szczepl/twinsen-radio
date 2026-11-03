@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import net.mspanc.twinsenradio.R
 import net.mspanc.twinsenradio.data.ArtContent
 import net.mspanc.twinsenradio.data.HostsJoin
+import net.mspanc.twinsenradio.data.TrackEnd
 import net.mspanc.twinsenradio.data.ArtworkMode
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ClockColors
@@ -93,10 +94,22 @@ class SettingsActivity : AppCompatActivity() {
         bind(b.ddBuffer, BufferProfile.ALL.map { it.label }, prefs.bufferProfile)
         // Both are stored as the value itself, not a position, so the list of
         // choices can change without moving anybody's setting.
+        bind(b.ddTrackEnd, TrackEnd.LABELS, TrackEnd.at(prefs.trackEnd).ordinal) { updateTrackEndOptionsEnabled() }
         bind(
-            b.ddApiHold,
-            Prefs.API_HOLD_CHOICES.map { if (it == 0) "Bez opóźnienia" else "$it s" },
-            Prefs.API_HOLD_CHOICES.indexOf(prefs.apiHoldSeconds).coerceAtLeast(0)
+            b.ddTrackGuess,
+            Prefs.TRACK_GUESS_CHOICES.map { "$it min" },
+            Prefs.TRACK_GUESS_CHOICES.indexOf(prefs.trackGuessMinutes).coerceAtLeast(0)
+        )
+        bind(
+            b.ddTrackMargin,
+            Prefs.TRACK_MARGIN_CHOICES.map { if (it == 0) "Bez zapasu" else "$it s" },
+            Prefs.TRACK_MARGIN_CHOICES.indexOf(prefs.trackEndMarginSeconds).coerceAtLeast(0)
+        )
+        updateTrackEndOptionsEnabled()
+        bind(
+            b.ddMetaDelay,
+            Prefs.META_DELAY_CHOICES.map { if (it == 0) "Bez opóźnienia" else "$it s" },
+            Prefs.META_DELAY_CHOICES.indexOf(prefs.metaDelaySeconds).coerceAtLeast(0)
         )
         bind(
             b.ddNewsMinutes,
@@ -205,6 +218,15 @@ class SettingsActivity : AppCompatActivity() {
     private fun pickArt(dropdown: MaterialAutoCompleteTextView): ArtContent =
         ArtContent.OFFERED.getOrElse(pick(dropdown)) { ArtContent.COVER }
 
+    /** The fixed time and the margin matter only to a mode that uses them. */
+    private fun updateTrackEndOptionsEnabled() {
+        val mode = TrackEnd.at(pick(b.ddTrackEnd))
+        listOf(b.tilTrackGuess to mode.usesGuess, b.tilTrackMargin to (mode != TrackEnd.OFF)).forEach { (til, on) ->
+            til.isEnabled = on
+            til.alpha = if (on) 1f else 0.4f
+        }
+    }
+
     /** Clock colours matter only if at least one of the two states draws a clock. */
     private fun updateClockOptionsEnabled() {
         val usesClock = listOf(b.ddArtPlaying, b.ddArtIdle)
@@ -286,7 +308,10 @@ class SettingsActivity : AppCompatActivity() {
         prefs.browsableStyle = ContentStyle.indexToValue(pick(b.ddBrowsable))
         prefs.playableStyle = ContentStyle.indexToValue(pick(b.ddPlayable))
         prefs.bufferProfile = pick(b.ddBuffer)
-        prefs.apiHoldSeconds = Prefs.API_HOLD_CHOICES[pick(b.ddApiHold)]
+        prefs.metaDelaySeconds = Prefs.META_DELAY_CHOICES[pick(b.ddMetaDelay)]
+        prefs.trackEnd = pick(b.ddTrackEnd)
+        prefs.trackGuessMinutes = Prefs.TRACK_GUESS_CHOICES[pick(b.ddTrackGuess)]
+        prefs.trackEndMarginSeconds = Prefs.TRACK_MARGIN_CHOICES[pick(b.ddTrackMargin)]
         prefs.newsMinutes = Prefs.NEWS_MINUTES_CHOICES[pick(b.ddNewsMinutes)]
         prefs.userM3uUrls = b.etM3u.text?.toString().orEmpty().lines()
 

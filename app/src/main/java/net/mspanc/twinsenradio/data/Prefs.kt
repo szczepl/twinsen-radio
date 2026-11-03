@@ -226,18 +226,50 @@ class Prefs(context: Context) {
         set(v) = sp.edit { putInt(KEY_BUFFER, v) }
 
     /**
-     * How long a title change from a station's title API waits before it goes
-     * on, in seconds - see [net.mspanc.twinsenradio.playback.StationTitleApi].
+     * How long every change of what's on air waits before it reaches the
+     * screens, in seconds; 0 = at once. For all stations and every source -
+     * the stream, a title API, Triton - see RadioService.publish.
      *
-     * A setting rather than a constant because there is nothing to measure it
-     * against any more: RNS's stream stopped naming tracks, so the only witness
-     * of when a song really starts is the driver's ear. The default 3 s is the
-     * user's own pick (30.10.2026) - long enough that a song the presenter talks
-     * over appears as the presenter steps away, not under the talking.
+     * The user's call (03.11.2026, after a weekend of driving): a station's
+     * API names the next song while the presenter is still talking, and no
+     * prediction of ours gets that right every time. A plain delay does.
+     *
+     * It replaced the hold on RNS's title API ("api_hold_seconds", 3 s by
+     * the user's pick of 30.10.2026), which held each title for itself and
+     * would only have added to this one. The stored key is simply no longer
+     * read.
      */
-    var apiHoldSeconds: Int
-        get() = sp.getInt(KEY_API_HOLD, 3)
-        set(v) = sp.edit { putInt(KEY_API_HOLD, v) }
+    var metaDelaySeconds: Int
+        get() = sp.getInt(KEY_META_DELAY, 0)
+        set(v) = sp.edit { putInt(KEY_META_DELAY, v) }
+
+    /**
+     * What the end of a track is predicted from - an ordinal of
+     * [TrackEnd]; see RadioService.scheduleStaleCheck.
+     */
+    var trackEnd: Int
+        get() = sp.getInt(KEY_TRACK_END, TrackEnd.CATALOG_OR_GUESS.ordinal)
+        set(v) = sp.edit { putInt(KEY_TRACK_END, v) }
+
+    /**
+     * How long a track is taken to run when its length is not known, in
+     * minutes. Five was the fixed figure until 03.11.2026: generous, because
+     * taking a correct description off the screen is worse than leaving a
+     * finished one up a while longer.
+     */
+    var trackGuessMinutes: Int
+        get() = sp.getInt(KEY_TRACK_GUESS, 5)
+        set(v) = sp.edit { putInt(KEY_TRACK_GUESS, v) }
+
+    /**
+     * Margin on top of the predicted end, in seconds. Thirty was the fixed
+     * figure until 03.11.2026: stations cut tracks short and talk over
+     * endings, and over two hours of measured listening the next thing was
+     * announced before the nominal end 15 times of 16 (FINDINGS.md, sec. 7).
+     */
+    var trackEndMarginSeconds: Int
+        get() = sp.getInt(KEY_TRACK_MARGIN, 30)
+        set(v) = sp.edit { putInt(KEY_TRACK_MARGIN, v) }
 
     /**
      * For how many minutes after the full hour a gap between tracks counts as
@@ -618,11 +650,21 @@ class Prefs(context: Context) {
         const val KEY_STYLE_BROWSABLE = "aa_style_browsable"
         const val KEY_STYLE_PLAYABLE = "aa_style_playable"
         const val KEY_BUFFER = "buffer_profile"
-        const val KEY_API_HOLD = "api_hold_seconds"
-        const val KEY_NEWS_MINUTES = "news_minutes"
+        const val KEY_META_DELAY = "meta_delay_seconds"
 
-        /** What the settings offer for [apiHoldSeconds]. */
-        val API_HOLD_CHOICES = listOf(0, 1, 2, 3, 4, 5, 8, 12)
+        /** What the settings offer for [metaDelaySeconds]. */
+        val META_DELAY_CHOICES = listOf(0, 2, 3, 5, 8, 10, 15, 20, 30, 45, 60)
+
+        const val KEY_TRACK_END = "track_end"
+        const val KEY_TRACK_GUESS = "track_guess_minutes"
+        const val KEY_TRACK_MARGIN = "track_end_margin_seconds"
+
+        /** What the settings offer for [trackGuessMinutes]. */
+        val TRACK_GUESS_CHOICES = listOf(3, 4, 5, 6, 8, 10, 15)
+
+        /** What the settings offer for [trackEndMarginSeconds]. */
+        val TRACK_MARGIN_CHOICES = listOf(0, 10, 20, 30, 45, 60, 90, 120)
+        const val KEY_NEWS_MINUTES = "news_minutes"
 
         /** What the settings offer for [newsMinutes]. */
         val NEWS_MINUTES_CHOICES = listOf(0, 3, 5, 8, 10, 15)

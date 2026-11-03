@@ -77,28 +77,24 @@ enum class LineContent(val label: String) {
 
     companion object {
         /**
-         * What can go on a line while a track is playing.
+         * Every entry, offered in both states (user's call, 03.11.2026).
          *
-         * [SLOGAN] is missing on purpose: the station's own announcement belongs
-         * to the gap between tracks, and the last one we heard put next to a
-         * playing song would be stale by definition.
+         * The two lists used to be pruned to what "made sense" in each state -
+         * no programme over a record, nothing about a track in a gap - and that
+         * left the gap with almost no choice at all. It also ruled out the
+         * layout the user actually wanted: the presenters on the artist's line
+         * and the programme on the title's, because a programme is a title too,
+         * just not a song's. So nothing is pruned any more; an entry with
+         * nothing to say in a state draws an empty line there, and choosing it
+         * is the user's business.
          */
-        val WHEN_PLAYING = listOf(
-            TITLE, ARTIST, ALBUM, STATION, CLOCK, DATE, EMPTY
-        )
+        val ALL = listOf(TITLE, ARTIST, ALBUM, STATION, SLOGAN, PROGRAMME, HOSTS, CLOCK, DATE, EMPTY)
 
-        /**
-         * What can go on a line when no track is playing.
-         *
-         * Everything that names a track is gone - there is none, and offering
-         * the choice would only promise an empty line. What remains is what the
-         * app still knows at that moment.
-         *
-         * [PROGRAMME] and [HOSTS] are here and not in [WHEN_PLAYING]: while a
-         * record plays the lines are about the record, and the programme is
-         * what fills the gap when the presenter talks.
-         */
-        val WHEN_IDLE = listOf(CLOCK, DATE, STATION, SLOGAN, PROGRAMME, HOSTS, EMPTY)
+        /** What can go on a line while a track is playing - everything. */
+        val WHEN_PLAYING = ALL
+
+        /** What can go on a line when no track is playing - everything. */
+        val WHEN_IDLE = ALL
 
         /**
          * Entries that are no longer offered, because a line can now hold two
@@ -408,7 +404,7 @@ data class Presentation(
      */
     val usesProgramme: Boolean
         get() = listOf(artPlaying, artIdle).any { it == ArtContent.HOST_PHOTO } ||
-            idle.shows(LineContent.Part.PROGRAMME) || idle.shows(LineContent.Part.HOSTS)
+            listOf(playing, idle).any { it.shows(LineContent.Part.PROGRAMME) || it.shows(LineContent.Part.HOSTS) }
 
     companion object {
         /**

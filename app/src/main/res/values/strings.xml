@@ -125,8 +125,13 @@
     <string name="opt_style_browsable">Schemat Android Auto — foldery</string>
     <string name="opt_style_playable">Schemat Android Auto — stacje</string>
     <string name="opt_buffer">Bufor strumienia</string>
-    <string name="opt_api_hold">Opóźnienie tytułu ze strony stacji</string>
-    <string name="opt_api_hold_help">Dotyczy stacji, których tytuły bierzemy ze strony, a nie ze strumienia (Radio Nowy Świat). Zmiana tytułu czeka tyle, zanim pojawi się na desce — utwór zapowiadany przez spikera wskoczy, gdy ten skończy mówić.</string>
+    <string name="opt_track_end">Przewiduj koniec utworu na podstawie…</string>
+    <string name="opt_track_end_help">Kiedy zdjąć opis utworu, jeśli stacja nie powie, że się skończył. Po zdjęciu na desce pojawia się to, co między utworami. „Nie przewiduj” zostawia opis aż do następnej zmiany.</string>
+    <string name="opt_track_guess">Stały czas utworu</string>
+    <string name="opt_track_margin">Zapas po przewidzianym końcu</string>
+    <string name="opt_track_margin_help">Stacje skracają utwory i wchodzą na ich końcówki, więc długość z katalogu zwykle jest za długa. Zapas to dodatkowy czas, zanim opis zniknie.</string>
+    <string name="opt_meta_delay">Opóźnienie wszystkich zmian opisu</string>
+    <string name="opt_meta_delay_help">Wszystkie stacje i wszystkie źródła. Każda zmiana tego, co gra, czeka tyle, zanim pojawi się na desce i w telefonie. Jeśli w tym czasie przyjdzie kolejna, zastępuje czekającą i pojawia się po tym samym czasie — nie dostaje własnego. Pierwsze sekundy po włączeniu stacji idą od razu.</string>
     <string name="opt_news_minutes">Serwis informacyjny po pełnej godzinie</string>
     <string name="opt_news_minutes_help">Przez tyle minut po pełnej godzinie przerwa między utworami jest traktowana jak serwis: zamiast audycji i zdjęcia prowadzącego wraca slogan i logo stacji. Ramówka serwisów nie oznacza, to przybliżenie.</string>
     <string name="opt_artwork">Źródło okładki („płyty”)</string>

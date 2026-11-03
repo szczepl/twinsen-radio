@@ -362,13 +362,18 @@ class MetadataFactory(private val context: Context, private val prefs: Prefs) {
         LineContent.DATE -> dateText()
         LineContent.CLOCK_DATE -> "${clockText()} · ${dateText()}"
         LineContent.STATION -> station.name
-        LineContent.SLOGAN -> stationSaysLine(now)
+        // Over a record the station isn't saying anything, so its slogan is the
+        // last one it said - the one remembered for the screen before play.
+        LineContent.SLOGAN ->
+            if (now?.isRealSong == true) prefs.slogan(station.id).orEmpty() else stationSaysLine(now)
         LineContent.EMPTY -> ""
-        // The programme fills a gap; over a record it would be a second
-        // description competing with the real one. Without a guide - another
-        // station, or the news - the line says what the slogan would.
-        LineContent.PROGRAMME -> if (now?.isRealSong == true) "" else onAir?.name ?: stationSaysLine(now)
-        LineContent.HOSTS -> if (now?.isRealSong == true) "" else onAir?.hosts.orEmpty()
+        // Both states, since 03.11.2026: the programme is on air under a record
+        // too, and where to show it is the user's choice. Without a guide -
+        // another station, or the news - a gap says what the slogan would; a
+        // record has its own description, so there the line stays empty.
+        LineContent.PROGRAMME ->
+            onAir?.name ?: if (now?.isRealSong == true) "" else stationSaysLine(now)
+        LineContent.HOSTS -> onAir?.hosts.orEmpty()
         LineContent.TITLE -> titleLine(now, title)
         // Without the album RMF tacks onto the artist ("Wiktoria Kida / Ksiega"):
         // that has a line of its own now, and next to it the record was named

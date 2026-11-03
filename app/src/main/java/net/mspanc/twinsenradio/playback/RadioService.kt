@@ -51,6 +51,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import net.mspanc.twinsenradio.data.BufferProfile
 import net.mspanc.twinsenradio.data.ContentStyle
 import net.mspanc.twinsenradio.data.Prefs
+import net.mspanc.twinsenradio.data.TrackEnd
 import net.mspanc.twinsenradio.data.LineContent
 import net.mspanc.twinsenradio.data.LineSpec
 import net.mspanc.twinsenradio.data.Station
@@ -128,8 +129,9 @@ class RadioService : MediaLibraryService() {
     /** The field names of the API's last answer - see [traceApiFields]. */
     private var lastApiFields: String? = null
 
-    /** Title changes waiting out their hold - see [handleIcyTitleHeld]. */
-    private val heldTitles = mutableListOf<Job>()
+    /** The change waiting out [Prefs.metaDelaySeconds], and its timer - see [publish]. */
+    private var delayedNow: NowPlaying? = null
+    private var delayedJob: Job? = null
 
     /** Cover art found for the current track; null = we show the station logo. */
     @Volatile
@@ -855,7 +857,8 @@ class RadioService : MediaLibraryService() {
                     val raw = "api: $body"
                     witness(StreamWitness.Source.API, title, raw)
                     // Where the stream decides (Radio 357), the API is only written down.
-                    if (source.decides) handleIcyTitleHeld(title, raw, prefs.apiHoldSeconds * 1_000L)
+                    // Held like every other change, by the global delay - see [publish].
+                    if (source.decides) handleIcyTitle(title, raw)
                 }
                 delay(StationTitleApi.POLL_MS)
             }
@@ -967,33 +970,6 @@ class RadioService : MediaLibraryService() {
     }
 
     /**
-     * [handleIcyTitle], but a title *change* waits [holdMs] first - see
-     * [StationTitleApi] for why a station needs it.
-     *
-     * Nothing in the first [JOIN_UNHELD_MS] of a station is held: whatever
-     * arrives then describes what is already playing, and holding it would only
-     * leave the screen empty for longer. Held titles keep their order, since
-     * they all wait the same time.
-     */
-    private fun handleIcyTitleHeld(title: String?, rawBlock: String, holdMs: Long) {
-        val joining = sinceStationMs()?.let { it < JOIN_UNHELD_MS } != false
-        if (holdMs <= 0 || lastIcyAtMs == 0L || joining) {
-            handleIcyTitle(title, rawBlock)
-            return
-        }
-        Log.i(TAG_ICY, "zmiana tytulu czeka ${holdMs}ms: '$title'")
-        Trace.write("odroczenie") {
-            put("tytul", title)
-            put("ms", holdMs)
-        }
-        heldTitles.removeAll { it.isCompleted }
-        heldTitles += scope.launch {
-            delay(holdMs)
-            handleIcyTitle(title, rawBlock)
-        }
-    }
-
-    /**
      * Records the API's fields whenever their set changes. Their web player
      * reads a `schedule_img` from the same answer, which looks like what it
      * sends while a programme rather than a track is on - the one signal of
@@ -1021,7 +997,35 @@ class RadioService : MediaLibraryService() {
      * collide with (see [joinPhase]), so there is nothing to wait for.
      */
     private fun publish(now: NowPlaying?) {
-        publishNow(now)
+        val delayMs = prefs.metaDelaySeconds * 1_000L
+        // Nothing in the first [JOIN_UNHELD_MS] of a station is held: whatever
+        // arrives then describes what is already playing, and holding it would
+        // only leave the screen empty for longer.
+        val joining = sinceStationMs()?.let { it < JOIN_UNHELD_MS } != false
+        if (delayMs <= 0 || joining) {
+            delayedJob?.cancel()
+            publishNow(now)
+            return
+        }
+        // One window per change, not one per arrival: whatever comes in while
+        // it is open takes the place of what was waiting and goes up when the
+        // window closes - without a window of its own. Otherwise a station
+        // that names a song twice in ten seconds would hold it twice as long.
+        delayedNow = now
+        if (delayedJob?.isActive == true) {
+            Log.i(TAG_ICY, "w oknie opoznienia przyszlo nowe - zastepuje czekajace: ${now?.raw}")
+            Trace.write("opoznienie-zamiana") { put("tytul", now?.raw) }
+            return
+        }
+        Log.i(TAG_ICY, "zmiana czeka ${delayMs}ms: ${now?.raw}")
+        Trace.write("opoznienie") {
+            put("tytul", now?.raw)
+            put("ms", delayMs)
+        }
+        delayedJob = scope.launch {
+            delay(delayMs)
+            publishNow(delayedNow)
+        }
     }
 
     /**
@@ -1325,21 +1329,37 @@ class RadioService : MediaLibraryService() {
         staleForRaw = null
         if (now?.isRealSong != true) return
 
+        // How the end is predicted is the user's choice - see [TrackEnd].
+        // Without a prediction the description stays until the station says
+        // something new.
+        val mode = TrackEnd.at(prefs.trackEnd)
+        val guessMs = prefs.trackGuessMinutes * 60_000L
         val catalogMs = trackInfo?.durationMs ?: 0
         val (budget, basis) = when {
+            mode == TrackEnd.OFF -> null to "wylaczone"
+            mode == TrackEnd.GUESS_ONLY -> guessMs to "staly-czas"
             // We joined this track partway through and the stream won't say how
             // far, so its length tells us nothing about what is left. Whatever
             // we pick here is a guess; we make it a generous one, because taking
             // a correct description off the screen is worse than leaving a
             // finished one up a while longer.
-            positionUnknown -> FALLBACK_TRACK_MS to "pozycja-nieznana"
+            positionUnknown -> (if (mode == TrackEnd.CATALOG_ONLY) null else guessMs) to "pozycja-nieznana"
             // A length below any radio edit means the catalog matched a
             // different release, not that the song is short. "Stayin' Alive"
             // came back as a 1:33 soundtrack cut on 09.09.2026 and wiped the
             // description two minutes into a song that was still playing.
             catalogMs in 1 until MIN_TRACK_MS -> MIN_TRACK_MS to "katalog-za-krotki"
             catalogMs > 0 -> catalogMs to "katalog"
-            else -> FALLBACK_TRACK_MS to "bez-dlugosci"
+            else -> (if (mode == TrackEnd.CATALOG_ONLY) null else guessMs) to "bez-dlugosci"
+        }
+        if (budget == null) {
+            Trace.write("termin") {
+                put("utwor", now.raw)
+                put("podstawa", basis)
+                put("dlugoscKatalog", catalogMs)
+                put("zaMs", null)
+            }
+            return
         }
 
         // Stations announce a track before they play it: the metadata arrives
@@ -1354,7 +1374,7 @@ class RadioService : MediaLibraryService() {
         // and for them the drift stays unmeasured. See FINDINGS.md, section 7.
         val adLeft = (adEndsAtMs - SystemClock.elapsedRealtime()).coerceAtLeast(0)
 
-        val timeout = budget + STALE_GRACE_MS + adLeft
+        val timeout = budget + prefs.trackEndMarginSeconds * 1_000L + adLeft
         staleAtMs = SystemClock.elapsedRealtime() + timeout
         staleBasis = basis
         staleForRaw = now.raw
@@ -1673,9 +1693,9 @@ class RadioService : MediaLibraryService() {
         lastApiTitle = null
         streamWitness.reset()
         onAirGuide.reset()
-        // A held title belongs to the station we are leaving.
-        heldTitles.forEach { it.cancel() }
-        heldTitles.clear()
+        // A change waiting to go up belongs to the station we are leaving.
+        delayedJob?.cancel()
+        delayedNow = null
         lastSlogan = null
         // The gap between ICY blocks is measured within one station; carried
         // across a change it would report the time since the previous one.
@@ -2621,8 +2641,8 @@ class RadioService : MediaLibraryService() {
         private const val SONG_COVER_WAIT_MS = 1_000L
 
         /**
-         * How long after a station change titles go on without their hold -
-         * see [handleIcyTitleHeld]. Both of RNS's sources answer within a
+         * How long after a station change titles go on without their delay -
+         * see [publish]. Both of RNS's sources answer within a
          * second of connecting (27-28.10.2026); five leaves room for a slow
          * network without letting a real track change slip through unheld.
          */
@@ -2652,9 +2672,6 @@ class RadioService : MediaLibraryService() {
         /** Android Auto, and the Desktop Head Unit that stands in for it. */
         private const val PKG_ANDROID_AUTO = "com.google.android.projection.gearhead"
 
-        /** Assumed track length when the catalog doesn't know it. */
-        private const val FALLBACK_TRACK_MS = 5 * 60_000L
-
         /**
          * Shortest catalog length we're willing to believe.
          *
@@ -2665,16 +2682,6 @@ class RadioService : MediaLibraryService() {
          * had another two and a half to run.
          */
         private const val MIN_TRACK_MS = 150_000L
-
-        /**
-         * Margin added to the track length before we consider the description stale.
-         *
-         * Stations shorten tracks, talk over endings, and play radio edits
-         * shorter than the catalog version, so waiting long past the nominal
-         * time gains nothing. Half a minute covers the natural drift while not
-         * leaving a stale title on screen for too long.
-         */
-        private const val STALE_GRACE_MS = 30_000L
 
         /**
          * How long a track over by the clock stays up while the station is given

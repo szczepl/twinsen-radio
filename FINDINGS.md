@@ -201,6 +201,9 @@ Dead ends not worth repeating:
     trace event `odroczenie`); the first title of a connection is not held.
     The 9 s is the drive's average, so on a fresh connection an API-only
     title will now come a few seconds late rather than early.
+    *Superseded 03.11.2026:* the per-station hold is gone. Every change from
+    every source now waits one global, user-set delay (trace events
+    `opoznienie` and `opoznienie-zamiana`, see `RadioService.publish`).
   **30.10.2026 the stream froze on a real track.** Every mount — the 256,
   `stream.nowyswiat.online/mp3` (which redirects to the backup 128) and the
   rest — sends `StreamTitle='Trent Reznor and Atticus Ross - Normal Life'`
@@ -455,7 +458,7 @@ arrived **before** the nominal end 15 times and exactly at it once. Never
 later. Mean: 49 s early.
 
 So a catalog length **systematically overstates** time on air — radio edits,
-crossfades, talking over endings. `STALE_GRACE_MS = 30 s` is measured against
+crossfades, talking over endings. The 30 s margin (a setting since 03.11.2026) is measured against
 that, and the stale deadline barely ever has to fire while a station behaves
 normally. It matters only in the gap an ad block leaves.
 

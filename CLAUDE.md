@@ -159,7 +159,7 @@ picture choice "Puste" is retired. See ARCHITECTURE.md, section 2. A fresh
 `run-as` and RNŚ's gap counts as news.
 
 **Settled on 2026-09-10** — see [FINDINGS.md](FINDINGS.md), section 7.
-`STALE_GRACE_MS` and `MARKER_GRACE_MS` no longer need guessing at: over
+The end-of-track margin (now a setting, default 30 s) and `MARKER_GRACE_MS` no longer need guessing at: over
 2 h 09 min of measured listening a station announced the next thing *before*
 the nominal end of a track in 15 of 16 cases and exactly at it once, never
 later. The description now survives an empty `StreamTitle`, a repeated block,

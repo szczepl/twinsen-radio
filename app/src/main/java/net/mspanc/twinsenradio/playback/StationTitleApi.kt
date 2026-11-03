@@ -66,9 +66,9 @@ object StationTitleApi {
     }
 
     /**
-     * The API alone describes the track (see [StreamWitness] for why), and a
-     * change waits [net.mspanc.twinsenradio.data.Prefs.apiHoldSeconds] before
-     * it goes on.
+     * The API alone describes the track (see [StreamWitness] for why). It had
+     * a hold of its own until 03.11.2026; a change now waits only the global
+     * [net.mspanc.twinsenradio.data.Prefs.metaDelaySeconds], like any other.
      *
      * That wait used to be 12 s, worked out on 28.10.2026, the one day the
      * stream had titles and both sources ran side by side: the API named each
@@ -78,7 +78,7 @@ object StationTitleApi {
      * rebuffer; on a fresh connection the stream came first and the API up to
      * 8 s after it. Neither the station's app nor its website waits at all.
      * With the stream mute there is nothing left to measure against but the
-     * ear, so it is now the user's setting.
+     * ear, so it became the user's setting - and then a global one.
      */
     private val RNS = Source(
         "https://nowyswiat.online/api/oZeta/stat",
